@@ -1,0 +1,8 @@
+*.mat
+*.mex*
+*.pyc
+*.tgz
+*.so
+experiments/logs/*
+output/*
+data/*

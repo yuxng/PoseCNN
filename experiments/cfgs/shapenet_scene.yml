@@ -1,0 +1,14 @@
+EXP_DIR: shapenet_scene
+TRAIN:
+  LEARNING_RATE: 0.0001
+  MOMENTUM: 0.9
+  GAMMA: 0.1
+  STEPSIZE: 30000
+  SCALES_BASE: !!python/tuple [1.0]
+  IMS_PER_BATCH: 1
+  SNAPSHOT_ITERS: 10000
+  SNAPSHOT_INFIX: shapenet_scene
+  SNAPSHOT_PREFIX: vgg16_fcn_depth
+  USE_FLIPPED: True
+TEST:
+  SCALES_BASE: !!python/tuple [1.0]
