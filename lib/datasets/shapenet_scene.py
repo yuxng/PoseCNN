@@ -181,11 +181,41 @@ class shapenet_scene(datasets.imdb):
         return label_index
 
 
+    def labels_to_image(self, im, labels):
+        class_colors = self._class_colors
+        height = labels.shape[0]
+        width = labels.shape[1]
+        image_r = np.zeros((height, width), dtype=np.float32)
+        image_g = np.zeros((height, width), dtype=np.float32)
+        image_b = np.zeros((height, width), dtype=np.float32)
+
+        for i in xrange(len(class_colors)):
+            color = class_colors[i]
+            if i == 0:
+                color = (1, 1, 1)
+            I = np.where(labels == i)
+            image_r[I] = 255 * color[0]
+            image_g[I] = 255 * color[1]
+            image_b[I] = 255 * color[2]
+
+        image = np.stack((image_b, image_g, image_r), axis=-1)
+        index = np.where(image == 255)
+        image[index] = im[index]
+        image = 0.1*im + 0.9*image
+
+        return image.astype(np.uint8)
+
+
     def evaluate_segmentations(self, segmentations, output_dir):
         print 'evaluating segmentations'
         # compute histogram
         n_cl = self.num_classes
         hist = np.zeros((n_cl, n_cl))
+
+        # make image dir
+        image_dir = os.path.join(output_dir, 'images')
+        if not os.path.exists(image_dir):
+            os.makedirs(image_dir)
 
         # for each image
         for im_ind, index in enumerate(self.image_index):
@@ -197,6 +227,21 @@ class shapenet_scene(datasets.imdb):
             sg_labels = segmentations[im_ind]['labels']
 
             hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
+
+            """
+            # label image
+            rgba = cv2.imread(self.image_path_from_index(index), cv2.IMREAD_UNCHANGED)
+            image = rgba[:,:,:3]
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            image[I[0], I[1], :] = 255
+            label_image = self.labels_to_image(image, sg_labels)
+
+            # save image
+            filename = os.path.join(image_dir, '%04d.png' % im_ind)
+            print filename
+            cv2.imwrite(filename, label_image)
+            """
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()

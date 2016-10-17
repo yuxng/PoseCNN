@@ -120,4 +120,4 @@ class imdb(object):
 
     def fast_hist(self, a, b, n):
         k = (a >= 0) & (a < n)
-        return np.bincount(n * a[k].astype(int) + b[k], minlength=n**2).reshape(n, n)
+        return np.bincount(n * a[k].astype(int) + b[k].astype(int), minlength=n**2).reshape(n, n)

@@ -187,7 +187,6 @@ class Network(object):
                 input = input[0]
 
             input_shape = input.get_shape()
-            print input_shape
             if input_shape.ndims == 4:
                 dim = 1
                 for d in input_shape[1:].as_list():
