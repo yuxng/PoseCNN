@@ -83,7 +83,6 @@ class SolverWrapper(object):
         cls_score = score_3d[0]
         label = tf.placeholder(tf.int32, shape=[None, None, None, None, self.imdb.num_classes])
         loss = self.loss_softmax(cls_score, label, self.imdb.num_classes)
-        # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(cls_score, label))
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)
