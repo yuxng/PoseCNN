@@ -5,8 +5,9 @@ class vgg16(Network):
     def __init__(self, trainable=True):
         self.inputs = []
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        self.location = tf.placeholder(tf.int32, shape=[None, None, None, None, None])
         self.keep_prob = tf.placeholder(tf.float32)
-        self.layers = dict({'data':self.data})
+        self.layers = dict({'data':self.data, 'location':self.location})
         self.trainable = trainable
         self.setup()
 
@@ -30,4 +31,7 @@ class vgg16(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_2')
              .conv(3, 3, 512, 1, 1, name='conv5_3')
              .conv(1, 1, 7, 1, 1, name='score')
-             .deconv(16, 16, 7, 8, 8, name='score_up'))
+             .deconv(32, 32, 7, 16, 16, name='score_up'))
+
+        (self.feed('score_up', 'location')
+             .backproject(name='score_3d'))

@@ -9,6 +9,6 @@ TRAIN:
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: shapenet_scene
   SNAPSHOT_PREFIX: vgg16_fcn_depth
-  USE_FLIPPED: True
+  USE_FLIPPED: False
 TEST:
   SCALES_BASE: !!python/tuple [1.0]

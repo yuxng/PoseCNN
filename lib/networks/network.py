@@ -1,6 +1,8 @@
 import numpy as np
 from math import ceil
 import tensorflow as tf
+import backprojecting_layer.backprojecting_op as backproject_op
+import backprojecting_layer.backprojecting_op_grad
 
 DEFAULT_PADDING = 'SAME'
 
@@ -143,6 +145,10 @@ class Network(object):
             f_shape = [k_h, k_w, c_o, c_i]
             weights = self.make_deconv_filter('weights', f_shape, trainable)
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding)
+
+    @layer
+    def backproject(self, input, name):
+        return backproject_op.backproject(input[0], input[1], name=name)
 
     @layer
     def relu(self, input, name):

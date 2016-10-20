@@ -3,6 +3,7 @@
 *.pyc
 *.tgz
 *.so
+*.o
 experiments/logs/*
 output/*
 data/*

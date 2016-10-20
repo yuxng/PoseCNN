@@ -6,12 +6,15 @@
 # --------------------------------------------------------
 
 import numpy as np
+from utils.gpu_build_voxel import gpu_build_voxel
 
 class Voxelizer(object):
-    def __init__(self, grid_size, num_channels):
+    def __init__(self, grid_size, num_classes):
         self.grid_size = grid_size
-        self.num_channels = num_channels
+        self.num_classes = num_classes
         self.margin = 0.1
+        self.filter_h = 5
+        self.filter_w = 5
         self.min_x = 0
         self.min_y = 0
         self.min_z = 0
@@ -19,14 +22,16 @@ class Voxelizer(object):
         self.step_y = 0
         self.step_z = 0
         self.voxelized = False
-        self.data = np.zeros((grid_size, grid_size, grid_size, num_channels), dtype=np.float32)
+        self.height = 0
+        self.width = 0
+        self.data = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
         self.count = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
 
     def update(self, bottom, grid_indexes):
         height = bottom.shape[1]
         width = bottom.shape[2]
-        assert bottom.shape[3] == self.num_channels, \
-               'in voxelizer.update, bottom channel {} not compatible {}'.format(bottom.shape[3], self.num_channels)
+        assert bottom.shape[3] == self.num_classes, \
+               'in voxelizer.update, bottom channel {} not compatible {}'.format(bottom.shape[3], self.num_classes)
         assert height*width == grid_indexes.shape[1], \
                'in voxelizer.update, bottom shape {} not compatible to grid indexes {}'.format(height*width, grid_indexes.shape[1])
 
@@ -54,8 +59,20 @@ class Voxelizer(object):
         self.step_y = 0
         self.step_z = 0
         self.voxelized = False
-        self.data = np.zeros((self.grid_size, self.grid_size, self.grid_size, self.num_channels), dtype=np.float32)
+        self.data = np.zeros((self.grid_size, self.grid_size, self.grid_size, self.num_classes), dtype=np.float32)
         self.count = np.zeros((self.grid_size, self.grid_size, self.grid_size), dtype=np.int32)
+
+
+    def compute_voxel_labels(self, grid_indexes, labels, pmatrix, device_id):
+        assert self.voxelized, 'In compute_voxel_labels(), not voxelized'
+
+        top_locations, top_labels = gpu_build_voxel(
+            self.grid_size, float(self.step_x), float(self.step_y), float(self.step_z),
+            float(self.min_x), float(self.min_y), float(self.min_z),
+            self.filter_h, self.filter_w, self.num_classes,
+            grid_indexes, labels, pmatrix.astype(np.float32), device_id)
+
+        return top_locations, top_labels
 
 
     def voxelize(self, points):
@@ -78,10 +95,16 @@ class Voxelizer(object):
             self.voxelized = True
 
         # compute grid indexes
-        grid_indexes = np.zeros_like(points, dtype=np.float32)
-        grid_indexes[0,:] = np.floor((points[0,:] - self.min_x) / self.step_x)
-        grid_indexes[1,:] = np.floor((points[1,:] - self.min_y) / self.step_y)
-        grid_indexes[2,:] = np.floor((points[2,:] - self.min_z) / self.step_z)
+        indexes = np.zeros_like(points, dtype=np.float32)
+        indexes[0,:] = np.floor((points[0,:] - self.min_x) / self.step_x)
+        indexes[1,:] = np.floor((points[1,:] - self.min_y) / self.step_y)
+        indexes[2,:] = np.floor((points[2,:] - self.min_z) / self.step_z)
+
+        # crash the grid indexes
+        grid_indexes = indexes[0,:] * self.grid_size * self.grid_size + indexes[1,:] * self.grid_size + indexes[2,:]
+        I = np.isnan(grid_indexes)
+        grid_indexes[I] = -1
+        grid_indexes = grid_indexes.reshape(self.height, self.width).astype(np.int32)
 
         return grid_indexes
 
@@ -95,8 +118,10 @@ class Voxelizer(object):
         Pinv = np.linalg.pinv(P)
 
         # compute the 3D points        
-        width = depth.shape[1]
         height = depth.shape[0]
+        width = depth.shape[1]
+        self.height = height
+        self.width = width
 
         # camera location
         C = meta_data['camera_location']

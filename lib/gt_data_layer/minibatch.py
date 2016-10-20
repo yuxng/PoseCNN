@@ -15,26 +15,24 @@ from fcn.config import cfg
 from utils.blob import im_list_to_blob
 import scipy.io
 
-def get_minibatch(roidb):
+def get_minibatch(roidb, voxelizer):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
-    assert(cfg.TRAIN.BATCH_SIZE % num_images == 0), \
-        'num_images ({}) must divide BATCH_SIZE ({})'. \
-        format(num_images, cfg.TRAIN.BATCH_SIZE)
 
-    # Get the input image blob, formatted for caffe
+    # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
     im_blob, im_depth_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    label_blob = _get_label_blob(roidb, im_scales)
+    location_blob, label_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_depth_blob, label_blob)
+    # _vis_minibatch(im_blob, im_depth_blob, label_blob, voxelizer)
 
     blobs = {'data_image': im_blob,
              'data_depth': im_depth_blob,
-             'data_label': label_blob}
+             'data_label': label_blob,
+             'data_location': location_blob}
 
     return blobs
 
@@ -88,28 +86,28 @@ def _process_label_image(label_image, class_colors):
     """
     height = label_image.shape[0]
     width = label_image.shape[1]
-    label_index = np.zeros((height, width), dtype=np.float32)
+    label_index = np.zeros((height, width), dtype=np.int32)
 
     # label image is in BRG order
     index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
-    count = np.zeros((len(class_colors),), dtype=np.float32)
-    locations = []
     for i in xrange(len(class_colors)):
         color = class_colors[i]
         ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
         I = np.where(index == ind)
-        locations.append(I)
-        count[i] = I[0].shape[0]
         label_index[I] = i
     
     return label_index
 
 
-def _get_label_blob(roidb, im_scales):
+def _get_label_blob(roidb, voxelizer):
     """ build the label blob """
 
     num_images = len(roidb)
-    processed_ims_cls = []
+    grid_size = voxelizer.grid_size
+    filter_h = voxelizer.filter_h
+    filter_w = voxelizer.filter_w
+    processed_locations = np.zeros((num_images, grid_size, grid_size, grid_size, filter_h*filter_w), dtype=np.int32)
+    processed_labels = np.zeros((num_images, grid_size, grid_size, grid_size), dtype=np.int32)
 
     for i in xrange(num_images):
         # read label image
@@ -119,43 +117,29 @@ def _get_label_blob(roidb, im_scales):
 
         im_cls = _process_label_image(im, roidb[i]['class_colors'])
 
-        # rescale image
-        im_scale = im_scales[i]
-        im = cv2.resize(im_cls, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
-        processed_ims_cls.append(im)
+        # backproject the labels into 3D voxel space
+        # depth
+        im_depth = cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED)
 
-    # Create a blob to hold the input images
-    blob_cls = im_list_to_blob(processed_ims_cls, 1)
+        # load meta data
+        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
 
-    #"""
-    # blob image size
-    image_height = blob_cls.shape[1]
-    image_width = blob_cls.shape[2]
+        # backprojection
+        points = voxelizer.backproject(im_depth, meta_data)
+        voxelizer.voxelized = False
+        grid_indexes = voxelizer.voxelize(points)
+        locations, labels = voxelizer.compute_voxel_labels(grid_indexes, im_cls, meta_data['projection_matrix'], cfg.GPU_ID)
 
-    # height and width of the heatmap
-    height = np.ceil(image_height / 2.0)
-    height = np.ceil(height / 2.0)
-    height = np.ceil(height / 2.0)
-    height = np.ceil(height / 2.0)
-    height = int(height * 8)
+        processed_locations[i,:,:,:,:] = locations
+        processed_labels[i,:,:,:] = labels
 
-    width = np.ceil(image_width / 2.0)
-    width = np.ceil(width / 2.0)
-    width = np.ceil(width / 2.0)
-    width = np.ceil(width / 2.0)
-    width = int(width * 8)
-
-    # rescale the blob
-    blob_cls_rescale = np.zeros((num_images, height, width), dtype=np.float32)
-    for i in xrange(num_images):
-        blob_cls_rescale[i,:,:] = cv2.resize(blob_cls[i,:,:,0], dsize=(width, height), interpolation=cv2.INTER_NEAREST)
-
-    return blob_cls_rescale
+    return processed_locations, processed_labels
 
 
-def _vis_minibatch(im_blob, im_depth_blob, label_blob):
+def _vis_minibatch(im_blob, im_depth_blob, label_blob, voxelizer):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
+    from utils.voxelizer import set_axes_equal
 
     for i in xrange(im_blob.shape[0]):
         fig = plt.figure()
@@ -176,8 +160,25 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
         plt.imshow(im_depth)
 
         # show label
-        label = label_blob[i, :, :]
-        fig.add_subplot(133)
-        plt.imshow(label)
+        label = label_blob[i, :, :, :]
+        index = np.where(label == 1)
+        X = index[0] * voxelizer.step_x + voxelizer.min_x
+        Y = index[1] * voxelizer.step_y + voxelizer.min_y
+        Z = index[2] * voxelizer.step_z + voxelizer.min_z
+        from mpl_toolkits.mplot3d import Axes3D
+        ax = fig.add_subplot(133, projection='3d')
+        ax.scatter(X, Y, Z, c='r', marker='o')
+
+        index = np.where(label > 1)
+        X = index[0] * voxelizer.step_x + voxelizer.min_x
+        Y = index[1] * voxelizer.step_y + voxelizer.min_y
+        Z = index[2] * voxelizer.step_z + voxelizer.min_z
+        ax.scatter(X, Y, Z, c='b', marker='o')
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_aspect('equal')
+        set_axes_equal(ax)
 
         plt.show()

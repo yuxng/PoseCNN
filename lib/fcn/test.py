@@ -200,7 +200,7 @@ def test_net(sess, net, imdb, weights_filename):
         segmentations[i] = seg
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, labels, points)
+        vis_segmentations(im, im_depth, labels, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].average_time, _t['misc'].average_time)
 
