@@ -49,9 +49,12 @@ __global__ void voxel_kernel(const int nthreads, const int grid_size, const floa
     int px = int(x1 / x3);
     int py = int(x2 / x3);
 
-    // reset the label counter
+    // reset the labels and label counter
     for (int i = 0; i < num_classes; i++)
+    {
+      top_labels[index * num_classes + i] = 0;
       top_label_count[index * num_classes + i] = 0;
+    }
 
     // reset the pixel locations
     for (int i = 0; i < filter_w * filter_h; i++)
@@ -84,17 +87,20 @@ __global__ void voxel_kernel(const int nthreads, const int grid_size, const floa
       }
     }
     // find the class label
-    int num = -1;
-    int label = 0;
-    for (int i = 0; i < num_classes; i++)
+    if (count > 0)
     {
-      if (top_label_count[index * num_classes + i] > num)
+      int num = -1;
+      int label = 0;
+      for (int i = 0; i < num_classes; i++)
       {
-        num = top_label_count[index * num_classes + i];
-        label = i;
+        if (top_label_count[index * num_classes + i] > num)
+        {
+          num = top_label_count[index * num_classes + i];
+          label = i;
+        }
       }
+      top_labels[index * num_classes + label] = 1;
     }
-    top_labels[index] = label;
   }
 }
 
@@ -125,7 +131,7 @@ void _build_voxels(const int grid_size, const float step_d, const float step_h, 
   CUDA_CHECK(cudaMalloc(&top_locations_dev,
                         grid_size * grid_size * grid_size * filter_h * filter_w * sizeof(int)));
   CUDA_CHECK(cudaMalloc(&top_labels_dev,
-                        grid_size * grid_size * grid_size * sizeof(int)));
+                        grid_size * grid_size * grid_size * num_classes * sizeof(int)));
   CUDA_CHECK(cudaMalloc(&top_label_count,
                         grid_size * grid_size * grid_size * num_classes * sizeof(int)));
 
@@ -161,7 +167,7 @@ void _build_voxels(const int grid_size, const float step_d, const float step_h, 
                         cudaMemcpyDeviceToHost));
   CUDA_CHECK(cudaMemcpy(top_labels,
                         top_labels_dev,
-                        grid_size * grid_size * grid_size * sizeof(int),
+                        grid_size * grid_size * grid_size * num_classes * sizeof(int),
                         cudaMemcpyDeviceToHost));
 
 

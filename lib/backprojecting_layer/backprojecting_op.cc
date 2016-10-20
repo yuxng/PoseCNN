@@ -62,7 +62,7 @@ class BackprojectOp : public OpKernel {
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
-    // pixel location should have 4 dimensions.
+    // pixel location should have 5 dimensions.
     OP_REQUIRES(context, bottom_pixel_locations.dims() == 5,
                 errors::InvalidArgument("indexes must be 5-dimensional"));
 

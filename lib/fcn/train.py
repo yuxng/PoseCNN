@@ -52,6 +52,26 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
+    def loss_softmax(self, scores, labels, num_classes):
+        """
+        scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: [batch_size, grid_size, grid_size, grid_size, num_classes]
+        """
+
+        with tf.name_scope('loss'):
+            # compute softmax of scores
+            m = tf.reduce_max(scores, reduction_indices=[4], keep_dims=True)
+            multiples = tf.convert_to_tensor([1, 1, 1, 1, num_classes], dtype=tf.int32)
+            e = tf.exp(tf.sub(scores, tf.tile(m, multiples)))
+            s = tf.reduce_sum(e, reduction_indices=[4], keep_dims=True)
+            softmax = tf.div(e, tf.tile(s, multiples))
+
+            labels_float = tf.cast(labels, tf.float32)
+            cross_entropy = -tf.reduce_sum(labels_float * tf.log(softmax), reduction_indices=[4])
+            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels_float))
+        return loss
+
+
     def train_model(self, sess, max_iters):
         """Network training loop."""
 
@@ -61,8 +81,9 @@ class SolverWrapper(object):
         # classification loss
         score_3d = self.net.get_output('score_3d')
         cls_score = score_3d[0]
-        label = tf.placeholder(tf.int32, shape=[None, None, None, None])
-        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(cls_score, label))
+        label = tf.placeholder(tf.int32, shape=[None, None, None, None, self.imdb.num_classes])
+        loss = self.loss_softmax(cls_score, label, self.imdb.num_classes)
+        # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(cls_score, label))
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)

@@ -29,10 +29,10 @@ def gpu_build_voxel(np.int32_t grid_size, np.float step_d, np.float step_h, np.f
     cdef np.ndarray[np.int32_t, ndim=4] \
         top_locations = np.zeros((grid_size, grid_size, grid_size, filter_h * filter_w), dtype=np.int32)
 
-    cdef np.ndarray[np.int32_t, ndim=3] \
-        top_labels = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
+    cdef np.ndarray[np.int32_t, ndim=4] \
+        top_labels = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.int32)
 
     _build_voxels(grid_size, step_d, step_h, step_w, min_d, min_h, min_w, filter_h, filter_w, num_classes, height, width, \
-                  &grid_indexes[0, 0], &labels[0, 0], &pmatrix[0, 0], &top_locations[0, 0, 0, 0], &top_labels[0, 0, 0], device_id)
+                  &grid_indexes[0, 0], &labels[0, 0], &pmatrix[0, 0], &top_locations[0, 0, 0, 0], &top_labels[0, 0, 0, 0], device_id)
 
     return top_locations, top_labels

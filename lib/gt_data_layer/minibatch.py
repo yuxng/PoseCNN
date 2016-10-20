@@ -107,7 +107,7 @@ def _get_label_blob(roidb, voxelizer):
     filter_h = voxelizer.filter_h
     filter_w = voxelizer.filter_w
     processed_locations = np.zeros((num_images, grid_size, grid_size, grid_size, filter_h*filter_w), dtype=np.int32)
-    processed_labels = np.zeros((num_images, grid_size, grid_size, grid_size), dtype=np.int32)
+    processed_labels = np.zeros((num_images, grid_size, grid_size, grid_size, voxelizer.num_classes), dtype=np.int32)
 
     for i in xrange(num_images):
         # read label image
@@ -131,7 +131,7 @@ def _get_label_blob(roidb, voxelizer):
         locations, labels = voxelizer.compute_voxel_labels(grid_indexes, im_cls, meta_data['projection_matrix'], cfg.GPU_ID)
 
         processed_locations[i,:,:,:,:] = locations
-        processed_labels[i,:,:,:] = labels
+        processed_labels[i,:,:,:,:] = labels
 
     return processed_locations, processed_labels
 
@@ -160,8 +160,13 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob, voxelizer):
         plt.imshow(im_depth)
 
         # show label
-        label = label_blob[i, :, :, :]
-        index = np.where(label == 1)
+        label = label_blob[i, :, :, :, :]
+
+        for i in range(voxelizer.num_classes):
+            index = np.where(label[:,:,:,i] == 1)
+            print 'class {}: {} voxels'.format(i, len(index[0]))
+
+        index = np.where(label[:,:,:,1] == 1)
         X = index[0] * voxelizer.step_x + voxelizer.min_x
         Y = index[1] * voxelizer.step_y + voxelizer.min_y
         Z = index[2] * voxelizer.step_z + voxelizer.min_z
@@ -169,7 +174,7 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob, voxelizer):
         ax = fig.add_subplot(133, projection='3d')
         ax.scatter(X, Y, Z, c='r', marker='o')
 
-        index = np.where(label > 1)
+        index = np.where(np.sum(label[:,:,:,2:], axis=3) == 1)
         X = index[0] * voxelizer.step_x + voxelizer.min_x
         Y = index[1] * voxelizer.step_y + voxelizer.min_y
         Z = index[2] * voxelizer.step_z + voxelizer.min_z
