@@ -86,16 +86,10 @@ def im_segment(sess, net, im, im_depth, meta_data, voxelizer):
 
     # forward pass
     feed_dict = {net.data: im_depth_blob, net.location: processed_locations}
-    output = sess.run([net.get_output('score_3d')], feed_dict=feed_dict)
+    output = sess.run([net.get_output('prob')], feed_dict=feed_dict)
 
     # get outputs scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
-    score = output[0][0]
-
-    # compute softmax of score
-    m = score.max(axis=-1)
-    e = np.exp(score - np.tile(m[:,:,:,:,np.newaxis], [1, 1, 1, 1, num_classes]))
-    s = np.sum(e, axis=-1)
-    cls_prob = np.divide(e, np.tile(s[:,:,:,:,np.newaxis], [1, 1, 1, 1, num_classes]))
+    cls_prob = output[0]
     cls_prob_3d = cls_prob[0, :, :, :, :]
 
     # compute pixel labels

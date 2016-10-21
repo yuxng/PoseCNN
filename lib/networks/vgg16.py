@@ -34,4 +34,5 @@ class vgg16(Network):
              .deconv(32, 32, 7, 16, 16, name='score_up'))
 
         (self.feed('score_up', 'location')
-             .backproject(name='score_3d'))
+             .backproject(name='score_3d')
+             .softmax_high_dimension(num_classes=7, name='prob'))
