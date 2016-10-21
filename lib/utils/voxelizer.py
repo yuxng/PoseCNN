@@ -62,7 +62,6 @@ class Voxelizer(object):
         self.data = np.zeros((self.grid_size, self.grid_size, self.grid_size, self.num_classes), dtype=np.float32)
         self.count = np.zeros((self.grid_size, self.grid_size, self.grid_size), dtype=np.int32)
 
-
     def compute_voxel_labels(self, grid_indexes, labels, pmatrix, device_id):
         assert self.voxelized, 'In compute_voxel_labels(), not voxelized'
 

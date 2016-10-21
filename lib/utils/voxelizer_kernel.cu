@@ -178,3 +178,70 @@ void _build_voxels(const int grid_size, const float step_d, const float step_h, 
   CUDA_CHECK(cudaFree(labels_dev));
   CUDA_CHECK(cudaFree(pmatrix_dev));
 }
+
+__global__ void pixel_kernel(const int nthreads, const int num_classes,
+                   const int* grid_indexes, const float* cls_prob_3d, int* top_labels)
+{
+  CUDA_1D_KERNEL_LOOP(index, nthreads) 
+  {
+    int grid_index = grid_indexes[index];
+    if (grid_index >= 0)
+    {
+      const float* cls_prob = cls_prob_3d + grid_index * num_classes;
+      float maxval = -1;
+      int label = -1;
+      for (int i = 0; i < num_classes; i++)
+      {
+        if (cls_prob[i] > maxval)
+        {
+          maxval = cls_prob[i];
+          label = i;
+        }
+      }
+      top_labels[index] = label;
+    }
+    else
+      top_labels[index] = 0;
+  }
+}
+
+// find the labels on pixels using probablities on voxels
+void _compute_pixel_labels(const int grid_size, const int num_classes, const int height, const int width,
+                   const int* grid_indexes, const float* cls_prob_3d, int* top_labels, int device_id)
+{
+  _set_device(device_id);
+  const int kThreadsPerBlock = 1024;
+
+  // output
+  int* top_labels_dev = NULL;
+  CUDA_CHECK(cudaMalloc(&top_labels_dev, height * width * sizeof(int)));
+
+  // internal usage
+  int* grid_indexes_dev = NULL;
+  float* cls_prob_3d_dev = NULL;
+  CUDA_CHECK(cudaMalloc(&grid_indexes_dev, height * width * sizeof(int)));
+  CUDA_CHECK(cudaMalloc(&cls_prob_3d_dev, grid_size * grid_size * grid_size * num_classes * sizeof(float)));
+  CUDA_CHECK(cudaMemcpy(grid_indexes_dev,
+                        grid_indexes,
+                        height * width * sizeof(int),
+                        cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(cls_prob_3d_dev,
+                        cls_prob_3d,
+                        grid_size * grid_size * grid_size * num_classes * sizeof(float),
+                        cudaMemcpyHostToDevice));
+
+  const int output_size = height * width;
+  pixel_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
+                       kThreadsPerBlock>>>(output_size, num_classes,
+                                           grid_indexes_dev, cls_prob_3d_dev, top_labels_dev);
+
+  CUDA_CHECK(cudaMemcpy(top_labels,
+                        top_labels_dev,
+                        height * width * sizeof(int),
+                        cudaMemcpyDeviceToHost));
+
+
+  CUDA_CHECK(cudaFree(top_labels_dev));
+  CUDA_CHECK(cudaFree(grid_indexes_dev));
+  CUDA_CHECK(cudaFree(cls_prob_3d_dev));
+}

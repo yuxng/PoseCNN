@@ -12,6 +12,7 @@ import argparse
 from utils.timer import Timer
 from utils.blob import im_list_to_blob
 from utils.voxelizer import Voxelizer, set_axes_equal
+from utils.gpu_build_voxel import gpu_compute_labels
 import numpy as np
 import cv2
 import cPickle
@@ -68,33 +69,37 @@ def im_segment(sess, net, im, im_depth, meta_data, voxelizer):
     # compute image blob
     im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
 
-    # forward pass
-    feed_dict = {net.data: im_depth_blob}
-    output = sess.run([net.get_output('score_up')], feed_dict=feed_dict)
+    # backprojection
+    points = voxelizer.backproject(im_depth, meta_data)
+    voxelizer.voxelized = False
+    grid_indexes = voxelizer.voxelize(points)
+    # use fake labels
+    im_cls = np.zeros_like(im_depth, dtype=np.int32)
+    locations, _ = voxelizer.compute_voxel_labels(grid_indexes, im_cls, meta_data['projection_matrix'], cfg.GPU_ID)
 
-    # get outputs
-    score = output[0]
-    height = score.shape[1]
-    width = score.shape[2]
-    channel = score.shape[3]
+    num_classes = voxelizer.num_classes
+    grid_size = voxelizer.grid_size
+    filter_h = voxelizer.filter_h
+    filter_w = voxelizer.filter_w
+    processed_locations = np.zeros((1, grid_size, grid_size, grid_size, filter_h*filter_w), dtype=np.int32)
+    processed_locations[0,:,:,:,:] = locations
+
+    # forward pass
+    feed_dict = {net.data: im_depth_blob, net.location: processed_locations}
+    output = sess.run([net.get_output('score_3d')], feed_dict=feed_dict)
+
+    # get outputs scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
+    score = output[0][0]
 
     # compute softmax of score
     m = score.max(axis=-1)
-    e = np.exp(score - np.tile(m[:,:,:,np.newaxis], [1, 1, 1, channel]))
+    e = np.exp(score - np.tile(m[:,:,:,:,np.newaxis], [1, 1, 1, 1, num_classes]))
     s = np.sum(e, axis=-1)
-    cls_prob = np.divide(e, np.tile(s[:,:,:,np.newaxis], [1, 1, 1, channel]))
+    cls_prob = np.divide(e, np.tile(s[:,:,:,:,np.newaxis], [1, 1, 1, 1, num_classes]))
+    cls_prob_3d = cls_prob[0, :, :, :, :]
 
-    # rescale scores
-    image_height = im.shape[0]
-    image_width = im.shape[1]
-    cls_prob_rescale = np.zeros((1, image_height, image_width, channel), dtype=np.float32)
-    for i in range(channel):
-        cls_prob_rescale[0,:,:,i] = cv2.resize(cls_prob[0,:,:,i], dsize=(image_width, image_height), interpolation=cv2.INTER_NEAREST)
-
-    # backprojection
-    points = voxelizer.backproject(im_depth, meta_data)
-    grid_indexes = voxelizer.voxelize(points)
-    labels = voxelizer.update(cls_prob_rescale, grid_indexes)
+    # compute pixel labels
+    labels = gpu_compute_labels(grid_indexes, cls_prob_3d, cfg.GPU_ID)
 
     return labels, points
 
@@ -161,7 +166,7 @@ def test_net(sess, net, imdb, weights_filename):
     _t = {'im_segment' : Timer(), 'misc' : Timer()}
 
     # voxelizer
-    voxelizer = Voxelizer(256, imdb.num_classes)
+    voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
 
     # perm = np.random.permutation(np.arange(num_images))
 
@@ -200,9 +205,9 @@ def test_net(sess, net, imdb, weights_filename):
         segmentations[i] = seg
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, labels, points)
+        # vis_segmentations(im, im_depth, labels, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
-              .format(i + 1, num_images, _t['im_segment'].average_time, _t['misc'].average_time)
+              .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
     seg_file = os.path.join(output_dir, 'segmentations.pkl')
     with open(seg_file, 'wb') as f:

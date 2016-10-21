@@ -77,7 +77,8 @@ if __name__ == '__main__':
 
     # start a session
     saver = tf.train.Saver()
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 

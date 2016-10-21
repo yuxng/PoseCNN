@@ -1045,6 +1045,9 @@ static Py_ssize_t __Pyx_minusones[] = {-1, -1, -1, -1, -1, -1, -1, -1};
 /* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_npy_int32(npy_int32 value);
 
+/* CIntToPy.proto */
+static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
+
 /* None.proto */
 #if CYTHON_CCOMPLEX
   #ifdef __cplusplus
@@ -1149,9 +1152,6 @@ static CYTHON_INLINE __pyx_t_double_complex __pyx_t_double_complex_from_parts(do
 #endif
 
 /* CIntToPy.proto */
-static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
-
-/* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_enum__NPY_TYPES(enum NPY_TYPES value);
 
 /* CIntFromPy.proto */
@@ -1252,11 +1252,13 @@ static const char __pyx_k_device_id[] = "device_id";
 static const char __pyx_k_grid_size[] = "grid_size";
 static const char __pyx_k_ValueError[] = "ValueError";
 static const char __pyx_k_top_labels[] = "top_labels";
+static const char __pyx_k_cls_prob_3d[] = "cls_prob_3d";
 static const char __pyx_k_num_classes[] = "num_classes";
 static const char __pyx_k_RuntimeError[] = "RuntimeError";
 static const char __pyx_k_grid_indexes[] = "grid_indexes";
 static const char __pyx_k_top_locations[] = "top_locations";
 static const char __pyx_k_gpu_build_voxel[] = "gpu_build_voxel";
+static const char __pyx_k_gpu_compute_labels[] = "gpu_compute_labels";
 static const char __pyx_k_utils_gpu_build_voxel[] = "utils.gpu_build_voxel";
 static const char __pyx_k_ndarray_is_not_C_contiguous[] = "ndarray is not C contiguous";
 static const char __pyx_k_var_Projects_FCN_lib_utils_gpu[] = "/var/Projects/FCN/lib/utils/gpu_build_voxel.pyx";
@@ -1270,11 +1272,13 @@ static PyObject *__pyx_kp_u_Format_string_allocated_too_shor_2;
 static PyObject *__pyx_kp_u_Non_native_byte_order_not_suppor;
 static PyObject *__pyx_n_s_RuntimeError;
 static PyObject *__pyx_n_s_ValueError;
+static PyObject *__pyx_n_s_cls_prob_3d;
 static PyObject *__pyx_n_s_device_id;
 static PyObject *__pyx_n_s_dtype;
 static PyObject *__pyx_n_s_filter_h;
 static PyObject *__pyx_n_s_filter_w;
 static PyObject *__pyx_n_s_gpu_build_voxel;
+static PyObject *__pyx_n_s_gpu_compute_labels;
 static PyObject *__pyx_n_s_grid_indexes;
 static PyObject *__pyx_n_s_grid_size;
 static PyObject *__pyx_n_s_height;
@@ -1304,6 +1308,7 @@ static PyObject *__pyx_kp_s_var_Projects_FCN_lib_utils_gpu;
 static PyObject *__pyx_n_s_width;
 static PyObject *__pyx_n_s_zeros;
 static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED PyObject *__pyx_self, __pyx_t_5numpy_int32_t __pyx_v_grid_size, PyObject *__pyx_v_step_d, PyObject *__pyx_v_step_h, PyObject *__pyx_v_step_w, PyObject *__pyx_v_min_d, PyObject *__pyx_v_min_h, PyObject *__pyx_v_min_w, __pyx_t_5numpy_int32_t __pyx_v_filter_h, __pyx_t_5numpy_int32_t __pyx_v_filter_w, __pyx_t_5numpy_int32_t __pyx_v_num_classes, PyArrayObject *__pyx_v_grid_indexes, PyArrayObject *__pyx_v_labels, PyArrayObject *__pyx_v_pmatrix, __pyx_t_5numpy_int32_t __pyx_v_device_id); /* proto */
+static PyObject *__pyx_pf_5utils_15gpu_build_voxel_2gpu_compute_labels(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_grid_indexes, PyArrayObject *__pyx_v_cls_prob_3d, __pyx_t_5numpy_int32_t __pyx_v_device_id); /* proto */
 static int __pyx_pf_5numpy_7ndarray___getbuffer__(PyArrayObject *__pyx_v_self, Py_buffer *__pyx_v_info, int __pyx_v_flags); /* proto */
 static void __pyx_pf_5numpy_7ndarray_2__releasebuffer__(PyArrayObject *__pyx_v_self, Py_buffer *__pyx_v_info); /* proto */
 static PyObject *__pyx_tuple_;
@@ -1313,10 +1318,12 @@ static PyObject *__pyx_tuple__4;
 static PyObject *__pyx_tuple__5;
 static PyObject *__pyx_tuple__6;
 static PyObject *__pyx_tuple__7;
+static PyObject *__pyx_tuple__9;
 static PyObject *__pyx_codeobj__8;
+static PyObject *__pyx_codeobj__10;
 
-/* "utils/gpu_build_voxel.pyx":20
- *                    np.float32_t* pmatrix, np.int32_t* top_locations, np.int32_t* top_labels, int device_id)
+/* "utils/gpu_build_voxel.pyx":23
+ *                    np.int32_t* grid_indexes, np.float32_t* cls_prob_3d, np.int32_t* top_labels, int device_id);
  * 
  * def gpu_build_voxel(np.int32_t grid_size, np.float step_d, np.float step_h, np.float step_w,             # <<<<<<<<<<<<<<
  *             np.float min_d, np.float min_h, np.float min_w,
@@ -1376,62 +1383,62 @@ static PyObject *__pyx_pw_5utils_15gpu_build_voxel_1gpu_build_voxel(PyObject *__
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_step_d)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 1); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 1); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_step_h)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 2); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 2); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  3:
         if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_step_w)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 3); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 3); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  4:
         if (likely((values[4] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_min_d)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 4); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 4); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  5:
         if (likely((values[5] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_min_h)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 5); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 5); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  6:
         if (likely((values[6] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_min_w)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 6); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 6); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  7:
         if (likely((values[7] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_filter_h)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 7); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 7); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  8:
         if (likely((values[8] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_filter_w)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 8); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 8); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case  9:
         if (likely((values[9] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_num_classes)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 9); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 9); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case 10:
         if (likely((values[10] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_grid_indexes)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 10); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 10); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case 11:
         if (likely((values[11] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_labels)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 11); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 11); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case 12:
         if (likely((values[12] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_pmatrix)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 12); __PYX_ERR(0, 20, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, 12); __PYX_ERR(0, 23, __pyx_L3_error)
         }
         case 13:
         if (kw_args > 0) {
@@ -1440,7 +1447,7 @@ static PyObject *__pyx_pw_5utils_15gpu_build_voxel_1gpu_build_voxel(PyObject *__
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "gpu_build_voxel") < 0)) __PYX_ERR(0, 20, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "gpu_build_voxel") < 0)) __PYX_ERR(0, 23, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
@@ -1462,42 +1469,42 @@ static PyObject *__pyx_pw_5utils_15gpu_build_voxel_1gpu_build_voxel(PyObject *__
         default: goto __pyx_L5_argtuple_error;
       }
     }
-    __pyx_v_grid_size = __Pyx_PyInt_As_npy_int32(values[0]); if (unlikely((__pyx_v_grid_size == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 20, __pyx_L3_error)
+    __pyx_v_grid_size = __Pyx_PyInt_As_npy_int32(values[0]); if (unlikely((__pyx_v_grid_size == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 23, __pyx_L3_error)
     __pyx_v_step_d = ((PyObject*)values[1]);
     __pyx_v_step_h = ((PyObject*)values[2]);
     __pyx_v_step_w = ((PyObject*)values[3]);
     __pyx_v_min_d = ((PyObject*)values[4]);
     __pyx_v_min_h = ((PyObject*)values[5]);
     __pyx_v_min_w = ((PyObject*)values[6]);
-    __pyx_v_filter_h = __Pyx_PyInt_As_npy_int32(values[7]); if (unlikely((__pyx_v_filter_h == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
-    __pyx_v_filter_w = __Pyx_PyInt_As_npy_int32(values[8]); if (unlikely((__pyx_v_filter_w == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
-    __pyx_v_num_classes = __Pyx_PyInt_As_npy_int32(values[9]); if (unlikely((__pyx_v_num_classes == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 22, __pyx_L3_error)
+    __pyx_v_filter_h = __Pyx_PyInt_As_npy_int32(values[7]); if (unlikely((__pyx_v_filter_h == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 25, __pyx_L3_error)
+    __pyx_v_filter_w = __Pyx_PyInt_As_npy_int32(values[8]); if (unlikely((__pyx_v_filter_w == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 25, __pyx_L3_error)
+    __pyx_v_num_classes = __Pyx_PyInt_As_npy_int32(values[9]); if (unlikely((__pyx_v_num_classes == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 25, __pyx_L3_error)
     __pyx_v_grid_indexes = ((PyArrayObject *)values[10]);
     __pyx_v_labels = ((PyArrayObject *)values[11]);
     __pyx_v_pmatrix = ((PyArrayObject *)values[12]);
     if (values[13]) {
-      __pyx_v_device_id = __Pyx_PyInt_As_npy_int32(values[13]); if (unlikely((__pyx_v_device_id == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 24, __pyx_L3_error)
+      __pyx_v_device_id = __Pyx_PyInt_As_npy_int32(values[13]); if (unlikely((__pyx_v_device_id == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 27, __pyx_L3_error)
     } else {
       __pyx_v_device_id = ((__pyx_t_5numpy_int32_t)0);
     }
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 20, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("gpu_build_voxel", 0, 13, 14, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 23, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("utils.gpu_build_voxel.gpu_build_voxel", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_d), (&PyFloat_Type), 1, "step_d", 1))) __PYX_ERR(0, 20, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_h), (&PyFloat_Type), 1, "step_h", 1))) __PYX_ERR(0, 20, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_w), (&PyFloat_Type), 1, "step_w", 1))) __PYX_ERR(0, 20, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_d), (&PyFloat_Type), 1, "min_d", 1))) __PYX_ERR(0, 21, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_h), (&PyFloat_Type), 1, "min_h", 1))) __PYX_ERR(0, 21, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_w), (&PyFloat_Type), 1, "min_w", 1))) __PYX_ERR(0, 21, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_grid_indexes), __pyx_ptype_5numpy_ndarray, 1, "grid_indexes", 0))) __PYX_ERR(0, 23, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_labels), __pyx_ptype_5numpy_ndarray, 1, "labels", 0))) __PYX_ERR(0, 23, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_pmatrix), __pyx_ptype_5numpy_ndarray, 1, "pmatrix", 0))) __PYX_ERR(0, 24, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_d), (&PyFloat_Type), 1, "step_d", 1))) __PYX_ERR(0, 23, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_h), (&PyFloat_Type), 1, "step_h", 1))) __PYX_ERR(0, 23, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_step_w), (&PyFloat_Type), 1, "step_w", 1))) __PYX_ERR(0, 23, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_d), (&PyFloat_Type), 1, "min_d", 1))) __PYX_ERR(0, 24, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_h), (&PyFloat_Type), 1, "min_h", 1))) __PYX_ERR(0, 24, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_w), (&PyFloat_Type), 1, "min_w", 1))) __PYX_ERR(0, 24, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_grid_indexes), __pyx_ptype_5numpy_ndarray, 1, "grid_indexes", 0))) __PYX_ERR(0, 26, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_labels), __pyx_ptype_5numpy_ndarray, 1, "labels", 0))) __PYX_ERR(0, 26, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_pmatrix), __pyx_ptype_5numpy_ndarray, 1, "pmatrix", 0))) __PYX_ERR(0, 27, __pyx_L1_error)
   __pyx_r = __pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(__pyx_self, __pyx_v_grid_size, __pyx_v_step_d, __pyx_v_step_h, __pyx_v_step_w, __pyx_v_min_d, __pyx_v_min_h, __pyx_v_min_w, __pyx_v_filter_h, __pyx_v_filter_w, __pyx_v_num_classes, __pyx_v_grid_indexes, __pyx_v_labels, __pyx_v_pmatrix, __pyx_v_device_id);
 
   /* function exit code */
@@ -1578,21 +1585,21 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_pybuffernd_pmatrix.rcbuffer = &__pyx_pybuffer_pmatrix;
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer, (PyObject*)__pyx_v_grid_indexes, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 20, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer, (PyObject*)__pyx_v_grid_indexes, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 23, __pyx_L1_error)
   }
   __pyx_pybuffernd_grid_indexes.diminfo[0].strides = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_grid_indexes.diminfo[0].shape = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_grid_indexes.diminfo[1].strides = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_grid_indexes.diminfo[1].shape = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.shape[1];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_labels.rcbuffer->pybuffer, (PyObject*)__pyx_v_labels, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 20, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_labels.rcbuffer->pybuffer, (PyObject*)__pyx_v_labels, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 23, __pyx_L1_error)
   }
   __pyx_pybuffernd_labels.diminfo[0].strides = __pyx_pybuffernd_labels.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_labels.diminfo[0].shape = __pyx_pybuffernd_labels.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_labels.diminfo[1].strides = __pyx_pybuffernd_labels.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_labels.diminfo[1].shape = __pyx_pybuffernd_labels.rcbuffer->pybuffer.shape[1];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_pmatrix.rcbuffer->pybuffer, (PyObject*)__pyx_v_pmatrix, &__Pyx_TypeInfo_nn___pyx_t_5numpy_float32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 20, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_pmatrix.rcbuffer->pybuffer, (PyObject*)__pyx_v_pmatrix, &__Pyx_TypeInfo_nn___pyx_t_5numpy_float32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 23, __pyx_L1_error)
   }
   __pyx_pybuffernd_pmatrix.diminfo[0].strides = __pyx_pybuffernd_pmatrix.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_pmatrix.diminfo[0].shape = __pyx_pybuffernd_pmatrix.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_pmatrix.diminfo[1].strides = __pyx_pybuffernd_pmatrix.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_pmatrix.diminfo[1].shape = __pyx_pybuffernd_pmatrix.rcbuffer->pybuffer.shape[1];
 
-  /* "utils/gpu_build_voxel.pyx":26
+  /* "utils/gpu_build_voxel.pyx":29
  *             np.ndarray[np.float32_t, ndim=2] pmatrix, np.int32_t device_id=0):
  * 
  *     cdef int height = labels.shape[0]             # <<<<<<<<<<<<<<
@@ -1601,7 +1608,7 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
  */
   __pyx_v_height = (__pyx_v_labels->dimensions[0]);
 
-  /* "utils/gpu_build_voxel.pyx":27
+  /* "utils/gpu_build_voxel.pyx":30
  * 
  *     cdef int height = labels.shape[0]
  *     cdef int width = labels.shape[1]             # <<<<<<<<<<<<<<
@@ -1610,27 +1617,27 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
  */
   __pyx_v_width = (__pyx_v_labels->dimensions[1]);
 
-  /* "utils/gpu_build_voxel.pyx":30
+  /* "utils/gpu_build_voxel.pyx":33
  * 
  *     cdef np.ndarray[np.int32_t, ndim=4] \
  *         top_locations = np.zeros((grid_size, grid_size, grid_size, filter_h * filter_w), dtype=np.int32)             # <<<<<<<<<<<<<<
  * 
  *     cdef np.ndarray[np.int32_t, ndim=4] \
  */
-  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_zeros); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_zeros); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_3 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_5 = __Pyx_PyInt_From_npy_int32((__pyx_v_filter_h * __pyx_v_filter_w)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyInt_From_npy_int32((__pyx_v_filter_h * __pyx_v_filter_w)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_6 = PyTuple_New(4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_6 = PyTuple_New(4); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_GIVEREF(__pyx_t_1);
   PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_1);
@@ -1644,32 +1651,32 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_t_3 = 0;
   __pyx_t_4 = 0;
   __pyx_t_5 = 0;
-  __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_5 = PyTuple_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_GIVEREF(__pyx_t_6);
   PyTuple_SET_ITEM(__pyx_t_5, 0, __pyx_t_6);
   __pyx_t_6 = 0;
-  __pyx_t_6 = PyDict_New(); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_6 = PyDict_New(); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_4 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_int32); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_int32); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_dtype, __pyx_t_3) < 0) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_6, __pyx_n_s_dtype, __pyx_t_3) < 0) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 30, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  if (!(likely(((__pyx_t_3) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_3, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 30, __pyx_L1_error)
+  if (!(likely(((__pyx_t_3) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_3, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 33, __pyx_L1_error)
   __pyx_t_7 = ((PyArrayObject *)__pyx_t_3);
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
     if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_top_locations.rcbuffer->pybuffer, (PyObject*)__pyx_t_7, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 4, 0, __pyx_stack) == -1)) {
       __pyx_v_top_locations = ((PyArrayObject *)Py_None); __Pyx_INCREF(Py_None); __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.buf = NULL;
-      __PYX_ERR(0, 29, __pyx_L1_error)
+      __PYX_ERR(0, 32, __pyx_L1_error)
     } else {__pyx_pybuffernd_top_locations.diminfo[0].strides = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_top_locations.diminfo[0].shape = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_top_locations.diminfo[1].strides = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_top_locations.diminfo[1].shape = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.shape[1]; __pyx_pybuffernd_top_locations.diminfo[2].strides = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.strides[2]; __pyx_pybuffernd_top_locations.diminfo[2].shape = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.shape[2]; __pyx_pybuffernd_top_locations.diminfo[3].strides = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.strides[3]; __pyx_pybuffernd_top_locations.diminfo[3].shape = __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.shape[3];
     }
   }
@@ -1677,27 +1684,27 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_v_top_locations = ((PyArrayObject *)__pyx_t_3);
   __pyx_t_3 = 0;
 
-  /* "utils/gpu_build_voxel.pyx":33
+  /* "utils/gpu_build_voxel.pyx":36
  * 
  *     cdef np.ndarray[np.int32_t, ndim=4] \
  *         top_labels = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.int32)             # <<<<<<<<<<<<<<
  * 
  *     _build_voxels(grid_size, step_d, step_h, step_w, min_d, min_h, min_w, filter_h, filter_w, num_classes, height, width, \
  */
-  __pyx_t_3 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_zeros); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_zeros); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_5 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  __pyx_t_2 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyInt_From_npy_int32(__pyx_v_grid_size); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_4 = __Pyx_PyInt_From_npy_int32(__pyx_v_num_classes); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyInt_From_npy_int32(__pyx_v_num_classes); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_1 = PyTuple_New(4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_1 = PyTuple_New(4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_GIVEREF(__pyx_t_3);
   PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_3);
@@ -1711,32 +1718,32 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_t_5 = 0;
   __pyx_t_2 = 0;
   __pyx_t_4 = 0;
-  __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_4 = PyTuple_New(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_GIVEREF(__pyx_t_1);
   PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_1);
   __pyx_t_1 = 0;
-  __pyx_t_1 = PyDict_New(); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_1 = PyDict_New(); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_int32); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_int32); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_4, __pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 36, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 36, __pyx_L1_error)
   __pyx_t_8 = ((PyArrayObject *)__pyx_t_5);
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
     if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_top_labels.rcbuffer->pybuffer, (PyObject*)__pyx_t_8, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 4, 0, __pyx_stack) == -1)) {
       __pyx_v_top_labels = ((PyArrayObject *)Py_None); __Pyx_INCREF(Py_None); __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.buf = NULL;
-      __PYX_ERR(0, 32, __pyx_L1_error)
+      __PYX_ERR(0, 35, __pyx_L1_error)
     } else {__pyx_pybuffernd_top_labels.diminfo[0].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_top_labels.diminfo[0].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_top_labels.diminfo[1].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_top_labels.diminfo[1].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[1]; __pyx_pybuffernd_top_labels.diminfo[2].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[2]; __pyx_pybuffernd_top_labels.diminfo[2].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[2]; __pyx_pybuffernd_top_labels.diminfo[3].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[3]; __pyx_pybuffernd_top_labels.diminfo[3].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[3];
     }
   }
@@ -1744,21 +1751,21 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_v_top_labels = ((PyArrayObject *)__pyx_t_5);
   __pyx_t_5 = 0;
 
-  /* "utils/gpu_build_voxel.pyx":35
+  /* "utils/gpu_build_voxel.pyx":38
  *         top_labels = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.int32)
  * 
  *     _build_voxels(grid_size, step_d, step_h, step_w, min_d, min_h, min_w, filter_h, filter_w, num_classes, height, width, \             # <<<<<<<<<<<<<<
  *                   &grid_indexes[0, 0], &labels[0, 0], &pmatrix[0, 0], &top_locations[0, 0, 0, 0], &top_labels[0, 0, 0, 0], device_id)
  * 
  */
-  __pyx_t_9 = __pyx_PyFloat_AsFloat(__pyx_v_step_d); if (unlikely((__pyx_t_9 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
-  __pyx_t_10 = __pyx_PyFloat_AsFloat(__pyx_v_step_h); if (unlikely((__pyx_t_10 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
-  __pyx_t_11 = __pyx_PyFloat_AsFloat(__pyx_v_step_w); if (unlikely((__pyx_t_11 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
-  __pyx_t_12 = __pyx_PyFloat_AsFloat(__pyx_v_min_d); if (unlikely((__pyx_t_12 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
-  __pyx_t_13 = __pyx_PyFloat_AsFloat(__pyx_v_min_h); if (unlikely((__pyx_t_13 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
-  __pyx_t_14 = __pyx_PyFloat_AsFloat(__pyx_v_min_w); if (unlikely((__pyx_t_14 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 35, __pyx_L1_error)
+  __pyx_t_9 = __pyx_PyFloat_AsFloat(__pyx_v_step_d); if (unlikely((__pyx_t_9 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_10 = __pyx_PyFloat_AsFloat(__pyx_v_step_h); if (unlikely((__pyx_t_10 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_11 = __pyx_PyFloat_AsFloat(__pyx_v_step_w); if (unlikely((__pyx_t_11 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_12 = __pyx_PyFloat_AsFloat(__pyx_v_min_d); if (unlikely((__pyx_t_12 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_13 = __pyx_PyFloat_AsFloat(__pyx_v_min_h); if (unlikely((__pyx_t_13 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_14 = __pyx_PyFloat_AsFloat(__pyx_v_min_w); if (unlikely((__pyx_t_14 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 38, __pyx_L1_error)
 
-  /* "utils/gpu_build_voxel.pyx":36
+  /* "utils/gpu_build_voxel.pyx":39
  * 
  *     _build_voxels(grid_size, step_d, step_h, step_w, min_d, min_h, min_w, filter_h, filter_w, num_classes, height, width, \
  *                   &grid_indexes[0, 0], &labels[0, 0], &pmatrix[0, 0], &top_locations[0, 0, 0, 0], &top_labels[0, 0, 0, 0], device_id)             # <<<<<<<<<<<<<<
@@ -1778,7 +1785,7 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   } else if (unlikely(__pyx_t_16 >= __pyx_pybuffernd_grid_indexes.diminfo[1].shape)) __pyx_t_17 = 1;
   if (unlikely(__pyx_t_17 != -1)) {
     __Pyx_RaiseBufferIndexError(__pyx_t_17);
-    __PYX_ERR(0, 36, __pyx_L1_error)
+    __PYX_ERR(0, 39, __pyx_L1_error)
   }
   __pyx_t_18 = 0;
   __pyx_t_19 = 0;
@@ -1793,7 +1800,7 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   } else if (unlikely(__pyx_t_19 >= __pyx_pybuffernd_labels.diminfo[1].shape)) __pyx_t_17 = 1;
   if (unlikely(__pyx_t_17 != -1)) {
     __Pyx_RaiseBufferIndexError(__pyx_t_17);
-    __PYX_ERR(0, 36, __pyx_L1_error)
+    __PYX_ERR(0, 39, __pyx_L1_error)
   }
   __pyx_t_20 = 0;
   __pyx_t_21 = 0;
@@ -1808,7 +1815,7 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   } else if (unlikely(__pyx_t_21 >= __pyx_pybuffernd_pmatrix.diminfo[1].shape)) __pyx_t_17 = 1;
   if (unlikely(__pyx_t_17 != -1)) {
     __Pyx_RaiseBufferIndexError(__pyx_t_17);
-    __PYX_ERR(0, 36, __pyx_L1_error)
+    __PYX_ERR(0, 39, __pyx_L1_error)
   }
   __pyx_t_22 = 0;
   __pyx_t_23 = 0;
@@ -1833,7 +1840,7 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   } else if (unlikely(__pyx_t_25 >= __pyx_pybuffernd_top_locations.diminfo[3].shape)) __pyx_t_17 = 3;
   if (unlikely(__pyx_t_17 != -1)) {
     __Pyx_RaiseBufferIndexError(__pyx_t_17);
-    __PYX_ERR(0, 36, __pyx_L1_error)
+    __PYX_ERR(0, 39, __pyx_L1_error)
   }
   __pyx_t_26 = 0;
   __pyx_t_27 = 0;
@@ -1858,10 +1865,10 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   } else if (unlikely(__pyx_t_29 >= __pyx_pybuffernd_top_labels.diminfo[3].shape)) __pyx_t_17 = 3;
   if (unlikely(__pyx_t_17 != -1)) {
     __Pyx_RaiseBufferIndexError(__pyx_t_17);
-    __PYX_ERR(0, 36, __pyx_L1_error)
+    __PYX_ERR(0, 39, __pyx_L1_error)
   }
 
-  /* "utils/gpu_build_voxel.pyx":35
+  /* "utils/gpu_build_voxel.pyx":38
  *         top_labels = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.int32)
  * 
  *     _build_voxels(grid_size, step_d, step_h, step_w, min_d, min_h, min_w, filter_h, filter_w, num_classes, height, width, \             # <<<<<<<<<<<<<<
@@ -1870,13 +1877,15 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
  */
   _build_voxels(__pyx_v_grid_size, __pyx_t_9, __pyx_t_10, __pyx_t_11, __pyx_t_12, __pyx_t_13, __pyx_t_14, __pyx_v_filter_h, __pyx_v_filter_w, __pyx_v_num_classes, __pyx_v_height, __pyx_v_width, (&(*__Pyx_BufPtrStrided2d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.buf, __pyx_t_15, __pyx_pybuffernd_grid_indexes.diminfo[0].strides, __pyx_t_16, __pyx_pybuffernd_grid_indexes.diminfo[1].strides))), (&(*__Pyx_BufPtrStrided2d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_labels.rcbuffer->pybuffer.buf, __pyx_t_18, __pyx_pybuffernd_labels.diminfo[0].strides, __pyx_t_19, __pyx_pybuffernd_labels.diminfo[1].strides))), (&(*__Pyx_BufPtrStrided2d(__pyx_t_5numpy_float32_t *, __pyx_pybuffernd_pmatrix.rcbuffer->pybuffer.buf, __pyx_t_20, __pyx_pybuffernd_pmatrix.diminfo[0].strides, __pyx_t_21, __pyx_pybuffernd_pmatrix.diminfo[1].strides))), (&(*__Pyx_BufPtrStrided4d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_top_locations.rcbuffer->pybuffer.buf, __pyx_t_22, __pyx_pybuffernd_top_locations.diminfo[0].strides, __pyx_t_23, __pyx_pybuffernd_top_locations.diminfo[1].strides, __pyx_t_24, __pyx_pybuffernd_top_locations.diminfo[2].strides, __pyx_t_25, __pyx_pybuffernd_top_locations.diminfo[3].strides))), (&(*__Pyx_BufPtrStrided4d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.buf, __pyx_t_26, __pyx_pybuffernd_top_labels.diminfo[0].strides, __pyx_t_27, __pyx_pybuffernd_top_labels.diminfo[1].strides, __pyx_t_28, __pyx_pybuffernd_top_labels.diminfo[2].strides, __pyx_t_29, __pyx_pybuffernd_top_labels.diminfo[3].strides))), __pyx_v_device_id);
 
-  /* "utils/gpu_build_voxel.pyx":38
+  /* "utils/gpu_build_voxel.pyx":41
  *                   &grid_indexes[0, 0], &labels[0, 0], &pmatrix[0, 0], &top_locations[0, 0, 0, 0], &top_labels[0, 0, 0, 0], device_id)
  * 
  *     return top_locations, top_labels             # <<<<<<<<<<<<<<
+ * 
+ * # compute pixel labels from 3D probablities on voxels
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_5 = PyTuple_New(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 38, __pyx_L1_error)
+  __pyx_t_5 = PyTuple_New(2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 41, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_INCREF(((PyObject *)__pyx_v_top_locations));
   __Pyx_GIVEREF(((PyObject *)__pyx_v_top_locations));
@@ -1888,8 +1897,8 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __pyx_t_5 = 0;
   goto __pyx_L0;
 
-  /* "utils/gpu_build_voxel.pyx":20
- *                    np.float32_t* pmatrix, np.int32_t* top_locations, np.int32_t* top_labels, int device_id)
+  /* "utils/gpu_build_voxel.pyx":23
+ *                    np.int32_t* grid_indexes, np.float32_t* cls_prob_3d, np.int32_t* top_labels, int device_id);
  * 
  * def gpu_build_voxel(np.int32_t grid_size, np.float step_d, np.float step_h, np.float step_w,             # <<<<<<<<<<<<<<
  *             np.float min_d, np.float min_h, np.float min_w,
@@ -1925,6 +1934,359 @@ static PyObject *__pyx_pf_5utils_15gpu_build_voxel_gpu_build_voxel(CYTHON_UNUSED
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_top_locations.rcbuffer->pybuffer);
   __pyx_L2:;
   __Pyx_XDECREF((PyObject *)__pyx_v_top_locations);
+  __Pyx_XDECREF((PyObject *)__pyx_v_top_labels);
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "utils/gpu_build_voxel.pyx":44
+ * 
+ * # compute pixel labels from 3D probablities on voxels
+ * def gpu_compute_labels(np.ndarray[np.int32_t, ndim=2] grid_indexes, np.ndarray[np.float32_t, ndim=4] cls_prob_3d, np.int32_t device_id=0):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef int height = grid_indexes.shape[0]
+ */
+
+/* Python wrapper */
+static PyObject *__pyx_pw_5utils_15gpu_build_voxel_3gpu_compute_labels(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
+static PyMethodDef __pyx_mdef_5utils_15gpu_build_voxel_3gpu_compute_labels = {"gpu_compute_labels", (PyCFunction)__pyx_pw_5utils_15gpu_build_voxel_3gpu_compute_labels, METH_VARARGS|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_5utils_15gpu_build_voxel_3gpu_compute_labels(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
+  PyArrayObject *__pyx_v_grid_indexes = 0;
+  PyArrayObject *__pyx_v_cls_prob_3d = 0;
+  __pyx_t_5numpy_int32_t __pyx_v_device_id;
+  PyObject *__pyx_r = 0;
+  __Pyx_RefNannyDeclarations
+  __Pyx_RefNannySetupContext("gpu_compute_labels (wrapper)", 0);
+  {
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_grid_indexes,&__pyx_n_s_cls_prob_3d,&__pyx_n_s_device_id,0};
+    PyObject* values[3] = {0,0,0};
+    if (unlikely(__pyx_kwds)) {
+      Py_ssize_t kw_args;
+      const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
+      switch (pos_args) {
+        case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
+        case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
+        case  1: values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
+        case  0: break;
+        default: goto __pyx_L5_argtuple_error;
+      }
+      kw_args = PyDict_Size(__pyx_kwds);
+      switch (pos_args) {
+        case  0:
+        if (likely((values[0] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_grid_indexes)) != 0)) kw_args--;
+        else goto __pyx_L5_argtuple_error;
+        case  1:
+        if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_cls_prob_3d)) != 0)) kw_args--;
+        else {
+          __Pyx_RaiseArgtupleInvalid("gpu_compute_labels", 0, 2, 3, 1); __PYX_ERR(0, 44, __pyx_L3_error)
+        }
+        case  2:
+        if (kw_args > 0) {
+          PyObject* value = PyDict_GetItem(__pyx_kwds, __pyx_n_s_device_id);
+          if (value) { values[2] = value; kw_args--; }
+        }
+      }
+      if (unlikely(kw_args > 0)) {
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "gpu_compute_labels") < 0)) __PYX_ERR(0, 44, __pyx_L3_error)
+      }
+    } else {
+      switch (PyTuple_GET_SIZE(__pyx_args)) {
+        case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
+        case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
+        values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
+        break;
+        default: goto __pyx_L5_argtuple_error;
+      }
+    }
+    __pyx_v_grid_indexes = ((PyArrayObject *)values[0]);
+    __pyx_v_cls_prob_3d = ((PyArrayObject *)values[1]);
+    if (values[2]) {
+      __pyx_v_device_id = __Pyx_PyInt_As_npy_int32(values[2]); if (unlikely((__pyx_v_device_id == (npy_int32)-1) && PyErr_Occurred())) __PYX_ERR(0, 44, __pyx_L3_error)
+    } else {
+      __pyx_v_device_id = ((__pyx_t_5numpy_int32_t)0);
+    }
+  }
+  goto __pyx_L4_argument_unpacking_done;
+  __pyx_L5_argtuple_error:;
+  __Pyx_RaiseArgtupleInvalid("gpu_compute_labels", 0, 2, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 44, __pyx_L3_error)
+  __pyx_L3_error:;
+  __Pyx_AddTraceback("utils.gpu_build_voxel.gpu_compute_labels", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_RefNannyFinishContext();
+  return NULL;
+  __pyx_L4_argument_unpacking_done:;
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_grid_indexes), __pyx_ptype_5numpy_ndarray, 1, "grid_indexes", 0))) __PYX_ERR(0, 44, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_cls_prob_3d), __pyx_ptype_5numpy_ndarray, 1, "cls_prob_3d", 0))) __PYX_ERR(0, 44, __pyx_L1_error)
+  __pyx_r = __pyx_pf_5utils_15gpu_build_voxel_2gpu_compute_labels(__pyx_self, __pyx_v_grid_indexes, __pyx_v_cls_prob_3d, __pyx_v_device_id);
+
+  /* function exit code */
+  goto __pyx_L0;
+  __pyx_L1_error:;
+  __pyx_r = NULL;
+  __pyx_L0:;
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+static PyObject *__pyx_pf_5utils_15gpu_build_voxel_2gpu_compute_labels(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_grid_indexes, PyArrayObject *__pyx_v_cls_prob_3d, __pyx_t_5numpy_int32_t __pyx_v_device_id) {
+  int __pyx_v_height;
+  int __pyx_v_width;
+  int __pyx_v_grid_size;
+  int __pyx_v_num_classes;
+  PyArrayObject *__pyx_v_top_labels = 0;
+  __Pyx_LocalBuf_ND __pyx_pybuffernd_cls_prob_3d;
+  __Pyx_Buffer __pyx_pybuffer_cls_prob_3d;
+  __Pyx_LocalBuf_ND __pyx_pybuffernd_grid_indexes;
+  __Pyx_Buffer __pyx_pybuffer_grid_indexes;
+  __Pyx_LocalBuf_ND __pyx_pybuffernd_top_labels;
+  __Pyx_Buffer __pyx_pybuffer_top_labels;
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  PyObject *__pyx_t_2 = NULL;
+  PyObject *__pyx_t_3 = NULL;
+  PyObject *__pyx_t_4 = NULL;
+  PyObject *__pyx_t_5 = NULL;
+  PyArrayObject *__pyx_t_6 = NULL;
+  Py_ssize_t __pyx_t_7;
+  Py_ssize_t __pyx_t_8;
+  int __pyx_t_9;
+  Py_ssize_t __pyx_t_10;
+  Py_ssize_t __pyx_t_11;
+  Py_ssize_t __pyx_t_12;
+  Py_ssize_t __pyx_t_13;
+  Py_ssize_t __pyx_t_14;
+  Py_ssize_t __pyx_t_15;
+  __Pyx_RefNannySetupContext("gpu_compute_labels", 0);
+  __pyx_pybuffer_top_labels.pybuffer.buf = NULL;
+  __pyx_pybuffer_top_labels.refcount = 0;
+  __pyx_pybuffernd_top_labels.data = NULL;
+  __pyx_pybuffernd_top_labels.rcbuffer = &__pyx_pybuffer_top_labels;
+  __pyx_pybuffer_grid_indexes.pybuffer.buf = NULL;
+  __pyx_pybuffer_grid_indexes.refcount = 0;
+  __pyx_pybuffernd_grid_indexes.data = NULL;
+  __pyx_pybuffernd_grid_indexes.rcbuffer = &__pyx_pybuffer_grid_indexes;
+  __pyx_pybuffer_cls_prob_3d.pybuffer.buf = NULL;
+  __pyx_pybuffer_cls_prob_3d.refcount = 0;
+  __pyx_pybuffernd_cls_prob_3d.data = NULL;
+  __pyx_pybuffernd_cls_prob_3d.rcbuffer = &__pyx_pybuffer_cls_prob_3d;
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer, (PyObject*)__pyx_v_grid_indexes, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 44, __pyx_L1_error)
+  }
+  __pyx_pybuffernd_grid_indexes.diminfo[0].strides = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_grid_indexes.diminfo[0].shape = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_grid_indexes.diminfo[1].strides = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_grid_indexes.diminfo[1].shape = __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.shape[1];
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer, (PyObject*)__pyx_v_cls_prob_3d, &__Pyx_TypeInfo_nn___pyx_t_5numpy_float32_t, PyBUF_FORMAT| PyBUF_STRIDES, 4, 0, __pyx_stack) == -1)) __PYX_ERR(0, 44, __pyx_L1_error)
+  }
+  __pyx_pybuffernd_cls_prob_3d.diminfo[0].strides = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_cls_prob_3d.diminfo[0].shape = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_cls_prob_3d.diminfo[1].strides = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_cls_prob_3d.diminfo[1].shape = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.shape[1]; __pyx_pybuffernd_cls_prob_3d.diminfo[2].strides = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.strides[2]; __pyx_pybuffernd_cls_prob_3d.diminfo[2].shape = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.shape[2]; __pyx_pybuffernd_cls_prob_3d.diminfo[3].strides = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.strides[3]; __pyx_pybuffernd_cls_prob_3d.diminfo[3].shape = __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.shape[3];
+
+  /* "utils/gpu_build_voxel.pyx":46
+ * def gpu_compute_labels(np.ndarray[np.int32_t, ndim=2] grid_indexes, np.ndarray[np.float32_t, ndim=4] cls_prob_3d, np.int32_t device_id=0):
+ * 
+ *     cdef int height = grid_indexes.shape[0]             # <<<<<<<<<<<<<<
+ *     cdef int width = grid_indexes.shape[1]
+ *     cdef int grid_size = cls_prob_3d.shape[0]
+ */
+  __pyx_v_height = (__pyx_v_grid_indexes->dimensions[0]);
+
+  /* "utils/gpu_build_voxel.pyx":47
+ * 
+ *     cdef int height = grid_indexes.shape[0]
+ *     cdef int width = grid_indexes.shape[1]             # <<<<<<<<<<<<<<
+ *     cdef int grid_size = cls_prob_3d.shape[0]
+ *     cdef int num_classes = cls_prob_3d.shape[3]
+ */
+  __pyx_v_width = (__pyx_v_grid_indexes->dimensions[1]);
+
+  /* "utils/gpu_build_voxel.pyx":48
+ *     cdef int height = grid_indexes.shape[0]
+ *     cdef int width = grid_indexes.shape[1]
+ *     cdef int grid_size = cls_prob_3d.shape[0]             # <<<<<<<<<<<<<<
+ *     cdef int num_classes = cls_prob_3d.shape[3]
+ * 
+ */
+  __pyx_v_grid_size = (__pyx_v_cls_prob_3d->dimensions[0]);
+
+  /* "utils/gpu_build_voxel.pyx":49
+ *     cdef int width = grid_indexes.shape[1]
+ *     cdef int grid_size = cls_prob_3d.shape[0]
+ *     cdef int num_classes = cls_prob_3d.shape[3]             # <<<<<<<<<<<<<<
+ * 
+ *     cdef np.ndarray[np.int32_t, ndim=2] \
+ */
+  __pyx_v_num_classes = (__pyx_v_cls_prob_3d->dimensions[3]);
+
+  /* "utils/gpu_build_voxel.pyx":52
+ * 
+ *     cdef np.ndarray[np.int32_t, ndim=2] \
+ *         top_labels = np.zeros((height, width), dtype=np.int32)             # <<<<<<<<<<<<<<
+ * 
+ *     _compute_pixel_labels(grid_size, num_classes, height, width, \
+ */
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_zeros); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __Pyx_PyInt_From_int(__pyx_v_height); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_width); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __Pyx_GIVEREF(__pyx_t_1);
+  PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_1);
+  __Pyx_GIVEREF(__pyx_t_3);
+  PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_3);
+  __pyx_t_1 = 0;
+  __pyx_t_3 = 0;
+  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_GIVEREF(__pyx_t_4);
+  PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4);
+  __pyx_t_4 = 0;
+  __pyx_t_4 = PyDict_New(); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_int32); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_5) < 0) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_6 = ((PyArrayObject *)__pyx_t_5);
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_top_labels.rcbuffer->pybuffer, (PyObject*)__pyx_t_6, &__Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) {
+      __pyx_v_top_labels = ((PyArrayObject *)Py_None); __Pyx_INCREF(Py_None); __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.buf = NULL;
+      __PYX_ERR(0, 51, __pyx_L1_error)
+    } else {__pyx_pybuffernd_top_labels.diminfo[0].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_top_labels.diminfo[0].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_top_labels.diminfo[1].strides = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_top_labels.diminfo[1].shape = __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.shape[1];
+    }
+  }
+  __pyx_t_6 = 0;
+  __pyx_v_top_labels = ((PyArrayObject *)__pyx_t_5);
+  __pyx_t_5 = 0;
+
+  /* "utils/gpu_build_voxel.pyx":55
+ * 
+ *     _compute_pixel_labels(grid_size, num_classes, height, width, \
+ *                   &grid_indexes[0, 0], &cls_prob_3d[0, 0, 0, 0], &top_labels[0, 0], device_id)             # <<<<<<<<<<<<<<
+ * 
+ *     return top_labels
+ */
+  __pyx_t_7 = 0;
+  __pyx_t_8 = 0;
+  __pyx_t_9 = -1;
+  if (__pyx_t_7 < 0) {
+    __pyx_t_7 += __pyx_pybuffernd_grid_indexes.diminfo[0].shape;
+    if (unlikely(__pyx_t_7 < 0)) __pyx_t_9 = 0;
+  } else if (unlikely(__pyx_t_7 >= __pyx_pybuffernd_grid_indexes.diminfo[0].shape)) __pyx_t_9 = 0;
+  if (__pyx_t_8 < 0) {
+    __pyx_t_8 += __pyx_pybuffernd_grid_indexes.diminfo[1].shape;
+    if (unlikely(__pyx_t_8 < 0)) __pyx_t_9 = 1;
+  } else if (unlikely(__pyx_t_8 >= __pyx_pybuffernd_grid_indexes.diminfo[1].shape)) __pyx_t_9 = 1;
+  if (unlikely(__pyx_t_9 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_9);
+    __PYX_ERR(0, 55, __pyx_L1_error)
+  }
+  __pyx_t_10 = 0;
+  __pyx_t_11 = 0;
+  __pyx_t_12 = 0;
+  __pyx_t_13 = 0;
+  __pyx_t_9 = -1;
+  if (__pyx_t_10 < 0) {
+    __pyx_t_10 += __pyx_pybuffernd_cls_prob_3d.diminfo[0].shape;
+    if (unlikely(__pyx_t_10 < 0)) __pyx_t_9 = 0;
+  } else if (unlikely(__pyx_t_10 >= __pyx_pybuffernd_cls_prob_3d.diminfo[0].shape)) __pyx_t_9 = 0;
+  if (__pyx_t_11 < 0) {
+    __pyx_t_11 += __pyx_pybuffernd_cls_prob_3d.diminfo[1].shape;
+    if (unlikely(__pyx_t_11 < 0)) __pyx_t_9 = 1;
+  } else if (unlikely(__pyx_t_11 >= __pyx_pybuffernd_cls_prob_3d.diminfo[1].shape)) __pyx_t_9 = 1;
+  if (__pyx_t_12 < 0) {
+    __pyx_t_12 += __pyx_pybuffernd_cls_prob_3d.diminfo[2].shape;
+    if (unlikely(__pyx_t_12 < 0)) __pyx_t_9 = 2;
+  } else if (unlikely(__pyx_t_12 >= __pyx_pybuffernd_cls_prob_3d.diminfo[2].shape)) __pyx_t_9 = 2;
+  if (__pyx_t_13 < 0) {
+    __pyx_t_13 += __pyx_pybuffernd_cls_prob_3d.diminfo[3].shape;
+    if (unlikely(__pyx_t_13 < 0)) __pyx_t_9 = 3;
+  } else if (unlikely(__pyx_t_13 >= __pyx_pybuffernd_cls_prob_3d.diminfo[3].shape)) __pyx_t_9 = 3;
+  if (unlikely(__pyx_t_9 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_9);
+    __PYX_ERR(0, 55, __pyx_L1_error)
+  }
+  __pyx_t_14 = 0;
+  __pyx_t_15 = 0;
+  __pyx_t_9 = -1;
+  if (__pyx_t_14 < 0) {
+    __pyx_t_14 += __pyx_pybuffernd_top_labels.diminfo[0].shape;
+    if (unlikely(__pyx_t_14 < 0)) __pyx_t_9 = 0;
+  } else if (unlikely(__pyx_t_14 >= __pyx_pybuffernd_top_labels.diminfo[0].shape)) __pyx_t_9 = 0;
+  if (__pyx_t_15 < 0) {
+    __pyx_t_15 += __pyx_pybuffernd_top_labels.diminfo[1].shape;
+    if (unlikely(__pyx_t_15 < 0)) __pyx_t_9 = 1;
+  } else if (unlikely(__pyx_t_15 >= __pyx_pybuffernd_top_labels.diminfo[1].shape)) __pyx_t_9 = 1;
+  if (unlikely(__pyx_t_9 != -1)) {
+    __Pyx_RaiseBufferIndexError(__pyx_t_9);
+    __PYX_ERR(0, 55, __pyx_L1_error)
+  }
+
+  /* "utils/gpu_build_voxel.pyx":54
+ *         top_labels = np.zeros((height, width), dtype=np.int32)
+ * 
+ *     _compute_pixel_labels(grid_size, num_classes, height, width, \             # <<<<<<<<<<<<<<
+ *                   &grid_indexes[0, 0], &cls_prob_3d[0, 0, 0, 0], &top_labels[0, 0], device_id)
+ * 
+ */
+  _compute_pixel_labels(__pyx_v_grid_size, __pyx_v_num_classes, __pyx_v_height, __pyx_v_width, (&(*__Pyx_BufPtrStrided2d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer.buf, __pyx_t_7, __pyx_pybuffernd_grid_indexes.diminfo[0].strides, __pyx_t_8, __pyx_pybuffernd_grid_indexes.diminfo[1].strides))), (&(*__Pyx_BufPtrStrided4d(__pyx_t_5numpy_float32_t *, __pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer.buf, __pyx_t_10, __pyx_pybuffernd_cls_prob_3d.diminfo[0].strides, __pyx_t_11, __pyx_pybuffernd_cls_prob_3d.diminfo[1].strides, __pyx_t_12, __pyx_pybuffernd_cls_prob_3d.diminfo[2].strides, __pyx_t_13, __pyx_pybuffernd_cls_prob_3d.diminfo[3].strides))), (&(*__Pyx_BufPtrStrided2d(__pyx_t_5numpy_int32_t *, __pyx_pybuffernd_top_labels.rcbuffer->pybuffer.buf, __pyx_t_14, __pyx_pybuffernd_top_labels.diminfo[0].strides, __pyx_t_15, __pyx_pybuffernd_top_labels.diminfo[1].strides))), __pyx_v_device_id);
+
+  /* "utils/gpu_build_voxel.pyx":57
+ *                   &grid_indexes[0, 0], &cls_prob_3d[0, 0, 0, 0], &top_labels[0, 0], device_id)
+ * 
+ *     return top_labels             # <<<<<<<<<<<<<<
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __Pyx_INCREF(((PyObject *)__pyx_v_top_labels));
+  __pyx_r = ((PyObject *)__pyx_v_top_labels);
+  goto __pyx_L0;
+
+  /* "utils/gpu_build_voxel.pyx":44
+ * 
+ * # compute pixel labels from 3D probablities on voxels
+ * def gpu_compute_labels(np.ndarray[np.int32_t, ndim=2] grid_indexes, np.ndarray[np.float32_t, ndim=4] cls_prob_3d, np.int32_t device_id=0):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef int height = grid_indexes.shape[0]
+ */
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_5);
+  { PyObject *__pyx_type, *__pyx_value, *__pyx_tb;
+    __Pyx_PyThreadState_declare
+    __Pyx_PyThreadState_assign
+    __Pyx_ErrFetch(&__pyx_type, &__pyx_value, &__pyx_tb);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_top_labels.rcbuffer->pybuffer);
+  __Pyx_ErrRestore(__pyx_type, __pyx_value, __pyx_tb);}
+  __Pyx_AddTraceback("utils.gpu_build_voxel.gpu_compute_labels", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = NULL;
+  goto __pyx_L2;
+  __pyx_L0:;
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_cls_prob_3d.rcbuffer->pybuffer);
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_grid_indexes.rcbuffer->pybuffer);
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_top_labels.rcbuffer->pybuffer);
+  __pyx_L2:;
   __Pyx_XDECREF((PyObject *)__pyx_v_top_labels);
   __Pyx_XGIVEREF(__pyx_r);
   __Pyx_RefNannyFinishContext();
@@ -4081,11 +4443,13 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_kp_u_Non_native_byte_order_not_suppor, __pyx_k_Non_native_byte_order_not_suppor, sizeof(__pyx_k_Non_native_byte_order_not_suppor), 0, 1, 0, 0},
   {&__pyx_n_s_RuntimeError, __pyx_k_RuntimeError, sizeof(__pyx_k_RuntimeError), 0, 0, 1, 1},
   {&__pyx_n_s_ValueError, __pyx_k_ValueError, sizeof(__pyx_k_ValueError), 0, 0, 1, 1},
+  {&__pyx_n_s_cls_prob_3d, __pyx_k_cls_prob_3d, sizeof(__pyx_k_cls_prob_3d), 0, 0, 1, 1},
   {&__pyx_n_s_device_id, __pyx_k_device_id, sizeof(__pyx_k_device_id), 0, 0, 1, 1},
   {&__pyx_n_s_dtype, __pyx_k_dtype, sizeof(__pyx_k_dtype), 0, 0, 1, 1},
   {&__pyx_n_s_filter_h, __pyx_k_filter_h, sizeof(__pyx_k_filter_h), 0, 0, 1, 1},
   {&__pyx_n_s_filter_w, __pyx_k_filter_w, sizeof(__pyx_k_filter_w), 0, 0, 1, 1},
   {&__pyx_n_s_gpu_build_voxel, __pyx_k_gpu_build_voxel, sizeof(__pyx_k_gpu_build_voxel), 0, 0, 1, 1},
+  {&__pyx_n_s_gpu_compute_labels, __pyx_k_gpu_compute_labels, sizeof(__pyx_k_gpu_compute_labels), 0, 0, 1, 1},
   {&__pyx_n_s_grid_indexes, __pyx_k_grid_indexes, sizeof(__pyx_k_grid_indexes), 0, 0, 1, 1},
   {&__pyx_n_s_grid_size, __pyx_k_grid_size, sizeof(__pyx_k_grid_size), 0, 0, 1, 1},
   {&__pyx_n_s_height, __pyx_k_height, sizeof(__pyx_k_height), 0, 0, 1, 1},
@@ -4195,17 +4559,29 @@ static int __Pyx_InitCachedConstants(void) {
   __Pyx_GOTREF(__pyx_tuple__6);
   __Pyx_GIVEREF(__pyx_tuple__6);
 
-  /* "utils/gpu_build_voxel.pyx":20
- *                    np.float32_t* pmatrix, np.int32_t* top_locations, np.int32_t* top_labels, int device_id)
+  /* "utils/gpu_build_voxel.pyx":23
+ *                    np.int32_t* grid_indexes, np.float32_t* cls_prob_3d, np.int32_t* top_labels, int device_id);
  * 
  * def gpu_build_voxel(np.int32_t grid_size, np.float step_d, np.float step_h, np.float step_w,             # <<<<<<<<<<<<<<
  *             np.float min_d, np.float min_h, np.float min_w,
  *             np.int32_t filter_h, np.int32_t filter_w, np.int32_t num_classes,
  */
-  __pyx_tuple__7 = PyTuple_Pack(18, __pyx_n_s_grid_size, __pyx_n_s_step_d, __pyx_n_s_step_h, __pyx_n_s_step_w, __pyx_n_s_min_d, __pyx_n_s_min_h, __pyx_n_s_min_w, __pyx_n_s_filter_h, __pyx_n_s_filter_w, __pyx_n_s_num_classes, __pyx_n_s_grid_indexes, __pyx_n_s_labels, __pyx_n_s_pmatrix, __pyx_n_s_device_id, __pyx_n_s_height, __pyx_n_s_width, __pyx_n_s_top_locations, __pyx_n_s_top_labels); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(0, 20, __pyx_L1_error)
+  __pyx_tuple__7 = PyTuple_Pack(18, __pyx_n_s_grid_size, __pyx_n_s_step_d, __pyx_n_s_step_h, __pyx_n_s_step_w, __pyx_n_s_min_d, __pyx_n_s_min_h, __pyx_n_s_min_w, __pyx_n_s_filter_h, __pyx_n_s_filter_w, __pyx_n_s_num_classes, __pyx_n_s_grid_indexes, __pyx_n_s_labels, __pyx_n_s_pmatrix, __pyx_n_s_device_id, __pyx_n_s_height, __pyx_n_s_width, __pyx_n_s_top_locations, __pyx_n_s_top_labels); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(0, 23, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__7);
   __Pyx_GIVEREF(__pyx_tuple__7);
-  __pyx_codeobj__8 = (PyObject*)__Pyx_PyCode_New(14, 0, 18, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__7, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_var_Projects_FCN_lib_utils_gpu, __pyx_n_s_gpu_build_voxel, 20, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__8)) __PYX_ERR(0, 20, __pyx_L1_error)
+  __pyx_codeobj__8 = (PyObject*)__Pyx_PyCode_New(14, 0, 18, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__7, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_var_Projects_FCN_lib_utils_gpu, __pyx_n_s_gpu_build_voxel, 23, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__8)) __PYX_ERR(0, 23, __pyx_L1_error)
+
+  /* "utils/gpu_build_voxel.pyx":44
+ * 
+ * # compute pixel labels from 3D probablities on voxels
+ * def gpu_compute_labels(np.ndarray[np.int32_t, ndim=2] grid_indexes, np.ndarray[np.float32_t, ndim=4] cls_prob_3d, np.int32_t device_id=0):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef int height = grid_indexes.shape[0]
+ */
+  __pyx_tuple__9 = PyTuple_Pack(8, __pyx_n_s_grid_indexes, __pyx_n_s_cls_prob_3d, __pyx_n_s_device_id, __pyx_n_s_height, __pyx_n_s_width, __pyx_n_s_grid_size, __pyx_n_s_num_classes, __pyx_n_s_top_labels); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(0, 44, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__9);
+  __Pyx_GIVEREF(__pyx_tuple__9);
+  __pyx_codeobj__10 = (PyObject*)__Pyx_PyCode_New(3, 0, 8, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__9, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_var_Projects_FCN_lib_utils_gpu, __pyx_n_s_gpu_compute_labels, 44, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__10)) __PYX_ERR(0, 44, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -4352,16 +4728,28 @@ PyMODINIT_FUNC PyInit_gpu_build_voxel(void)
   }
   #endif
 
-  /* "utils/gpu_build_voxel.pyx":20
- *                    np.float32_t* pmatrix, np.int32_t* top_locations, np.int32_t* top_labels, int device_id)
+  /* "utils/gpu_build_voxel.pyx":23
+ *                    np.int32_t* grid_indexes, np.float32_t* cls_prob_3d, np.int32_t* top_labels, int device_id);
  * 
  * def gpu_build_voxel(np.int32_t grid_size, np.float step_d, np.float step_h, np.float step_w,             # <<<<<<<<<<<<<<
  *             np.float min_d, np.float min_h, np.float min_w,
  *             np.int32_t filter_h, np.int32_t filter_w, np.int32_t num_classes,
  */
-  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5utils_15gpu_build_voxel_1gpu_build_voxel, NULL, __pyx_n_s_utils_gpu_build_voxel); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 20, __pyx_L1_error)
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5utils_15gpu_build_voxel_1gpu_build_voxel, NULL, __pyx_n_s_utils_gpu_build_voxel); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 23, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_gpu_build_voxel, __pyx_t_1) < 0) __PYX_ERR(0, 20, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_gpu_build_voxel, __pyx_t_1) < 0) __PYX_ERR(0, 23, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+
+  /* "utils/gpu_build_voxel.pyx":44
+ * 
+ * # compute pixel labels from 3D probablities on voxels
+ * def gpu_compute_labels(np.ndarray[np.int32_t, ndim=2] grid_indexes, np.ndarray[np.float32_t, ndim=4] cls_prob_3d, np.int32_t device_id=0):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef int height = grid_indexes.shape[0]
+ */
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5utils_15gpu_build_voxel_3gpu_compute_labels, NULL, __pyx_n_s_utils_gpu_build_voxel); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 44, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_gpu_compute_labels, __pyx_t_1) < 0) __PYX_ERR(0, 44, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "utils/gpu_build_voxel.pyx":1
@@ -5722,6 +6110,33 @@ static void __Pyx_ReleaseBuffer(Py_buffer *view) {
     }
 }
 
+/* CIntToPy */
+      static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value) {
+    const int neg_one = (int) -1, const_zero = (int) 0;
+    const int is_unsigned = neg_one > const_zero;
+    if (is_unsigned) {
+        if (sizeof(int) < sizeof(long)) {
+            return PyInt_FromLong((long) value);
+        } else if (sizeof(int) <= sizeof(unsigned long)) {
+            return PyLong_FromUnsignedLong((unsigned long) value);
+        } else if (sizeof(int) <= sizeof(unsigned PY_LONG_LONG)) {
+            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
+        }
+    } else {
+        if (sizeof(int) <= sizeof(long)) {
+            return PyInt_FromLong((long) value);
+        } else if (sizeof(int) <= sizeof(PY_LONG_LONG)) {
+            return PyLong_FromLongLong((PY_LONG_LONG) value);
+        }
+    }
+    {
+        int one = 1; int little = (int)*(unsigned char *)&one;
+        unsigned char *bytes = (unsigned char *)&value;
+        return _PyLong_FromByteArray(bytes, sizeof(int),
+                                     little, !is_unsigned);
+    }
+}
+
 /* None */
       #if CYTHON_CCOMPLEX
   #ifdef __cplusplus
@@ -5965,33 +6380,6 @@ static void __Pyx_ReleaseBuffer(Py_buffer *view) {
         }
     #endif
 #endif
-
-/* CIntToPy */
-      static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value) {
-    const int neg_one = (int) -1, const_zero = (int) 0;
-    const int is_unsigned = neg_one > const_zero;
-    if (is_unsigned) {
-        if (sizeof(int) < sizeof(long)) {
-            return PyInt_FromLong((long) value);
-        } else if (sizeof(int) <= sizeof(unsigned long)) {
-            return PyLong_FromUnsignedLong((unsigned long) value);
-        } else if (sizeof(int) <= sizeof(unsigned PY_LONG_LONG)) {
-            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
-        }
-    } else {
-        if (sizeof(int) <= sizeof(long)) {
-            return PyInt_FromLong((long) value);
-        } else if (sizeof(int) <= sizeof(PY_LONG_LONG)) {
-            return PyLong_FromLongLong((PY_LONG_LONG) value);
-        }
-    }
-    {
-        int one = 1; int little = (int)*(unsigned char *)&one;
-        unsigned char *bytes = (unsigned char *)&value;
-        return _PyLong_FromByteArray(bytes, sizeof(int),
-                                     little, !is_unsigned);
-    }
-}
 
 /* CIntToPy */
       static CYTHON_INLINE PyObject* __Pyx_PyInt_From_enum__NPY_TYPES(enum NPY_TYPES value) {
