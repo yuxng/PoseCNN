@@ -12,7 +12,6 @@ import argparse
 from utils.timer import Timer
 from utils.blob import im_list_to_blob
 from utils.voxelizer import Voxelizer, set_axes_equal
-from utils.gpu_build_voxel import gpu_compute_labels
 import numpy as np
 import cv2
 import cPickle
@@ -69,33 +68,57 @@ def im_segment(sess, net, im, im_depth, meta_data, voxelizer):
     # compute image blob
     im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
 
+    # depth
+    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+
+    # use fake labels
+    im_cls = np.zeros_like(im_depth, dtype=np.int32)
+
     # backprojection
     points = voxelizer.backproject(im_depth, meta_data)
     voxelizer.voxelized = False
     grid_indexes = voxelizer.voxelize(points)
-    # use fake labels
-    im_cls = np.zeros_like(im_depth, dtype=np.int32)
-    locations, _ = voxelizer.compute_voxel_labels(grid_indexes, im_cls, meta_data['projection_matrix'], cfg.GPU_ID)
 
-    num_classes = voxelizer.num_classes
-    grid_size = voxelizer.grid_size
-    filter_h = voxelizer.filter_h
-    filter_w = voxelizer.filter_w
-    processed_locations = np.zeros((1, grid_size, grid_size, grid_size, filter_h*filter_w), dtype=np.int32)
-    processed_locations[0,:,:,:,:] = locations
+    # construct the meta data
+    """
+    format of the meta_data
+    projection matrix: meta_data[0 ~ 11]
+    camera center: meta_data[12, 13, 14]
+    voxel step size: meta_data[15, 16, 17]
+    voxel min value: meta_data[18, 19, 20]
+    backprojection matrix: meta_data[21 ~ 32]
+    """
+    P = np.matrix(meta_data['projection_matrix'])
+    Pinv = np.linalg.pinv(P)
+    mdata = np.zeros(33, dtype=np.float32)
+    mdata[0:12] = P.flatten()
+    mdata[12:15] = meta_data['camera_location']
+    mdata[15] = voxelizer.step_x
+    mdata[16] = voxelizer.step_y
+    mdata[17] = voxelizer.step_z
+    mdata[18] = voxelizer.min_x
+    mdata[19] = voxelizer.min_y
+    mdata[20] = voxelizer.min_z
+    mdata[21:33] = Pinv.flatten()
+
+    # construct blobs
+    height = im_depth.shape[0]
+    width = im_depth.shape[1]
+    depth_blob = np.zeros((1, height, width, 1), dtype=np.float32)
+    label_blob = np.zeros((1, height, width, 1), dtype=np.int32)
+    meta_data_blob = np.zeros((1, 1, 1, 33), dtype=np.float32)
+    depth_blob[0,:,:,0] = depth
+    label_blob[0,:,:,0] = im_cls
+    meta_data_blob[0,0,0,:] = mdata
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.location: processed_locations}
-    output = sess.run([net.get_output('prob')], feed_dict=feed_dict)
+    feed_dict = {net.data: im_depth_blob, net.depth: depth_blob, net.label: label_blob, net.meta_data: meta_data_blob}
+    output = sess.run([net.get_output('label')], feed_dict=feed_dict)
 
     # get outputs scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
-    cls_prob = output[0]
-    cls_prob_3d = cls_prob[0, :, :, :, :]
+    labels = output[0]
 
-    # compute pixel labels
-    labels = gpu_compute_labels(grid_indexes, cls_prob_3d, cfg.GPU_ID)
-
-    return labels, points
+    return labels[0,:,:,0], points
 
 
 def vis_segmentations(im, im_depth, labels, points):

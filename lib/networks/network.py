@@ -3,6 +3,7 @@ from math import ceil
 import tensorflow as tf
 import backprojecting_layer.backprojecting_op as backproject_op
 import backprojecting_layer.backprojecting_op_grad
+import computing_label_layer.computing_label_op as compute_label_op
 
 DEFAULT_PADDING = 'SAME'
 
@@ -149,6 +150,10 @@ class Network(object):
     @layer
     def backproject(self, input, grid_size, num_classes, threshold, name):
         return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, num_classes, threshold, name=name)
+
+    @layer
+    def compute_label(self, input, name):
+        return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
 
     @layer
     def relu(self, input, name):

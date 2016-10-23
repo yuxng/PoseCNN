@@ -6,7 +6,6 @@
 # --------------------------------------------------------
 
 import numpy as np
-from utils.gpu_build_voxel import gpu_build_voxel
 
 class Voxelizer(object):
     def __init__(self, grid_size, num_classes):
@@ -61,18 +60,6 @@ class Voxelizer(object):
         self.voxelized = False
         self.data = np.zeros((self.grid_size, self.grid_size, self.grid_size, self.num_classes), dtype=np.float32)
         self.count = np.zeros((self.grid_size, self.grid_size, self.grid_size), dtype=np.int32)
-
-    def compute_voxel_labels(self, grid_indexes, labels, pmatrix, device_id):
-        assert self.voxelized, 'In compute_voxel_labels(), not voxelized'
-
-        top_locations, top_labels = gpu_build_voxel(
-            self.grid_size, float(self.step_x), float(self.step_y), float(self.step_z),
-            float(self.min_x), float(self.min_y), float(self.min_z),
-            self.filter_h, self.filter_w, self.num_classes,
-            grid_indexes, labels, pmatrix.astype(np.float32), device_id)
-
-        return top_locations, top_labels
-
 
     def voxelize(self, points):
         if not self.voxelized:

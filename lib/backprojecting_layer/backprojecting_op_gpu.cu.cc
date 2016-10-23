@@ -119,7 +119,7 @@ bool BackprojectForwardLaucher(
 
 template <typename Dtype>
 __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
-    const float* bottom_depth, const float* bottom_meta_data, 
+    const Dtype* bottom_depth, const Dtype* bottom_meta_data, 
     const int height, const int width, const int channels, const int num_meta_data,
     const int grid_size, Dtype* bottom_diff) 
 {
@@ -181,7 +181,7 @@ __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
 
     // get the gradient
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)
-      bottom_diff[index] = top_diff[(n * grid_size * grid_size * grid_size + vd * grid_size * grid_size + vh * grid_size + w) * channels + c];
+      bottom_diff[index] = top_diff[(n * grid_size * grid_size * grid_size + vd * grid_size * grid_size + vh * grid_size + vw) * channels + c];
     else
       bottom_diff[index] = 0;
   }
