@@ -147,8 +147,8 @@ class Network(object):
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding)
 
     @layer
-    def backproject(self, input, name):
-        return backproject_op.backproject(input[0], input[1], name=name)
+    def backproject(self, input, grid_size, num_classes, threshold, name):
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, num_classes, threshold, name=name)
 
     @layer
     def relu(self, input, name):
