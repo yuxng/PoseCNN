@@ -10,11 +10,9 @@
 __sets = {}
 
 import networks.vgg16
-import networks.test_net
 import tensorflow as tf
 
 __sets['vgg16'] = networks.vgg16()
-__sets['test_net'] = networks.test_net()
 
 def get_network(name):
     """Get a network by name."""

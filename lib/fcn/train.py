@@ -59,9 +59,8 @@ class SolverWrapper(object):
         """
 
         with tf.name_scope('loss'):
-            labels_float = tf.cast(labels, tf.float32)
-            cross_entropy = -tf.reduce_sum(labels_float * tf.log(prob_3d), reduction_indices=[4])
-            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels_float))
+            cross_entropy = -tf.reduce_sum(labels * tf.log(prob_3d), reduction_indices=[4])
+            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
         return loss
 
 
@@ -106,49 +105,7 @@ class SolverWrapper(object):
                        self.net.label: blobs['data_label'], self.net.meta_data: blobs['data_meta_data']}
             
             timer.tic()
-            loss_cls_value, backprojection_value, _ = sess.run([loss, self.net.get_output('backprojection'), train_op], feed_dict=feed_dict)
-
-            # show label
-            labels3d = backprojection_value[1][0,:,:,:,:]
-            print labels3d.shape
-            for i in range(7):
-                index = np.where(labels3d[:,:,:,i] == 1)
-                print 'class {}: {} voxels'.format(i, len(index[0]))
-
-            """
-            format of the meta_data
-            projection matrix: meta_data[0 ~ 11]
-            camera center: meta_data[12, 13, 14]
-            voxel step size: meta_data[15, 16, 17]
-            voxel min value: meta_data[18, 19, 20]
-            backprojection matrix: meta_data[21 ~ 32]
-            """
-            mdata = blobs['data_meta_data'][0,0,0,:]
-            index = np.where(labels3d[:,:,:,1] == 1)
-            X = index[0] * mdata[15] + mdata[18]
-            Y = index[1] * mdata[16] + mdata[19]
-            Z = index[2] * mdata[17] + mdata[20]
-            import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
-            from utils.voxelizer import set_axes_equal
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(X, Y, Z, c='r', marker='o')
-
-            index = np.where(np.sum(labels3d[:,:,:,2:], axis=3) == 1)
-            X = index[0] * mdata[15] + mdata[18]
-            Y = index[1] * mdata[16] + mdata[19]
-            Z = index[2] * mdata[17] + mdata[20]
-            ax.scatter(X, Y, Z, c='b', marker='o')
-
-            ax.set_xlabel('X')
-            ax.set_ylabel('Y')
-            ax.set_zlabel('Z')
-            ax.set_aspect('equal')
-            set_axes_equal(ax)
-
-            plt.show()
-
+            loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
             timer.toc()
 
             print 'iter: %d / %d, loss_cls: %.4f, lr: %f' %\

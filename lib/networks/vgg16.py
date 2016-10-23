@@ -35,5 +35,5 @@ class vgg16(Network):
              .deconv(32, 32, 7, 16, 16, name='score_up'))
 
         (self.feed('score_up', 'depth', 'label', 'meta_data')
-             .backproject(256, 7, 0.01, name='score_3d')
+             .backproject(256, 7, 0.001, name='backprojection')
              .softmax_high_dimension(num_classes=7, name='prob'))
