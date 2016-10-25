@@ -4,6 +4,7 @@ import tensorflow as tf
 import backprojecting_layer.backprojecting_op as backproject_op
 import backprojecting_layer.backprojecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
+from gru3d import GRU3DCell
 
 DEFAULT_PADDING = 'SAME'
 
@@ -127,6 +128,23 @@ class Network(object):
                 conv = tf.concat(3, output_groups)
             if relu:
                 bias = tf.nn.bias_add(conv, biases)
+                return tf.nn.relu(bias, name=scope.name)    
+        return tf.nn.bias_add(conv, biases, name=scope.name)
+
+
+    @layer
+    def conv3d(self, input, k_d, k_h, k_w, c_i, c_o, s_d, s_h, s_w, name, relu=True, padding=DEFAULT_PADDING, trainable=True):
+        self.validate_padding(padding)
+        if isinstance(input, tuple):
+            input = input[0]
+        with tf.variable_scope(name) as scope:
+            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
+            init_biases = tf.constant_initializer(0.0)
+            kernel = self.make_var('weights', [k_d, k_h, k_w, c_i, c_o], init_weights, trainable)
+            biases = self.make_var('biases', [c_o], init_biases, trainable)
+            conv = tf.nn.conv3d(input, kernel, [1, s_d, s_h, s_w, 1], padding=padding)
+            if relu:
+                bias = tf.nn.bias_add(conv, biases)
                 return tf.nn.relu(bias, name=scope.name)
             return tf.nn.bias_add(conv, biases, name=scope.name)
 
@@ -154,6 +172,14 @@ class Network(object):
     @layer
     def compute_label(self, input, name):
         return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
+
+    @layer
+    def rnn_gru3d(self, input, num_units, channels, name):
+        if isinstance(input[0], tuple):
+            input[0] = input[0][0]
+        with tf.variable_scope(name):
+            gru3d = GRU3DCell(num_units, channels)
+            return gru3d(input[0], input[1])
 
     @layer
     def relu(self, input, name):

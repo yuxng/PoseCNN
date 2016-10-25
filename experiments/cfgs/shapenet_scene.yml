@@ -10,5 +10,7 @@ TRAIN:
   SNAPSHOT_INFIX: shapenet_scene
   SNAPSHOT_PREFIX: vgg16_fcn_depth
   USE_FLIPPED: False
+  GRID_SIZE: 256
 TEST:
   SCALES_BASE: !!python/tuple [1.0]
+  GRID_SIZE: 256

@@ -4,11 +4,16 @@ from networks.network import Network
 class vgg16(Network):
     def __init__(self, trainable=True):
         self.inputs = []
+        self.grid_size = 256
+        self.num_classes = 7
+
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.depth = tf.placeholder(tf.float32, shape=[None, None, None, 1])
         self.label = tf.placeholder(tf.int32, shape=[None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[None, None, None, 33])
-        self.layers = dict({'data':self.data, 'depth':self.depth, 'label':self.label, 'meta_data':self.meta_data})
+        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
+
+        self.layers = dict({'data':self.data, 'depth':self.depth, 'label':self.label, 'meta_data':self.meta_data, 'state':self.state})
         self.trainable = trainable
         self.setup()
 
@@ -31,12 +36,15 @@ class vgg16(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_1')
              .conv(3, 3, 512, 1, 1, name='conv5_2')
              .conv(3, 3, 512, 1, 1, name='conv5_3')
-             .conv(1, 1, 7, 1, 1, name='score')
-             .deconv(32, 32, 7, 16, 16, name='score_up'))
+             .conv(1, 1, self.num_classes, 1, 1, name='score')
+             .deconv(32, 32, self.num_classes, 16, 16, name='score_up'))
 
         (self.feed('score_up', 'depth', 'label', 'meta_data')
-             .backproject(256, 7, 0.01, name='backprojection')
-             .softmax_high_dimension(num_classes=7, name='prob'))
+             .backproject(self.grid_size, self.num_classes, 0.01, name='backprojection'))
+
+        (self.feed('backprojection', 'state')
+             .rnn_gru3d(self.num_classes, self.num_classes, name='gru3d')
+             .softmax_high_dimension(num_classes=self.num_classes, name='prob'))
 
         (self.feed('prob', 'depth', 'meta_data')
              .compute_label(name='label'))

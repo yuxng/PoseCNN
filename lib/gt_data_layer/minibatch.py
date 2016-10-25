@@ -24,7 +24,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, state_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     # _vis_minibatch(im_blob, im_depth_blob, label_blob)
@@ -33,7 +33,8 @@ def get_minibatch(roidb, voxelizer):
              'data_depth_image': im_depth_blob,
              'data_depth': depth_blob,
              'data_label': label_blob,
-             'data_meta_data': meta_data_blob}
+             'data_meta_data': meta_data_blob,
+             'data_state': state_blob}
 
     return blobs
 
@@ -165,7 +166,11 @@ def _get_label_blob(roidb, voxelizer):
         label_blob[i,:,:,0] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
-    return depth_blob, label_blob, meta_data_blob
+    grid_size = voxelizer.grid_size
+    num_classes = voxelizer.num_classes
+    state_blob = np.zeros((num_images, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
+
+    return depth_blob, label_blob, meta_data_blob, state_blob
 
 
 def _vis_minibatch(im_blob, im_depth_blob, label_blob):

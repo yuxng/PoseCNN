@@ -102,7 +102,8 @@ class SolverWrapper(object):
 
             # Make one SGD update
             feed_dict={self.net.data: blobs['data_depth_image'], self.net.depth: blobs['data_depth'], \
-                       self.net.label: blobs['data_label'], self.net.meta_data: blobs['data_meta_data']}
+                       self.net.label: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
+                       self.net.state: blobs['data_state']}
             
             timer.tic()
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
@@ -135,8 +136,7 @@ def get_training_roidb(imdb):
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
 
         print 'Solving...'
