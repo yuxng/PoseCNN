@@ -48,6 +48,7 @@ __C.TRAIN.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 
 # Images to use per minibatch
 __C.TRAIN.IMS_PER_BATCH = 2
+__C.TRAIN.NUM_STEPS = 5
 
 # Use horizontally-flipped images during training?
 __C.TRAIN.USE_FLIPPED = True

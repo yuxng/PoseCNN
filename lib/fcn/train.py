@@ -52,15 +52,20 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
-    def loss_cross_entropy(self, prob_3d, labels, num_classes):
+    def loss_cross_entropy(self, probs, labels, num_classes):
         """
-        prob_3d: [batch_size, grid_size, grid_size, grid_size, num_classes]
-        labels: [batch_size, grid_size, grid_size, grid_size, num_classes]
+        probs: a list of [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: a list of [batch_size, grid_size, grid_size, grid_size, num_classes]
         """
 
         with tf.name_scope('loss'):
-            cross_entropy = -tf.reduce_sum(labels * tf.log(prob_3d), reduction_indices=[4])
-            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
+            loss = 0
+            for i in range(cfg.TRAIN.NUM_STEPS):
+                prob = probs[i]
+                label = labels[i]
+                cross_entropy = -tf.reduce_sum(label * tf.log(prob), reduction_indices=[4])
+                loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
+            loss /= cfg.TRAIN.NUM_STEPS
         return loss
 
 
@@ -71,10 +76,9 @@ class SolverWrapper(object):
         data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
 
         # classification loss
-        prob_3d = self.net.get_output('prob')
-        backprojection = self.net.get_output('backprojection')
-        label = backprojection[1]
-        loss = self.loss_cross_entropy(prob_3d, label, self.imdb.num_classes)
+        probs = self.net.get_output('output_prob')
+        labels = self.net.get_output('output_label')
+        loss = self.loss_cross_entropy(probs, labels, self.imdb.num_classes)
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)

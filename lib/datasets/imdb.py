@@ -108,6 +108,7 @@ class imdb(object):
                      'depth' : self.roidb[i]['depth'],
                      'label' : self.roidb[i]['label'],
                      'meta_data' : self.roidb[i]['meta_data'],
+                     'video_id' : self.roidb[i]['video_id'],
                      'class_colors' : self.roidb[i]['class_colors'],
                      'flipped' : True}
             self.roidb.append(entry)

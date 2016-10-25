@@ -108,13 +108,13 @@ class Network(object):
         return var
 
     @layer
-    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
+    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
         self.validate_padding(padding)
         c_i = input.get_shape()[-1]
         assert c_i%group==0
         assert c_o%group==0
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
-        with tf.variable_scope(name) as scope:
+        with tf.variable_scope(name, reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
@@ -133,11 +133,11 @@ class Network(object):
 
 
     @layer
-    def conv3d(self, input, k_d, k_h, k_w, c_i, c_o, s_d, s_h, s_w, name, relu=True, padding=DEFAULT_PADDING, trainable=True):
+    def conv3d(self, input, k_d, k_h, k_w, c_i, c_o, s_d, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, trainable=True):
         self.validate_padding(padding)
         if isinstance(input, tuple):
             input = input[0]
-        with tf.variable_scope(name) as scope:
+        with tf.variable_scope(name, reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_d, k_h, k_w, c_i, c_o], init_weights, trainable)
@@ -149,10 +149,10 @@ class Network(object):
             return tf.nn.bias_add(conv, biases, name=scope.name)
 
     @layer
-    def deconv(self, input, k_h, k_w, c_o, s_h, s_w, name, padding=DEFAULT_PADDING, trainable=True):
+    def deconv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, padding=DEFAULT_PADDING, trainable=True):
         self.validate_padding(padding)
         c_i = input.get_shape()[-1]
-        with tf.variable_scope(name):
+        with tf.variable_scope(name, reuse) as scope:
             # Compute shape out of input
             in_shape = tf.shape(input)
             h = in_shape[1] * s_h
@@ -163,7 +163,7 @@ class Network(object):
             # filter
             f_shape = [k_h, k_w, c_o, c_i]
             weights = self.make_deconv_filter('weights', f_shape, trainable)
-        return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding)
+        return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer
     def backproject(self, input, grid_size, num_classes, threshold, name):
@@ -174,12 +174,12 @@ class Network(object):
         return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
 
     @layer
-    def rnn_gru3d(self, input, num_units, channels, name):
+    def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
         if isinstance(input[0], tuple):
             input[0] = input[0][0]
-        with tf.variable_scope(name):
+        with tf.variable_scope(name, reuse) as scope:
             gru3d = GRU3DCell(num_units, channels)
-            return gru3d(input[0], input[1])
+            return gru3d(input[0], input[1], scope)
 
     @layer
     def relu(self, input, name):
@@ -217,8 +217,8 @@ class Network(object):
         return tf.concat(concat_dim=axis, values=inputs, name=name)
 
     @layer
-    def fc(self, input, num_out, name, relu=True, trainable=True):
-        with tf.variable_scope(name) as scope:
+    def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):
+        with tf.variable_scope(name, reuse) as scope:
             # only use the first input
             if isinstance(input, tuple):
                 input = input[0]
@@ -246,21 +246,20 @@ class Network(object):
 
     @layer
     def softmax_high_dimension(self, input, num_classes, name):
-        with tf.variable_scope(name) as scope:
-            # only use the first input
-            if isinstance(input, tuple):
-                input = input[0]
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
 
-            input_shape = input.get_shape()
-            ndims = input_shape.ndims
-            array = np.ones(ndims)
-            array[-1] = num_classes
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
 
-            m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
-            multiples = tf.convert_to_tensor(array, dtype=tf.int32)
-            e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
-            s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
-            return tf.div(e, tf.tile(s, multiples))
+        m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        return tf.div(e, tf.tile(s, multiples))
 
 
     @layer

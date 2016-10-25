@@ -18,6 +18,9 @@ import scipy.io
 def get_minibatch(roidb, voxelizer):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
+    assert(num_images % cfg.TRAIN.NUM_STEPS == 0), \
+        'num_images ({}) must be dividable by NUM_STEPS ({})'. \
+        format(num_images, cfg.TRAIN.NUM_STEPS)
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
@@ -26,8 +29,20 @@ def get_minibatch(roidb, voxelizer):
     # build the label blob
     depth_blob, label_blob, meta_data_blob, state_blob = _get_label_blob(roidb, voxelizer)
 
+    # reshape the blobs
+    num_steps = cfg.TRAIN.NUM_STEPS
+    ims_per_batch = cfg.TRAIN.IMS_PER_BATCH
+    height = im_blob.shape[1]
+    width = im_blob.shape[2]
+
+    im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
+
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_depth_blob, label_blob)
+    _vis_minibatch(im_blob, im_depth_blob, label_blob)
 
     blobs = {'data_rgb_image': im_blob,
              'data_depth_image': im_depth_blob,
@@ -127,10 +142,11 @@ def _get_label_blob(roidb, voxelizer):
         depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
         processed_depth.append(depth)
 
-        # backprojection
-        points = voxelizer.backproject(im_depth, meta_data)
-        voxelizer.voxelized = False
-        grid_indexes = voxelizer.voxelize(points)
+        # voxelization
+        if i % cfg.TRAIN.NUM_STEPS == 0:
+            points = voxelizer.backproject(im_depth, meta_data)
+            voxelizer.voxelized = False
+            voxelizer.voxelize(points)
 
         # construct the meta data
         """
@@ -168,7 +184,7 @@ def _get_label_blob(roidb, voxelizer):
 
     grid_size = voxelizer.grid_size
     num_classes = voxelizer.num_classes
-    state_blob = np.zeros((num_images, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
+    state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
 
     return depth_blob, label_blob, meta_data_blob, state_blob
 
@@ -177,27 +193,28 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
-    for i in xrange(im_blob.shape[0]):
-        fig = plt.figure()
-        # show image
-        im = im_blob[i, :, :, :].copy()
-        im += cfg.PIXEL_MEANS
-        im = im[:, :, (2, 1, 0)]
-        im = im.astype(np.uint8)
-        fig.add_subplot(131)
-        plt.imshow(im)
+    for i in range(im_blob.shape[1]):
+        for j in xrange(im_blob.shape[0]):
+            fig = plt.figure()
+            # show image
+            im = im_blob[j, i, :, :, :].copy()
+            im += cfg.PIXEL_MEANS
+            im = im[:, :, (2, 1, 0)]
+            im = im.astype(np.uint8)
+            fig.add_subplot(131)
+            plt.imshow(im)
 
-        # show depth image
-        im_depth = im_depth_blob[i, :, :, :].copy()
-        im_depth += cfg.PIXEL_MEANS
-        im_depth = im_depth[:, :, (2, 1, 0)]
-        im_depth = im_depth.astype(np.uint8)
-        fig.add_subplot(132)
-        plt.imshow(im_depth)
+            # show depth image
+            im_depth = im_depth_blob[j, i, :, :, :].copy()
+            im_depth += cfg.PIXEL_MEANS
+            im_depth = im_depth[:, :, (2, 1, 0)]
+            im_depth = im_depth.astype(np.uint8)
+            fig.add_subplot(132)
+            plt.imshow(im_depth)
 
-        # show label
-        label = label_blob[i, :, :, 0]
-        fig.add_subplot(133)
-        plt.imshow(label)
+            # show label
+            label = label_blob[j, i, :, :, 0]
+            fig.add_subplot(133)
+            plt.imshow(label)
 
-        plt.show()
+            plt.show()

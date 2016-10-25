@@ -153,11 +153,16 @@ class shapenet_scene(datasets.imdb):
 
         # metadata path
         metadata_path = self.metadata_path_from_index(index)
+
+        # parse image name
+        pos = index.find('/')
+        video_id = index[:pos]
         
         return {'image': image_path,
                 'depth': depth_path,
                 'label': label_path,
                 'meta_data': metadata_path,
+                'video_id': video_id,
                 'class_colors': self._class_colors,
                 'flipped': False}
 
