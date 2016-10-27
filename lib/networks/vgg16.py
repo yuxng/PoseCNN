@@ -11,7 +11,7 @@ class vgg16(Network):
         self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 33])
-        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
+        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, 8])
         self.layers = dict({'data': [], 'depth': [], 'meta_data': [], 'state_3d': []})
 
         self.trainable = trainable
@@ -53,20 +53,21 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_1', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
-                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
-                 .deconv(32, 32, self.num_classes, 16, 16, name='score_up', reuse=reuse))
+                 .conv(3, 3, 64, 1, 1, name='conv6', reuse=reuse)
+                 .deconv(32, 32, 64, 16, 16, name='conv6_up', reuse=reuse))
 
             (self.feed('state_3d', 'depth', 'meta_data')
                  .project(name='state_2d'))
 
-            (self.feed('score_up', 'state_2d')
-                 .rnn_gru2d(self.num_classes, self.num_classes, name='gru2d', reuse=reuse))
+            (self.feed('conv6_up', 'state_2d')
+                 .rnn_gru2d(8, 64, name='gru2d', reuse=reuse)
+                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse))
 
             (self.feed('gru2d', 'state_3d', 'depth', 'meta_data')
                  .backproject(self.grid_size, 0.01, name='backprojection'))
 
             # collect outputs
             input_state = self.get_output('backprojection')
-            output.append(self.get_output('gru2d')[0])
+            output.append(self.get_output('score'))
 
         self.layers['output'] = output

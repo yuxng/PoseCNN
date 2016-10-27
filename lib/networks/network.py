@@ -112,6 +112,8 @@ class Network(object):
     @layer
     def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
         self.validate_padding(padding)
+        if isinstance(input, tuple):
+            input = input[0]
         c_i = input.get_shape()[-1]
         assert c_i%group==0
         assert c_o%group==0

@@ -27,9 +27,8 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
                 inputs_state = tf.concat(3, [inputs, state])
 
                 # define the variables
-                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
                 init_biases = tf.constant_initializer(1.0)
-                kernel = self.make_var('weights', [1, 1, self._num_units + self._channels, 2 * self._num_units], init_weights)
+                kernel = self.make_var('weights', [3, 3, self._num_units + self._channels, 2 * self._num_units])
                 biases = self.make_var('biases', [2 * self._num_units], init_biases)
 
                 # 2D convolution
@@ -44,7 +43,7 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
 
                 # define the variables
                 init_biases_1 = tf.constant_initializer(0.0)
-                kernel_1 = self.make_var('weights', [1, 1, self._num_units + self._channels, self._num_units], init_weights)
+                kernel_1 = self.make_var('weights', [3, 3, self._num_units + self._channels, self._num_units])
                 biases_1 = self.make_var('biases', [self._num_units], init_biases_1)
 
                 # 2D convolution
