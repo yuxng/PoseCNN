@@ -183,7 +183,6 @@ def _get_label_blob(roidb, voxelizer):
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     grid_size = voxelizer.grid_size
-    num_classes = voxelizer.num_classes
     state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
 
     return depth_blob, label_blob, meta_data_blob, state_blob
