@@ -61,13 +61,14 @@ class vgg16(Network):
 
             (self.feed('conv6_up', 'state_2d')
                  .rnn_gru2d(8, 64, name='gru2d', reuse=reuse)
-                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse))
+                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
+                 .softmax_high_dimension(self.num_classes, name='prob'))
 
             (self.feed('gru2d', 'state_3d', 'depth', 'meta_data')
                  .backproject(self.grid_size, 0.01, name='backprojection'))
 
             # collect outputs
             input_state = self.get_output('backprojection')
-            output.append(self.get_output('score'))
+            output.append(self.get_output('prob'))
 
         self.layers['output'] = output

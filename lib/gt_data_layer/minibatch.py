@@ -38,7 +38,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
-    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width))
+    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
 
     # For debug visualizations
@@ -97,13 +97,14 @@ def _get_image_blob(roidb, scale_ind):
 
     return blob, blob_depth, im_scales
 
-def _process_label_image(label_image, class_colors):
+def _process_label_image(label_image, class_colors, class_weights):
     """
     change label image to label index
     """
     height = label_image.shape[0]
     width = label_image.shape[1]
-    label_index = np.zeros((height, width), dtype=np.int32)
+    num_classes = len(class_colors)
+    label_index = np.zeros((height, width, num_classes), dtype=np.float32)
 
     # label image is in BRG order
     index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
@@ -111,7 +112,7 @@ def _process_label_image(label_image, class_colors):
         color = class_colors[i]
         ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
         I = np.where(index == ind)
-        label_index[I] = i
+        label_index[I[0], I[1], i] = class_weights[i]
     
     return label_index
 
@@ -132,7 +133,7 @@ def _get_label_blob(roidb, voxelizer):
         im = cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED)
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
-        im_cls = _process_label_image(im, roidb[i]['class_colors'])
+        im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # depth
@@ -174,12 +175,13 @@ def _get_label_blob(roidb, voxelizer):
     # construct the blobs
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
+    num_classes = voxelizer.num_classes
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
-    label_blob = np.zeros((num_images, height, width), dtype=np.int32)
+    label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 33), dtype=np.float32)
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
-        label_blob[i,:,:] = processed_label[i]
+        label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     grid_size = voxelizer.grid_size
@@ -212,8 +214,15 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
             plt.imshow(im_depth)
 
             # show label
-            label = label_blob[j, i, :, :]
+            label = label_blob[j, i, :, :, :]
+            height = label.shape[0]
+            width = label.shape[1]
+            num_classes = label.shape[2]
+            l = np.zeros((height, width), dtype=np.int32)
+            for k in xrange(num_classes):
+                index = np.where(label[:,:,k] > 0)
+                l[index] = k
             fig.add_subplot(133)
-            plt.imshow(label)
+            plt.imshow(l)
 
             plt.show()

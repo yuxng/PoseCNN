@@ -55,7 +55,7 @@ class SolverWrapper(object):
     def loss_cross_entropy(self, scores, labels):
         """
         scores: a list of tensors [batch_size, height, width, num_classes]
-        labels: a tensor of [num_steps, batch_size, height, width]
+        labels: a tensor of [num_steps, batch_size, height, width, num_classes]
         """
 
         with tf.name_scope('loss'):
@@ -64,7 +64,8 @@ class SolverWrapper(object):
             for i in range(cfg.TRAIN.NUM_STEPS):
                 score = scores[i]
                 label = input_labels[i]
-                loss += tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(score, label))
+                cross_entropy = -tf.reduce_sum(label * tf.log(score), reduction_indices=[3])
+                loss += tf.reduce_mean(cross_entropy)
             loss /= cfg.TRAIN.NUM_STEPS
         return loss
 
@@ -77,7 +78,7 @@ class SolverWrapper(object):
 
         # classification loss
         scores = self.net.get_output('output')
-        labels = tf.placeholder(tf.int32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None])  # [num_steps, batch_size, height, width]
+        labels = tf.placeholder(tf.float32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None, None])  # [num_steps, batch_size, height, width, num_classes]
         loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
