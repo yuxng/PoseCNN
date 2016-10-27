@@ -16,10 +16,11 @@ namespace tensorflow {
 // the mask array, if it is not nullptr. If mask is passed in as nullptr, the
 // argmax indices are not written.
 bool BackprojectForwardLaucher(
-    const float* bottom_data, const float* bottom_depth, const int* bottom_label, const float* bottom_meta_data,
+    const float* bottom_data, const float* bottom_data_3d,
+    const float* bottom_depth, const float* bottom_meta_data,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data, 
-    const int grid_size, const int num_classes, const float threshold,
-    float* top_data, float* top_label, const Eigen::GpuDevice& d);
+    const int grid_size, const float threshold,
+    float* top_data, const Eigen::GpuDevice& d);
 
 bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
     const int height, const int width, const int channels, const int num_meta_data, const int grid_size, 

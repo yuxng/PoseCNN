@@ -30,19 +30,16 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 REGISTER_OP("Backproject")
     .Attr("T: {float, double}")
     .Attr("grid_size: int")
-    .Attr("num_classes: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
+    .Input("bottom_data_3d: T")
     .Input("bottom_depth: T")
-    .Input("bottom_label: int32")
     .Input("bottom_meta_data: T")
-    .Output("top_data: T")
-    .Output("top_label: T");
+    .Output("top_data: T");
 
 REGISTER_OP("BackprojectGrad")
     .Attr("T: {float, double}")
     .Attr("grid_size: int")
-    .Attr("num_classes: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
@@ -60,12 +57,6 @@ class BackprojectOp : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
-    // Get the num_classes
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("num_classes", &num_classes_));
-    // Check that num classes is positive
-    OP_REQUIRES(context, num_classes_ >= 0,
-                errors::InvalidArgument("Need num_classes >= 0, got ", num_classes_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -75,18 +66,17 @@ class BackprojectOp : public OpKernel {
   }
 
   // bottom_data: (batch_size, height, width, channels)
-  // bottom_pixel_locations: (batch_size, grid_size, grid_size, grid_size, channels_location)
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
     auto bottom_data_flat = bottom_data.flat<T>();
 
-    const Tensor& bottom_depth = context->input(1);
-    auto im_depth = bottom_depth.flat<T>();
+    const Tensor& bottom_data_3d = context->input(1);
+    auto bottom_data_3d_flat = bottom_data_3d.flat<T>();
 
-    const Tensor& bottom_label = context->input(2);
-    auto im_label = bottom_label.flat<T>();
+    const Tensor& bottom_depth = context->input(2);
+    auto im_depth = bottom_depth.flat<T>();
 
     // format of the meta_data
     // projection matrix: meta_data[0 ~ 11]
@@ -101,11 +91,11 @@ class BackprojectOp : public OpKernel {
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
+    OP_REQUIRES(context, bottom_data_3d.dims() == 5,
+                errors::InvalidArgument("data 3D must be 4-dimensional"));
+
     OP_REQUIRES(context, bottom_depth.dims() == 4,
                 errors::InvalidArgument("depth must be 4-dimensional"));
-
-    OP_REQUIRES(context, bottom_label.dims() == 4,
-                errors::InvalidArgument("label must be 4-dimensional"));
 
     OP_REQUIRES(context, bottom_meta_data.dims() == 4,
                 errors::InvalidArgument("meta data must be 4-dimensional"));
@@ -134,15 +124,6 @@ class BackprojectOp : public OpKernel {
     Tensor* top_data_tensor = NULL;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_data_tensor));
     auto top_data = top_data_tensor->template flat<T>();
-
-    // top_label
-    dims[4] = num_classes_;
-    TensorShape output_shape_label;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
-
-    Tensor* top_label_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(1, output_shape_label, &top_label_tensor));
-    auto top_label = top_label_tensor->template flat<T>();
 
     int index_meta_data = 0;    
     for(int n = 0; n < batch_size; n++)
@@ -181,25 +162,15 @@ class BackprojectOp : public OpKernel {
               if (fabs(depth - dvoxel) < threshold_)
               {
                 flag = 1;
+                // data
                 for(int c = 0; c < num_channels; c++)
                   top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_flat(index_pixel * num_channels + c);
-                int label = im_label(index_pixel);
-                for(int c = 0; c < num_classes_; c++)
-                {
-                  if (c == label)
-                    top_label((index_batch + index_depth + index_height + w) * num_classes_ + c) = 1;
-                  else
-                    top_label((index_batch + index_depth + index_height + w) * num_classes_ + c) = 0;
-                }
               }
             }
             if (flag == 0)
             {
-              // set to zero
               for (int c = 0; c < num_channels; c++)
-                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
-              for (int c = 0; c < num_classes_; c++)
-                top_label((index_batch + index_depth + index_height + w) * num_classes_ + c) = 0;
+                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_3d_flat((index_batch + index_depth + index_height + w) * num_channels + c);
             }
           }
         }
@@ -209,7 +180,6 @@ class BackprojectOp : public OpKernel {
   }
  private:
   int grid_size_;
-  int num_classes_;
   float threshold_;
 };
 
@@ -217,30 +187,30 @@ REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_CPU).TypeConstraint<fl
 REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_CPU).TypeConstraint<double>("T"), BackprojectOp<CPUDevice, double>);
 
 bool BackprojectForwardLaucher(
-    const float* bottom_data, const float* bottom_depth, const int* bottom_label, const float* bottom_meta_data,
+    const float* bottom_data, const float* bottom_data_3d,
+    const float* bottom_depth, const float* bottom_meta_data,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data,
-    const int grid_size, const int num_classes, const float threshold,
-    float* top_data, float* top_label, const Eigen::GpuDevice& d);
+    const int grid_size, const float threshold,
+    float* top_data, const Eigen::GpuDevice& d);
 
 static void BackprojectingKernel(
-    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_depth, const Tensor* bottom_label, const Tensor* bottom_meta_data,
+    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_data_3d,
+    const Tensor* bottom_depth, const Tensor* bottom_meta_data,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data, 
-    const int grid_size, const int num_classes, const float threshold,
-    const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_label) 
+    const int grid_size, const float threshold, const TensorShape& tensor_output_shape) 
 {
   Tensor* top_data = nullptr;
-  Tensor* top_label = nullptr;
   OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &top_data));
-  OP_REQUIRES_OK(context, context->allocate_output(1, tensor_output_shape_label, &top_label));
 
   if (!context->status().ok()) {
     return;
   }
 
   BackprojectForwardLaucher(
-    bottom_data->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_label->flat<int>().data(), bottom_meta_data->flat<float>().data(),
-    batch_size, height, width, channels, num_meta_data, grid_size, num_classes, threshold,
-    top_data->flat<float>().data(), top_label->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+    bottom_data->flat<float>().data(), bottom_data_3d->flat<float>().data(),
+    bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
+    batch_size, height, width, channels, num_meta_data, grid_size, threshold,
+    top_data->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 template <class T>
@@ -255,12 +225,6 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
-    // Get the num_classes
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("num_classes", &num_classes_));
-    // Check that num classes is positive
-    OP_REQUIRES(context, num_classes_ >= 0,
-                errors::InvalidArgument("Need num_classes >= 0, got ", num_classes_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -273,19 +237,19 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
-    const Tensor& bottom_depth = context->input(1);
-    const Tensor& bottom_label = context->input(2);
+    const Tensor& bottom_data_3d = context->input(1);
+    const Tensor& bottom_depth = context->input(2);
     const Tensor& bottom_meta_data = context->input(3);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
+    OP_REQUIRES(context, bottom_data_3d.dims() == 5,
+                errors::InvalidArgument("data 3D must be 5-dimensional"));
+
     OP_REQUIRES(context, bottom_depth.dims() == 4,
                 errors::InvalidArgument("depth must be 4-dimensional"));
-
-    OP_REQUIRES(context, bottom_label.dims() == 4,
-                errors::InvalidArgument("label must be 4-dimensional"));
 
     OP_REQUIRES(context, bottom_meta_data.dims() == 4,
                 errors::InvalidArgument("meta data must be 4-dimensional"));
@@ -311,17 +275,11 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     TensorShape output_shape;
     TensorShapeUtils::MakeShape(dims, 5, &output_shape);
 
-    // top_label
-    dims[4] = num_classes_;
-    TensorShape output_shape_label;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
-
-    BackprojectingKernel(context, &bottom_data, &bottom_depth, &bottom_label, &bottom_meta_data, batch_size, height,
-      width, num_channels, num_meta_data, grid_size_, num_classes_, threshold_, output_shape, output_shape_label);
+    BackprojectingKernel(context, &bottom_data, &bottom_data_3d, &bottom_depth, &bottom_meta_data, batch_size, height,
+      width, num_channels, num_meta_data, grid_size_, threshold_, output_shape);
   }
  private:
   int grid_size_;
-  int num_classes_;
   float threshold_;
 };
 
@@ -361,12 +319,6 @@ class BackprojectGradOp : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
-    // Get the num_classes
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("num_classes", &num_classes_));
-    // Check that num classes is positive
-    OP_REQUIRES(context, num_classes_ >= 0,
-                errors::InvalidArgument("Need num_classes >= 0, got ", num_classes_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -413,7 +365,6 @@ class BackprojectGradOp : public OpKernel {
   }
  private:
   int grid_size_;
-  int num_classes_;
   float threshold_;
 };
 

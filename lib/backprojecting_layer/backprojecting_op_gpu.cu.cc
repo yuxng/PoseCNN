@@ -14,10 +14,9 @@
 using namespace tensorflow;
 
 template <typename Dtype>
-__global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_depth,
-    const int* bottom_label, const Dtype* bottom_meta_data, const int height, const int width, const int channels, const int num_meta_data,
-    const int grid_size, const int num_classes, const float threshold,
-    Dtype* top_data, Dtype* top_label) 
+__global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_data_3d, const Dtype* bottom_depth,
+    const Dtype* bottom_meta_data, const int height, const int width, const int channels, const int num_meta_data,
+    const int grid_size, const float threshold, Dtype* top_data) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -61,30 +60,12 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
       {
         flag = 1;
         top_data[index] = bottom_data[index_pixel * channels + c];
-        
-        if (c == 0)
-        {
-          int label = bottom_label[index_pixel];
-          for (int cl = 0; cl < num_classes; cl++)
-          {
-            if (cl == label)
-              top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 1;
-            else
-              top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 0;
-          }
-        }
       }
     }
 
     if (flag == 0)
     {
-      // set to zero
-      top_data[index] = 0;
-      if (c == 0)
-      {
-        for (int cl = 0; cl < num_classes; cl++)
-          top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 0;
-      }
+      top_data[index] = bottom_data_3d[index]; 
     }
 
   }
@@ -92,10 +73,11 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
 
 // bottom_data: (batch_size, height, width, channels)
 bool BackprojectForwardLaucher(
-    const float* bottom_data, const float* bottom_depth, const int* bottom_label, const float* bottom_meta_data,
+    const float* bottom_data, const float* bottom_data_3d,
+    const float* bottom_depth, const float* bottom_meta_data,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data, 
-    const int grid_size, const int num_classes, const float threshold,
-    float* top_data, float* top_label, const Eigen::GpuDevice& d)
+    const int grid_size, const float threshold,
+    float* top_data, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
   cudaError_t err;
@@ -103,8 +85,8 @@ bool BackprojectForwardLaucher(
   const int output_size = batch_size * grid_size * grid_size * grid_size * channels;
   BackprojectForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, bottom_data, bottom_depth, bottom_label, bottom_meta_data, height, width, channels, num_meta_data,
-      grid_size, num_classes, threshold, top_data, top_label);
+      output_size, bottom_data, bottom_data_3d, bottom_depth, bottom_meta_data, height, width, channels, num_meta_data,
+      grid_size, threshold, top_data);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)

@@ -10,16 +10,13 @@ def _backproject_shape(op):
   dims_data = op.inputs[0].get_shape().as_list()
   batch_size = dims_data[0]
   channels = dims_data[3]
-
   grid_size = op.get_attr('grid_size')
-  num_classes = op.get_attr('num_classes')
 
-  output_shape_1 = tf.TensorShape([batch_size, grid_size, grid_size, grid_size, channels])
-  output_shape_2 = tf.TensorShape([batch_size, grid_size, grid_size, grid_size, num_classes])
-  return [output_shape_1, output_shape_2]
+  output_shape = tf.TensorShape([batch_size, grid_size, grid_size, grid_size, channels])
+  return [output_shape]
 
 @ops.RegisterGradient("Backproject")
-def _backproject_grad(op, grad, _):
+def _backproject_grad(op, grad):
   """The gradients for `backproject`.
   Args:
     op: The `backproject` `Operation` that we are differentiating, which we can use
@@ -29,13 +26,12 @@ def _backproject_grad(op, grad, _):
     Gradients with respect to the input of `backproject`.
   """
   data = op.inputs[0]
-  depth = op.inputs[1]
+  depth = op.inputs[2]
   meta_data = op.inputs[3]
   grid_size = op.get_attr('grid_size')
-  num_classes = op.get_attr('num_classes')
   threshold = op.get_attr('threshold')
 
   # compute gradient
-  data_grad = backprojecting_op.backproject_grad(data, depth, meta_data, grad, grid_size, num_classes, threshold)
+  data_grad = backprojecting_op.backproject_grad(data, depth, meta_data, grad, grid_size, threshold)
 
   return [data_grad, None, None, None]  # List of one Tensor, since we have four input

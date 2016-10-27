@@ -10,10 +10,9 @@ class vgg16(Network):
 
         self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
-        self.label = tf.placeholder(tf.int32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 33])
         self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
-        self.layers = dict({'data': [], 'depth': [], 'label': [], 'meta_data': [], 'state': []})
+        self.layers = dict({'data': [], 'depth': [], 'meta_data': [], 'state_3d': []})
 
         self.trainable = trainable
         self.setup()
@@ -21,19 +20,16 @@ class vgg16(Network):
     def setup(self):
         input_data = tf.unpack(self.data)
         input_depth = tf.unpack(self.depth)
-        input_label = tf.unpack(self.label)
         input_meta_data = tf.unpack(self.meta_data)
         input_state = self.state
-        output_prob = []
-        output_label = []
+        output = []
         
         for i in range(self.num_steps):
             # set inputs
             self.layers['data'] = input_data[i]
             self.layers['depth'] = input_depth[i]
-            self.layers['label'] = input_label[i]
             self.layers['meta_data'] = input_meta_data[i]
-            self.layers['state'] = input_state
+            self.layers['state_3d'] = input_state
             if i == 0:
                 reuse = None
             else:
@@ -60,20 +56,17 @@ class vgg16(Network):
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
                  .deconv(32, 32, self.num_classes, 16, 16, name='score_up', reuse=reuse))
 
-            (self.feed('score_up', 'depth', 'label', 'meta_data')
-                 .backproject(self.grid_size, self.num_classes, 0.01, name='backprojection'))
+            (self.feed('state_3d', 'depth', 'meta_data')
+                 .project(name='state_2d'))
 
-            (self.feed('backprojection', 'state')
-                 .rnn_gru3d(self.num_classes, self.num_classes, name='gru3d', reuse=reuse)
-                 .softmax_high_dimension(num_classes=self.num_classes, name='prob'))
+            (self.feed('score_up', 'state_2d')
+                 .rnn_gru2d(self.num_classes, self.num_classes, name='gru2d', reuse=reuse))
 
-            (self.feed('prob', 'depth', 'meta_data')
-                 .compute_label(name='label'))
+            (self.feed('gru2d', 'state_3d', 'depth', 'meta_data')
+                 .backproject(self.grid_size, 0.01, name='backprojection'))
 
             # collect outputs
-            input_state = self.get_output('gru3d')[1]
-            output_prob.append(self.get_output('prob'))
-            output_label.append(self.get_output('backprojection')[1])
+            input_state = self.get_output('backprojection')
+            output.append(self.get_output('gru2d')[0])
 
-        self.layers['output_prob'] = output_prob
-        self.layers['output_label'] = output_label
+        self.layers['output'] = output

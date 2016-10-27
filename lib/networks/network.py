@@ -3,8 +3,10 @@ from math import ceil
 import tensorflow as tf
 import backprojecting_layer.backprojecting_op as backproject_op
 import backprojecting_layer.backprojecting_op_grad
+import projecting_layer.projecting_op as project_op
+import projecting_layer.projecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
-from gru3d import GRU3DCell
+from gru2d import GRU2DCell
 
 DEFAULT_PADDING = 'SAME'
 
@@ -166,20 +168,22 @@ class Network(object):
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer
-    def backproject(self, input, grid_size, num_classes, threshold, name):
-        return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, num_classes, threshold, name=name)
+    def backproject(self, input, grid_size, threshold, name):
+        return backproject_op.backproject(input[0][1], input[1], input[2], input[3], grid_size, threshold, name=name)
+
+    @layer
+    def project(self, input, name):
+        return project_op.project(input[0], input[1], input[2], name=name)
 
     @layer
     def compute_label(self, input, name):
         return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
 
     @layer
-    def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
-        if isinstance(input[0], tuple):
-            input[0] = input[0][0]
+    def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
         with tf.variable_scope(name, reuse) as scope:
-            gru3d = GRU3DCell(num_units, channels)
-            return gru3d(input[0], input[1], scope)
+            gru2d = GRU2DCell(num_units, channels)
+            return gru2d(input[0], input[1], scope)
 
     @layer
     def relu(self, input, name):
@@ -242,6 +246,9 @@ class Network(object):
 
     @layer
     def softmax(self, input, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
         return tf.nn.softmax(input, name)
 
     @layer

@@ -38,7 +38,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
-    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
 
     # For debug visualizations
@@ -175,11 +175,11 @@ def _get_label_blob(roidb, voxelizer):
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
-    label_blob = np.zeros((num_images, height, width, 1), dtype=np.int32)
+    label_blob = np.zeros((num_images, height, width), dtype=np.int32)
     meta_data_blob = np.zeros((num_images, 1, 1, 33), dtype=np.float32)
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
-        label_blob[i,:,:,0] = processed_label[i]
+        label_blob[i,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     grid_size = voxelizer.grid_size
@@ -213,7 +213,7 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
             plt.imshow(im_depth)
 
             # show label
-            label = label_blob[j, i, :, :, 0]
+            label = label_blob[j, i, :, :]
             fig.add_subplot(133)
             plt.imshow(label)
 

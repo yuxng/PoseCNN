@@ -52,19 +52,19 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
-    def loss_cross_entropy(self, probs, labels, num_classes):
+    def loss_cross_entropy(self, scores, labels):
         """
-        probs: a list of [batch_size, grid_size, grid_size, grid_size, num_classes]
-        labels: a list of [batch_size, grid_size, grid_size, grid_size, num_classes]
+        scores: a list of tensors [batch_size, height, width, num_classes]
+        labels: a tensor of [num_steps, batch_size, height, width]
         """
 
         with tf.name_scope('loss'):
+            input_labels = tf.unpack(labels)
             loss = 0
             for i in range(cfg.TRAIN.NUM_STEPS):
-                prob = probs[i]
-                label = labels[i]
-                cross_entropy = -tf.reduce_sum(label * tf.log(prob), reduction_indices=[4])
-                loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
+                score = scores[i]
+                label = input_labels[i]
+                loss += tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(score, label))
             loss /= cfg.TRAIN.NUM_STEPS
         return loss
 
@@ -76,9 +76,9 @@ class SolverWrapper(object):
         data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
 
         # classification loss
-        probs = self.net.get_output('output_prob')
-        labels = self.net.get_output('output_label')
-        loss = self.loss_cross_entropy(probs, labels, self.imdb.num_classes)
+        scores = self.net.get_output('output')
+        labels = tf.placeholder(tf.int32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None])  # [num_steps, batch_size, height, width]
+        loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)
@@ -106,7 +106,7 @@ class SolverWrapper(object):
 
             # Make one SGD update
             feed_dict={self.net.data: blobs['data_depth_image'], self.net.depth: blobs['data_depth'], \
-                       self.net.label: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
+                       labels: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
                        self.net.state: blobs['data_state']}
             
             timer.tic()
