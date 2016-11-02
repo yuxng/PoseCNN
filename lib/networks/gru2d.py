@@ -22,13 +22,16 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
     # state:  [batch_size, height, width, num_units]
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
+            inputs_shape = tf.shape(inputs)
+            inputs = tf.reshape(inputs, [inputs_shape[0], inputs_shape[1], inputs_shape[2], self._channels])
+
             with tf.variable_scope("Gates"):  # Reset gate and update gate.
                 # concat inputs and state
                 inputs_state = tf.concat(3, [inputs, state])
 
                 # define the variables
                 init_biases = tf.constant_initializer(1.0)
-                kernel = self.make_var('weights', [1, 1, self._num_units + self._channels, 2 * self._num_units])
+                kernel = self.make_var('weights', [3, 3, self._num_units + self._channels, 2 * self._num_units])
                 biases = self.make_var('biases', [2 * self._num_units], init_biases)
 
                 # 2D convolution
@@ -43,7 +46,7 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
 
                 # define the variables
                 init_biases_1 = tf.constant_initializer(0.0)
-                kernel_1 = self.make_var('weights', [1, 1, self._num_units + self._channels, self._num_units])
+                kernel_1 = self.make_var('weights', [3, 3, self._num_units + self._channels, self._num_units])
                 biases_1 = self.make_var('biases', [self._num_units], init_biases_1)
 
                 # 2D convolution

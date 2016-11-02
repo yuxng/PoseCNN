@@ -2,16 +2,17 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16(Network):
-    def __init__(self, num_steps, trainable=True):
+    def __init__(self, num_steps, num_units, trainable=True):
         self.inputs = []
         self.grid_size = 256
         self.num_classes = 7
         self.num_steps = num_steps
+        self.num_units = num_units
 
         self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 33])
-        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, 8])
+        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_units])
         self.layers = dict({'data': [], 'depth': [], 'meta_data': [], 'state_3d': []})
 
         self.trainable = trainable
@@ -36,8 +37,8 @@ class vgg16(Network):
                 reuse = True
 
             (self.feed('data')
-                 .conv(3, 3, 64, 1, 1, name='conv1_1', reuse=reuse)
-                 .conv(3, 3, 64, 1, 1, name='conv1_2', reuse=reuse)
+                 .conv(3, 3, 64, 1, 1, name='conv1_1', reuse=reuse, trainable=False)
+                 .conv(3, 3, 64, 1, 1, name='conv1_2', reuse=reuse, trainable=False)
                  .max_pool(2, 2, 2, 2, name='pool1')
                  .conv(3, 3, 128, 1, 1, name='conv2_1', reuse=reuse)
                  .conv(3, 3, 128, 1, 1, name='conv2_2', reuse=reuse)
@@ -53,15 +54,18 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_1', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
-                 .conv(3, 3, 64, 1, 1, name='conv6', reuse=reuse)
-                 .deconv(32, 32, 64, 16, 16, name='conv6_up', reuse=reuse))
+                 .conv(1, 1, self.num_classes, 1, 1, name='conv6', reuse=reuse)
+                 .deconv(32, 32, self.num_classes, 16, 16, name='conv6_up', reuse=reuse))
 
             (self.feed('state_3d', 'depth', 'meta_data')
                  .project(name='state_2d'))
 
             (self.feed('conv6_up', 'state_2d')
-                 .rnn_gru2d(8, 64, name='gru2d', reuse=reuse)
-                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
+                 .rnn_gru2d(self.num_units, self.num_classes, name='gru2d', reuse=reuse)
+                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse))
+
+            (self.feed('conv6_up', 'score')
+                 .add(name='add')
                  .softmax_high_dimension(self.num_classes, name='prob'))
 
             (self.feed('gru2d', 'state_3d', 'depth', 'meta_data')

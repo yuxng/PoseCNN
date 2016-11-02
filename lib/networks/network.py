@@ -7,6 +7,8 @@ import projecting_layer.projecting_op as project_op
 import projecting_layer.projecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
 from gru2d import GRU2DCell
+from vanilla2d import Vanilla2DCell
+from add2d import Add2DCell
 
 DEFAULT_PADDING = 'SAME'
 
@@ -188,6 +190,18 @@ class Network(object):
             return gru2d(input[0], input[1], scope)
 
     @layer
+    def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse) as scope:
+            vanilla2d = Vanilla2DCell(num_units, channels)
+            return vanilla2d(input[0], input[1], scope)
+    
+    @layer
+    def rnn_add2d(self, input, num_units, channels, step, name, reuse=None):
+        with tf.variable_scope(name, reuse) as scope:
+            add2d = Add2DCell(num_units, channels)
+            return add2d(input[0], input[1], step, scope)
+
+    @layer
     def relu(self, input, name):
         return tf.nn.relu(input, name=name)
 
@@ -221,6 +235,10 @@ class Network(object):
     @layer
     def concat(self, inputs, axis, name):
         return tf.concat(concat_dim=axis, values=inputs, name=name)
+
+    @layer
+    def add(self, inputs, name):
+        return tf.add(inputs[0], inputs[1])
 
     @layer
     def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):
@@ -258,7 +276,7 @@ class Network(object):
         # only use the first input
         if isinstance(input, tuple):
             input = input[0]
-
+        print input
         input_shape = input.get_shape()
         ndims = input_shape.ndims
         array = np.ones(ndims)

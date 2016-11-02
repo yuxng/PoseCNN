@@ -14,12 +14,12 @@ time ./tools/train_net.py --gpu $1 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb shapenet_scene_train \
   --cfg experiments/cfgs/shapenet_scene.yml \
-  --iters 10000
+  --iters 40000
 
 time ./tools/test_net.py --gpu $1 \
   --network vgg16 \
-  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_shapenet_scene_iter_10000.ckpt \
-  --imdb shapenet_scene_train \
+  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_shapenet_scene_iter_40000.ckpt \
+  --imdb shapenet_scene_val \
   --cfg experiments/cfgs/shapenet_scene.yml
 
 # create output video

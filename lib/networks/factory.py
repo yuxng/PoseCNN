@@ -14,7 +14,8 @@ import tensorflow as tf
 from fcn.config import cfg
 
 print cfg.TRAIN.NUM_STEPS
-__sets['vgg16'] = networks.vgg16(cfg.TRAIN.NUM_STEPS)
+print cfg.TRAIN.NUM_UNITS
+__sets['vgg16'] = networks.vgg16(cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_UNITS)
 
 def get_network(name):
     """Get a network by name."""

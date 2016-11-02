@@ -12,8 +12,8 @@ def _project_shape(op):
   channels = dims_data[4]
 
   dims_image = op.inputs[1].get_shape().as_list()
-  height = dims_data[1]
-  width = dims_data[2]
+  height = dims_image[1]
+  width = dims_image[2]
 
   output_shape = tf.TensorShape([batch_size, height, width, channels])
   return [output_shape]

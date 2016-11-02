@@ -116,7 +116,7 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
 
     # forward pass
     feed_dict = {net.data: im_depth_blob, net.state: state, net.depth: depth_blob, net.meta_data: meta_data_blob}
-    score, state = sess.run([net.get_output('score'), net.get_output('backprojection')], feed_dict=feed_dict)
+    score, state = sess.run([net.get_output('prob'), net.get_output('backprojection')], feed_dict=feed_dict)
 
     # get outputs scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
     labels = np.argmax(score, axis=3)
@@ -191,7 +191,7 @@ def test_net(sess, net, imdb, weights_filename):
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
-    for i in xrange(num_images):
+    for i in xrange(200, num_images):
     # for i in perm:
         # parse image name
         image_index = imdb.image_index[i]
@@ -227,7 +227,7 @@ def test_net(sess, net, imdb, weights_filename):
         segmentations[i] = seg
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, labels, points)
+        vis_segmentations(im, im_depth, labels, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
