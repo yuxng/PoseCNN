@@ -58,7 +58,7 @@ class vgg16(Network):
                  .deconv(32, 32, self.num_classes, 16, 16, name='conv6_up', reuse=reuse))
 
             (self.feed('state_3d', 'depth', 'meta_data')
-                 .project(name='state_2d'))
+                 .project(0.01, name='state_2d'))
 
             (self.feed('conv6_up', 'state_2d')
                  .rnn_gru2d(self.num_units, self.num_classes, name='gru2d', reuse=reuse)
