@@ -29,4 +29,12 @@ def _project_grad(op, grad):
     Gradients with respect to the input of `project`.
   """
 
-  return [None, None, None]  # List of one Tensor, since we have three input
+  data = op.inputs[0]
+  depth = op.inputs[1]
+  meta_data = op.inputs[2]
+  threshold = op.get_attr('threshold')
+
+  # compute gradient
+  data_grad = projecting_op.project_grad(data, depth, meta_data, grad, threshold)
+
+  return [data_grad, None, None]  # List of one Tensor, since we have three input
