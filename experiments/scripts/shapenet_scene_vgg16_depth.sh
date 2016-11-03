@@ -4,12 +4,13 @@ set -x
 set -e
 
 export PYTHONUNBUFFERED="True"
+export CUDA_VISIBLE_DEVICES=$1
 
 LOG="experiments/logs/shapenet_scene_vgg16_depth.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
-time ./tools/train_net.py --gpu $1 \
+time ./tools/train_net.py --gpu 0 \
   --network vgg16 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb shapenet_scene_train \
