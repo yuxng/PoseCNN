@@ -108,6 +108,89 @@ bool ProjectForwardLaucher(
   return d.ok();
 }
 
+
+template <typename Dtype>
+__global__ void ProjectBackward(const int nthreads, const Dtype* top_diff,
+    const Dtype* bottom_depth, const Dtype* bottom_meta_data, 
+    const int height, const int width, const int channels, const int num_meta_data,
+    const int grid_size, const float threshold, Dtype* bottom_diff) 
+{
+  CUDA_1D_KERNEL_LOOP(index, nthreads) 
+  {
+    // (n, d, h, w, c) is an element in the output
+    int n = index;
+    int c = n % channels;
+    n /= channels;
+    int w = n % grid_size;
+    n /= grid_size;
+    int h = n % grid_size;
+    n /= grid_size;
+    int d = n % grid_size;
+    n /= grid_size;
+
+    // voxel location in 3D
+    const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
+    Dtype X = d * meta_data[15] + meta_data[18];
+    Dtype Y = h * meta_data[16] + meta_data[19];
+    Dtype Z = w * meta_data[17] + meta_data[20];
+
+    // project the 3D point to image
+    Dtype x1 = meta_data[0] * X + meta_data[1] * Y + meta_data[2] * Z + meta_data[3];
+    Dtype x2 = meta_data[4] * X + meta_data[5] * Y + meta_data[6] * Z + meta_data[7];
+    Dtype x3 = meta_data[8] * X + meta_data[9] * Y + meta_data[10] * Z + meta_data[11];
+    int px = round(x1 / x3);
+    int py = round(x2 / x3);
+
+    int flag = 0;
+    if (px >= 0 && px < width && py >= 0 && py < height)
+    {
+      int index_pixel = n * height * width + py * width + px;
+      Dtype depth = bottom_depth[index_pixel];
+
+      // distance of this voxel to camera center
+      Dtype dvoxel = sqrt((X - meta_data[12]) * (X - meta_data[12]) 
+                        + (Y - meta_data[13]) * (Y - meta_data[13]) 
+                        + (Z - meta_data[14]) * (Z - meta_data[14]));
+
+      // check if the voxel is on the surface
+      if (fabs(depth - dvoxel) < threshold)
+      {
+        flag = 1;
+        bottom_diff[index] = top_diff[index_pixel * channels + c];
+      }
+    }
+
+    if (flag == 0)
+    {
+      bottom_diff[index] = 0; 
+    }
+  }
+}
+
+
+bool ProjectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    float* bottom_diff, const Eigen::GpuDevice& d)
+{
+  const int kThreadsPerBlock = 1024;
+  const int output_size = batch_size * grid_size * grid_size * grid_size * channels;
+  cudaError_t err;
+
+  ProjectBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
+                       kThreadsPerBlock, 0, d.stream()>>>(
+      output_size, top_diff, bottom_depth, bottom_meta_data,
+      height, width, channels, num_meta_data, grid_size, threshold, bottom_diff);
+
+  err = cudaGetLastError();
+  if(cudaSuccess != err)
+  {
+    fprintf( stderr, "cudaCheckError() failed : %s\n", cudaGetErrorString( err ) );
+    exit( -1 );
+  }
+
+  return d.ok();
+}
+
 // }  // namespace tensorflow
 
 #endif  // GOOGLE_CUDA

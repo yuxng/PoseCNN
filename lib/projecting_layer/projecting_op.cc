@@ -29,15 +29,31 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Project")
     .Attr("T: {float, double}")
+    .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
     .Input("bottom_meta_data: T")
     .Output("top_data: T");
 
+REGISTER_OP("ProjectGrad")
+    .Attr("T: {float, double}")
+    .Attr("threshold: float")
+    .Input("bottom_data: T")
+    .Input("bottom_depth: T")
+    .Input("bottom_meta_data: T")
+    .Input("grad: T")
+    .Output("output: T");
+
 template <typename Device, typename T>
 class ProjectOp : public OpKernel {
  public:
   explicit ProjectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
   }
 
   // bottom_data: (batch_size, grid_size, grid_size, grid_size, channels)
@@ -163,6 +179,8 @@ class ProjectOp : public OpKernel {
       }
     }
   }
+ private:
+  float threshold_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Project").Device(DEVICE_CPU).TypeConstraint<float>("T"), ProjectOp<CPUDevice, float>);
@@ -197,6 +215,12 @@ class ProjectOp<Eigen::GpuDevice, T> : public OpKernel {
   typedef Eigen::GpuDevice Device;
 
   explicit ProjectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -242,6 +266,89 @@ class ProjectOp<Eigen::GpuDevice, T> : public OpKernel {
     ProjectingKernel(context, &bottom_data, &bottom_depth, &bottom_meta_data, batch_size, height,
       width, num_channels, num_meta_data, grid_size, output_shape);
   }
+ private:
+  float threshold_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Project").Device(DEVICE_GPU).TypeConstraint<float>("T"), ProjectOp<Eigen::GpuDevice, float>);
+
+
+bool ProjectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    float* bottom_diff, const Eigen::GpuDevice& d);
+
+static void ProjectingGradKernel(
+    OpKernelContext* context, const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* out_backprop,
+    const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    const TensorShape& tensor_output_shape) 
+{
+  Tensor* output = nullptr;
+  OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &output));
+
+  if (!context->status().ok()) {
+    return;
+  }
+
+  ProjectBackwardLaucher(
+    out_backprop->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
+    batch_size, height, width, channels, num_meta_data, grid_size, threshold, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+}
+
+
+// compute gradient
+template <class Device, class T>
+class ProjectGradOp : public OpKernel {
+ public:
+  explicit ProjectGradOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
+  }
+
+  void Compute(OpKernelContext* context) override 
+  {
+    // Grab the input tensor
+    const Tensor& bottom_data = context->input(0);
+    const Tensor& bottom_depth = context->input(1);
+    const Tensor& bottom_meta_data = context->input(2);
+    const Tensor& out_backprop = context->input(3);
+
+    // data should have 5 dimensions.
+    OP_REQUIRES(context, bottom_data.dims() == 5,
+                errors::InvalidArgument("data must be 5-dimensional"));
+
+    OP_REQUIRES(context, bottom_depth.dims() == 4,
+                errors::InvalidArgument("depth must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_meta_data.dims() == 4,
+                errors::InvalidArgument("meta data must be 4-dimensional"));
+
+    // batch size
+    int batch_size = bottom_data.dim_size(0);
+    // grid size
+    int grid_size = bottom_data.dim_size(1);
+    // number of channels
+    int num_channels = bottom_data.dim_size(4);
+    // height
+    int height = bottom_depth.dim_size(1);
+    // width
+    int width = bottom_depth.dim_size(2);
+    // number of meta data
+    int num_meta_data = bottom_meta_data.dim_size(3);
+
+    // construct the output shape
+    TensorShape output_shape = bottom_data.shape();
+
+    ProjectingGradKernel(
+      context, &bottom_depth, &bottom_meta_data, &out_backprop,
+      batch_size, height, width, num_channels, num_meta_data, grid_size, threshold_, output_shape);
+
+  }
+ private:
+  float threshold_;
+};
+
+REGISTER_KERNEL_BUILDER(Name("ProjectGrad").Device(DEVICE_GPU).TypeConstraint<float>("T"), ProjectGradOp<Eigen::GpuDevice, float>);

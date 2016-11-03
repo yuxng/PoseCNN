@@ -191,7 +191,7 @@ def test_net(sess, net, imdb, weights_filename):
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
-    for i in xrange(200, num_images):
+    for i in xrange(num_images):
     # for i in perm:
         # parse image name
         image_index = imdb.image_index[i]
@@ -227,7 +227,7 @@ def test_net(sess, net, imdb, weights_filename):
         segmentations[i] = seg
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, labels, points)
+        # vis_segmentations(im, im_depth, labels, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
