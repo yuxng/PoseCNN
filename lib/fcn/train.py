@@ -9,6 +9,7 @@
 
 from fcn.config import cfg
 from gt_data_layer.layer import GtDataLayer
+from gt_single_data_layer.layer import GtSingleDataLayer
 from utils.timer import Timer
 import numpy as np
 import os
@@ -73,13 +74,20 @@ class SolverWrapper(object):
     def train_model(self, sess, max_iters):
         """Network training loop."""
 
-        # data layer
-        data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
-
-        # classification loss
-        scores = self.net.get_output('output')
-        labels = tf.placeholder(tf.float32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None, None])  # [num_steps, batch_size, height, width, num_classes]
-        loss = self.loss_cross_entropy(scores, labels)
+        if cfg.TRAIN.SINGLE_FRAME:
+            # data layer
+            data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes)
+            # classification loss
+            scores = self.net.get_output('score_up')
+            labels = tf.placeholder(tf.int32, shape=[None, None, None]) # [batch_size, height, width]
+            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(scores, labels))
+        else:
+            # data layer
+            data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
+            # classification loss
+            scores = self.net.get_output('output')
+            labels = tf.placeholder(tf.float32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None, None])  # [num_steps, batch_size, height, width, num_classes]
+            loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)
@@ -91,7 +99,11 @@ class SolverWrapper(object):
         if self.pretrained_model is not None:
             print ('Loading pretrained model '
                    'weights from {:s}').format(self.pretrained_model)
-            self.net.load(self.pretrained_model, sess, True)
+            if cfg.TRAIN.SINGLE_FRAME:
+                self.net.load(self.pretrained_model, sess, True)
+            else:
+                saver = tf.train.Saver(self.net.variables_to_restore)
+                saver.restore(sess, self.pretrained_model)
 
         last_snapshot_iter = -1
         timer = Timer()
@@ -106,9 +118,12 @@ class SolverWrapper(object):
             blobs = data_layer.forward()
 
             # Make one SGD update
-            feed_dict={self.net.data: blobs['data_depth_image'], self.net.depth: blobs['data_depth'], \
-                       labels: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
-                       self.net.state: blobs['data_state']}
+            if cfg.TRAIN.SINGLE_FRAME:
+                feed_dict={self.net.data: blobs['data_depth_image'], labels: blobs['data_label']}
+            else:
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.depth: blobs['data_depth'], \
+                           labels: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
+                           self.net.state: blobs['data_state']}
             
             timer.tic()
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)

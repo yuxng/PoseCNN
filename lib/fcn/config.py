@@ -34,6 +34,8 @@ cfg = __C
 
 __C.TRAIN = edict()
 
+__C.TRAIN.SINGLE_FRAME = True
+
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
 __C.TRAIN.MOMENTUM = 0.9
@@ -70,6 +72,8 @@ __C.TRAIN.DISPLAY = 20
 #
 
 __C.TEST = edict()
+
+__C.TEST.SINGLE_FRAME = True
 
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)

@@ -125,6 +125,9 @@ class Network(object):
             init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
             biases = self.make_var('biases', [c_o], init_biases, trainable)
+            if not trainable:
+                self.variables_to_restore.append(kernel)
+                self.variables_to_restore.append(biases)
             if group==1:
                 conv = convolve(input, kernel)
             else:
@@ -169,6 +172,8 @@ class Network(object):
             # filter
             f_shape = [k_h, k_w, c_o, c_i]
             weights = self.make_deconv_filter('weights', f_shape, trainable)
+            if not trainable:
+                self.variables_to_restore.append(weights)
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer

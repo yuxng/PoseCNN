@@ -10,18 +10,33 @@ LOG="experiments/logs/shapenet_scene_vgg16_depth.txt.`date +'%Y-%m-%d_%H-%M-%S'`
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
+# first train FCN for single frame
+#time ./tools/train_net.py --gpu 0 \
+#  --network vgg16_convs \
+#  --weights data/imagenet_models/vgg16_convs.npy \
+#  --imdb shapenet_scene_train \
+#  --cfg experiments/cfgs/shapenet_scene_single_frame.yml \
+#  --iters 10000
+
+# test the single frame network
+#time ./tools/test_net.py --gpu $1 \
+#  --network vgg16_convs \
+#  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_single_frame_shapenet_scene_iter_10000.ckpt \
+#  --imdb shapenet_scene_val \
+#  --cfg experiments/cfgs/shapenet_scene_single_frame.yml
+
 time ./tools/train_net.py --gpu 0 \
   --network vgg16 \
-  --weights data/imagenet_models/vgg16_convs.npy \
+  --weights output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_single_frame_shapenet_scene_iter_10000.ckpt \
   --imdb shapenet_scene_train \
   --cfg experiments/cfgs/shapenet_scene.yml \
-  --iters 40000
+  --iters 10000
 
-#time ./tools/test_net.py --gpu $1 \
-#  --network vgg16 \
-#  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_shapenet_scene_iter_40000.ckpt \
-#  --imdb shapenet_scene_val \
-#  --cfg experiments/cfgs/shapenet_scene.yml
+time ./tools/test_net.py --gpu $1 \
+  --network vgg16 \
+  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_multi_frame_shapenet_scene_iter_10000.ckpt \
+  --imdb shapenet_scene_val \
+  --cfg experiments/cfgs/shapenet_scene.yml
 
 # create output video
 #/var/Softwares/ffmpeg-3.1.3-64bit-static/ffmpeg -r 8 -start_number 0 \

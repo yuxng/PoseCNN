@@ -61,6 +61,24 @@ def _get_image_blob(im, im_depth):
     return blob, blob_depth, np.array(im_scale_factors)
 
 
+def im_segment_single_frame(sess, net, im, im_depth):
+    """segment image
+    """
+
+    # compute image blob
+    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
+
+    # forward pass
+    feed_dict = {net.data: im_depth_blob}
+    output = sess.run([net.get_output('score_up')], feed_dict=feed_dict)
+    score = output[0]
+
+    # compute pixel labels
+    labels = np.argmax(score, axis=3)
+
+    return labels
+
+
 def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
     """segment image
     """
@@ -164,6 +182,9 @@ def vis_segmentations(im, im_depth, labels, points):
 
     plt.show()
 
+##################
+# test video
+##################
 def test_net(sess, net, imdb, weights_filename):
 
     output_dir = get_output_dir(imdb, weights_filename)
@@ -228,6 +249,63 @@ def test_net(sess, net, imdb, weights_filename):
         _t['misc'].toc()
 
         # vis_segmentations(im, im_depth, labels, points)
+        print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
+              .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
+
+    seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    with open(seg_file, 'wb') as f:
+        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
+
+    # evaluation
+    imdb.evaluate_segmentations(segmentations, output_dir)
+
+###################
+# test single frame
+###################
+def test_net_single_frame(sess, net, imdb, weights_filename):
+
+    output_dir = get_output_dir(imdb, weights_filename)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    print imdb.name
+    if os.path.exists(seg_file):
+        with open(seg_file, 'rb') as fid:
+            segmentations = cPickle.load(fid)
+        imdb.evaluate_segmentations(segmentations, output_dir)
+        return
+
+    """Test a FCN on an image database."""
+    num_images = len(imdb.image_index)
+    segmentations = [[] for _ in xrange(num_images)]
+
+    # timers
+    _t = {'im_segment' : Timer(), 'misc' : Timer()}
+
+    # perm = np.random.permutation(np.arange(num_images))
+
+    for i in xrange(num_images):
+    # for i in perm:
+
+        rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
+        im = rgba[:,:,:3]
+        alpha = rgba[:,:,3]
+        I = np.where(alpha == 0)
+        im[I[0], I[1], :] = 255
+
+        im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
+
+        _t['im_segment'].tic()
+        labels = im_segment_single_frame(sess, net, im, im_depth)
+        _t['im_segment'].toc()
+
+        _t['misc'].tic()
+        seg = {'labels': labels}
+        segmentations[i] = seg
+        _t['misc'].toc()
+
+        # vis_segmentations(im, im_depth, labels)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

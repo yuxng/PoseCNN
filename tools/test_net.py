@@ -11,6 +11,7 @@
 
 import _init_paths
 from fcn.test import test_net
+from fcn.test import test_net_single_frame
 from fcn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
 import argparse
@@ -84,4 +85,7 @@ if __name__ == '__main__':
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 
-    test_net(sess, network, imdb, weights_filename)
+    if cfg.TEST.SINGLE_FRAME:
+        test_net_single_frame(sess, network, imdb, weights_filename)
+    else:
+        test_net(sess, network, imdb, weights_filename)
