@@ -10,13 +10,17 @@ def _backproject_shape(op):
   dims_data = op.inputs[0].get_shape().as_list()
   batch_size = dims_data[0]
   channels = dims_data[3]
+
+  dims_label = op.inputs[1].get_shape().as_list()
+  num_classes = dims_label[3]
   grid_size = op.get_attr('grid_size')
 
   output_shape = tf.TensorShape([batch_size, grid_size, grid_size, grid_size, channels])
-  return [output_shape]
+  output_shape_label = tf.TensorShape([batch_size, grid_size, grid_size, grid_size, num_classes])
+  return [output_shape, output_shape_label]
 
 @ops.RegisterGradient("Backproject")
-def _backproject_grad(op, grad):
+def _backproject_grad(op, grad, _):
   """The gradients for `backproject`.
   Args:
     op: The `backproject` `Operation` that we are differentiating, which we can use

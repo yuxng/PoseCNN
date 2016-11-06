@@ -1,20 +1,20 @@
 EXP_DIR: shapenet_scene
 TRAIN:
   SINGLE_FRAME: False
-  LEARNING_RATE: 0.001
+  LEARNING_RATE: 0.0001
   MOMENTUM: 0.9
   GAMMA: 0.1
   STEPSIZE: 30000
   SCALES_BASE: !!python/tuple [1.0]
   IMS_PER_BATCH: 1
   NUM_STEPS: 3 
-  NUM_UNITS: 8
+  NUM_UNITS: 7
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: shapenet_scene
   SNAPSHOT_PREFIX: vgg16_fcn_depth_multi_frame
   USE_FLIPPED: False
-  GRID_SIZE: 256
+  GRID_SIZE: 128
 TEST:
   SINGLE_FRAME: False
   SCALES_BASE: !!python/tuple [1.0]
-  GRID_SIZE: 256
+  GRID_SIZE: 128

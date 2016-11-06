@@ -61,22 +61,59 @@ def _get_image_blob(im, im_depth):
     return blob, blob_depth, np.array(im_scale_factors)
 
 
-def im_segment_single_frame(sess, net, im, im_depth):
+def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer):
     """segment image
     """
 
     # compute image blob
     im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
 
+    # depth
+    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+
+    # backprojection
+    points = voxelizer.backproject(im_depth, meta_data)
+    voxelizer.voxelized = False
+    grid_indexes = voxelizer.voxelize(points)
+
+    # construct the meta data
+    """
+    format of the meta_data
+    projection matrix: meta_data[0 ~ 11]
+    camera center: meta_data[12, 13, 14]
+    voxel step size: meta_data[15, 16, 17]
+    voxel min value: meta_data[18, 19, 20]
+    backprojection matrix: meta_data[21 ~ 32]
+    """
+    P = np.matrix(meta_data['projection_matrix'])
+    Pinv = np.linalg.pinv(P)
+    mdata = np.zeros(33, dtype=np.float32)
+    mdata[0:12] = P.flatten()
+    mdata[12:15] = meta_data['camera_location']
+    mdata[15] = voxelizer.step_x
+    mdata[16] = voxelizer.step_y
+    mdata[17] = voxelizer.step_z
+    mdata[18] = voxelizer.min_x
+    mdata[19] = voxelizer.min_y
+    mdata[20] = voxelizer.min_z
+    mdata[21:33] = Pinv.flatten()
+
+    # construct blobs
+    height = im_depth.shape[0]
+    width = im_depth.shape[1]
+    depth_blob = np.zeros((1, height, width, 1), dtype=np.float32)
+    meta_data_blob = np.zeros((1, 1, 1, 33), dtype=np.float32)
+    depth_blob[0,:,:,0] = depth
+    meta_data_blob[0,0,0,:] = mdata
+    # use a fake label blob
+    label_blob = np.zeros((1, height, width, voxelizer.num_classes), dtype=np.float32)
+
     # forward pass
-    feed_dict = {net.data: im_depth_blob}
-    output = sess.run([net.get_output('score_up')], feed_dict=feed_dict)
-    score = output[0]
+    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.depth: depth_blob, net.meta_data: meta_data_blob}
+    output = sess.run([net.get_output('label')], feed_dict=feed_dict)
+    labels = output[0]
 
-    # compute pixel labels
-    labels = np.argmax(score, axis=3)
-
-    return labels
+    return labels[0,:,:,0], points
 
 
 def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
@@ -123,23 +160,24 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
     meta_data_blob = np.zeros((1, 1, 1, 33), dtype=np.float32)
     depth_blob[0,:,:,0] = depth
     meta_data_blob[0,0,0,:] = mdata
+    # use a fake label blob
+    label_blob = np.zeros((1, height, width, voxelizer.num_classes), dtype=np.float32)
 
     # reshape the blobs
     num_steps = 1
     ims_per_batch = 1
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.state: state, net.depth: depth_blob, net.meta_data: meta_data_blob}
-    score, state = sess.run([net.get_output('prob'), net.get_output('backprojection')], feed_dict=feed_dict)
+    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.state: state, net.depth: depth_blob, net.meta_data: meta_data_blob}
+    output, state = sess.run([net.get_output('labels_pred'), net.get_output('output_state')], feed_dict=feed_dict)
 
-    # get outputs scores: [batch_size, grid_size, grid_size, grid_size, num_classes]
-    labels = np.argmax(score, axis=3)
-
-    return labels[0,:,:], points, state, voxelizer
+    labels = output[0]
+    return labels[0,:,:,0], points, state, voxelizer
 
 
 def vis_segmentations(im, im_depth, labels, points):
@@ -283,6 +321,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
     # timers
     _t = {'im_segment' : Timer(), 'misc' : Timer()}
 
+    # voxelizer
+    voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
+
     # perm = np.random.permutation(np.arange(num_images))
 
     for i in xrange(num_images):
@@ -296,8 +337,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
 
         im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
 
+        # load meta data
+        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+
         _t['im_segment'].tic()
-        labels = im_segment_single_frame(sess, net, im, im_depth)
+        labels, points = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
@@ -305,7 +349,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
         segmentations[i] = seg
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, labels)
+        # vis_segmentations(im, im_depth, labels, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

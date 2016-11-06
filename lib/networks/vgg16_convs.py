@@ -2,13 +2,18 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, trainable=True):
+    def __init__(self, grid_size, trainable=True):
         self.inputs = []
         self.num_classes = 7
+        self.grid_size = grid_size
+
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        self.layers = dict({'data': self.data})
+        self.label = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
+        self.depth = tf.placeholder(tf.float32, shape=[None, None, None, 1])
+        self.meta_data = tf.placeholder(tf.float32, shape=[None, None, None, 33])
+
+        self.layers = dict({'data': self.data, 'label': self.label, 'depth': self.depth, 'meta_data': self.meta_data})
         self.trainable = trainable
-        self.variables_to_restore = []
         self.setup()
 
     def setup(self):
@@ -32,3 +37,10 @@ class vgg16_convs(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_3')
              .conv(1, 1, self.num_classes, 1, 1, name='score')
              .deconv(32, 32, self.num_classes, 16, 16, name='score_up'))
+
+        (self.feed('score_up', 'label', 'depth', 'meta_data')
+             .backproject(self.grid_size, 0.02, name='backprojection')
+             .softmax_high_dimension(self.num_classes, name='prob'))
+
+        (self.feed('prob', 'depth', 'meta_data')
+             .compute_label(name='label'))

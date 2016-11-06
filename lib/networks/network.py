@@ -7,6 +7,7 @@ import projecting_layer.projecting_op as project_op
 import projecting_layer.projecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
 from gru2d import GRU2DCell
+from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
 from add2d import Add2DCell
 
@@ -125,9 +126,6 @@ class Network(object):
             init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
             biases = self.make_var('biases', [c_o], init_biases, trainable)
-            if not trainable:
-                self.variables_to_restore.append(kernel)
-                self.variables_to_restore.append(biases)
             if group==1:
                 conv = convolve(input, kernel)
             else:
@@ -172,13 +170,11 @@ class Network(object):
             # filter
             f_shape = [k_h, k_w, c_o, c_i]
             weights = self.make_deconv_filter('weights', f_shape, trainable)
-            if not trainable:
-                self.variables_to_restore.append(weights)
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer
     def backproject(self, input, grid_size, threshold, name):
-        return backproject_op.backproject(input[0][1], input[1], input[2], input[3], grid_size, threshold, name=name)
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, threshold, name=name)
 
     @layer
     def project(self, input, threshold, name):
@@ -193,6 +189,12 @@ class Network(object):
         with tf.variable_scope(name, reuse=reuse) as scope:
             gru2d = GRU2DCell(num_units, channels)
             return gru2d(input[0], input[1], scope)
+
+    @layer
+    def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            gru3d = GRU3DCell(num_units, channels)
+            return gru3d(input[0][0], input[1], scope)
 
     @layer
     def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):
@@ -281,7 +283,6 @@ class Network(object):
         # only use the first input
         if isinstance(input, tuple):
             input = input[0]
-        print input
         input_shape = input.get_shape()
         ndims = input_shape.ndims
         array = np.ones(ndims)

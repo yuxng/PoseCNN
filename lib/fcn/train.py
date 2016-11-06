@@ -55,19 +55,30 @@ class SolverWrapper(object):
 
     def loss_cross_entropy(self, scores, labels):
         """
-        scores: a list of tensors [batch_size, height, width, num_classes]
-        labels: a tensor of [num_steps, batch_size, height, width, num_classes]
+        scores: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
         """
 
         with tf.name_scope('loss'):
-            input_labels = tf.unpack(labels)
             loss = 0
             for i in range(cfg.TRAIN.NUM_STEPS):
                 score = scores[i]
-                label = input_labels[i]
-                cross_entropy = -tf.reduce_sum(label * tf.log(score), reduction_indices=[3])
-                loss += tf.reduce_mean(cross_entropy)
+                label = labels[i]
+                cross_entropy = -tf.reduce_sum(label * tf.log(score + 1e-10), reduction_indices=[4])
+                loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
             loss /= cfg.TRAIN.NUM_STEPS
+        return loss
+
+    def loss_cross_entropy_single_frame(self, scores, labels):
+        """
+        scores: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+        """
+
+        with tf.name_scope('loss'):
+            cross_entropy = -tf.reduce_sum(labels * tf.log(scores + 1e-10), reduction_indices=[4])
+            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
+
         return loss
 
 
@@ -78,15 +89,15 @@ class SolverWrapper(object):
             # data layer
             data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes)
             # classification loss
-            scores = self.net.get_output('score_up')
-            labels = tf.placeholder(tf.int32, shape=[None, None, None]) # [batch_size, height, width]
-            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(scores, labels))
+            scores = self.net.get_output('prob')
+            labels = self.net.get_output('backprojection')[1]
+            loss = self.loss_cross_entropy_single_frame(scores, labels)
         else:
             # data layer
             data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
             # classification loss
-            scores = self.net.get_output('output')
-            labels = tf.placeholder(tf.float32, shape=[cfg.TRAIN.NUM_STEPS, None, None, None, None])  # [num_steps, batch_size, height, width, num_classes]
+            scores = self.net.get_output('outputs')
+            labels = self.net.get_output('labels_gt')
             loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
@@ -99,11 +110,7 @@ class SolverWrapper(object):
         if self.pretrained_model is not None:
             print ('Loading pretrained model '
                    'weights from {:s}').format(self.pretrained_model)
-            if cfg.TRAIN.SINGLE_FRAME:
-                self.net.load(self.pretrained_model, sess, True)
-            else:
-                saver = tf.train.Saver(self.net.variables_to_restore)
-                saver.restore(sess, self.pretrained_model)
+            self.net.load(self.pretrained_model, sess, True)
 
         last_snapshot_iter = -1
         timer = Timer()
@@ -119,10 +126,11 @@ class SolverWrapper(object):
 
             # Make one SGD update
             if cfg.TRAIN.SINGLE_FRAME:
-                feed_dict={self.net.data: blobs['data_depth_image'], labels: blobs['data_label']}
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data']}
             else:
-                feed_dict={self.net.data: blobs['data_depth_image'], self.net.depth: blobs['data_depth'], \
-                           labels: blobs['data_label'], self.net.meta_data: blobs['data_meta_data'], \
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
                            self.net.state: blobs['data_state']}
             
             timer.tic()
