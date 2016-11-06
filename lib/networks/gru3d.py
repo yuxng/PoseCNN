@@ -19,17 +19,6 @@ class GRU3DCell(tf.nn.rnn_cell.RNNCell):
     def make_var(self, name, shape, initializer=None, trainable=True):
         return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
 
-    # f_shape: [1, 1, 1, 14, 7]
-    def make_filter(self, name, f_shape, trainable=True):
-        weights = np.zeros(f_shape)
-        for i in range(f_shape[4]):
-            for j in range(f_shape[4]):
-                weights[:, :, :, j, i] = 1
-
-        init = tf.constant_initializer(value=weights, dtype=tf.float32)
-        var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=trainable)
-        return var
-
     # inputs: [batch_size, grid_size, grid_size, grid_size, channels]
     # state:  [batch_size, grid_size, grid_size, grid_size, num_units]
     def __call__(self, inputs, state, scope=None):
@@ -59,7 +48,7 @@ class GRU3DCell(tf.nn.rnn_cell.RNNCell):
 
                 # define the variables
                 init_biases_1 = tf.constant_initializer(0.0)
-                kernel_1 = self.make_filter('weights', [1, 1, 1, self._num_units + self._channels, self._num_units])
+                kernel_1 = self.make_var('weights', [1, 1, 1, self._num_units + self._channels, self._num_units])
                 biases_1 = self.make_var('biases', [self._num_units], init_biases_1)
 
                 # 3D convolution
