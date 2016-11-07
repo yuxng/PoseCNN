@@ -40,7 +40,7 @@ class vgg16_convs(Network):
 
         (self.feed('score_up', 'label', 'depth', 'meta_data')
              .backproject(self.grid_size, 0.02, name='backprojection')
-             .softmax_high_dimension(self.num_classes, name='prob'))
+             .log_softmax_high_dimension(self.num_classes, name='prob'))
 
         (self.feed('prob', 'depth', 'meta_data')
              .compute_label(name='label'))

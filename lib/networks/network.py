@@ -296,5 +296,22 @@ class Network(object):
 
 
     @layer
+    def log_softmax_high_dimension(self, input, num_classes, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
+
+        m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        d = tf.sub(input, tf.tile(m, multiples))
+        e = tf.exp(d)
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        return tf.sub(d, tf.log(tf.tile(s, multiples)))
+
+    @layer
     def dropout(self, input, keep_prob, name):
         return tf.nn.dropout(input, keep_prob, name=name)
