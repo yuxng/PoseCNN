@@ -250,6 +250,7 @@ def test_net(sess, net, imdb, weights_filename):
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
+    video_count = 0
     for i in xrange(num_images):
     # for i in perm:
         # parse image name
@@ -257,14 +258,22 @@ def test_net(sess, net, imdb, weights_filename):
         pos = image_index.find('/')
         if video_index == '':
             video_index = image_index[:pos]
+            video_count = 0
             voxelizer.reset()
             state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 voxelizer.reset()
+                video_count = 0
                 video_index = image_index[:pos]
                 state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                 print 'start video {}'.format(video_index)
+            else:
+                if video_count % 20 == 0:
+                    voxelizer.reset()
+                    state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+                    print 'restart video {}'.format(video_index)
+        video_count += 1
 
         rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
         im = rgba[:,:,:3]
