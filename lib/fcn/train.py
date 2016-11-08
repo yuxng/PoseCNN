@@ -64,7 +64,7 @@ class SolverWrapper(object):
             for i in range(cfg.TRAIN.NUM_STEPS):
                 score = scores[i]
                 label = labels[i]
-                cross_entropy = -tf.reduce_sum(label * tf.log(score + 1e-10), reduction_indices=[4])
+                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
                 loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
             loss /= cfg.TRAIN.NUM_STEPS
         return loss
@@ -76,7 +76,7 @@ class SolverWrapper(object):
         """
 
         with tf.name_scope('loss'):
-            cross_entropy = -tf.reduce_sum(labels * tf.log(scores + 1e-10), reduction_indices=[4])
+            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
             loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
 
         return loss
