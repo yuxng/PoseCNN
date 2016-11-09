@@ -56,5 +56,5 @@ class GRU3DCell(tf.nn.rnn_cell.RNNCell):
                 # c = tf.nn.tanh(tf.nn.bias_add(conv_1, biases_1))
                 c = tf.nn.bias_add(conv_1, biases_1)
             """
-            new_h = u * state + (1 - u) * inputs
+            new_h = tf.nn.relu(u * state + (1 - u) * inputs)
         return new_h, new_h
