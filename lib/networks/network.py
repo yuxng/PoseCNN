@@ -315,3 +315,63 @@ class Network(object):
     @layer
     def dropout(self, input, keep_prob, name):
         return tf.nn.dropout(input, keep_prob, name=name)
+
+
+    def make_3d_spatial_filter(self, name, size, channel, theta):
+        depth = size
+        heigh = size
+        width = size
+        kernel = np.zeros([size, size, size])
+        c = size / 2
+        for d in range(depth):
+            for h in range(height):
+                for w in range(width):
+                    kernel[d, h, w] = np.exp( -1 * ((d - c) * (d - c) + (h - c) * (h - c) + (w - c) * (w - c)) / (2.0 * theta * theta) )
+        kernel[c, c, c] = 0
+        print kernel
+
+        weights = np.zeros([size, size, size, channel, channel])
+        for i in range(channel):
+            weights[:, :, i, i] = kernel
+
+        init = tf.constant_initializer(value=weights, dtype=tf.float32)
+        var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=False)
+        return var
+
+
+    @layer
+    def meanfield_iteration(self, input, num_classes, name, reuse=None, trainable=True):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            # softmax
+            input_shape = input.get_shape()
+            ndims = input_shape.ndims
+            array = np.ones(ndims)
+            array[-1] = num_classes
+
+            m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+            multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+            e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
+            s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+            Q = tf.div(e, tf.tile(s, multiples))
+
+            # message passing
+            weights_message = self.make_3d_spatial_filter('weights_message', 3, num_classes, 0.8)
+            message = tf.nn.conv3d(Q, weights_message, [1, 1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+            # compatibility transform
+            kernel = np.zeros([1, 1, 1, num_classes, num_classes])
+            for i in range(num_classes):
+                kernel[0, 0, 0, i, i] = 1            
+            init_weights = tf.constant_initializer(value=kernel, dtype=tf.float32)
+            weights_comp = self.make_var('weights_comp', [1, 1, 1, num_classes, num_classes], init_weights, trainable)
+            compatibility = tf.nn.conv3d(message, weights_comp, [1, 1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+            # add unary potential
+            return input + compatibility
+
+
+
+

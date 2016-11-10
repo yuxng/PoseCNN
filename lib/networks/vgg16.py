@@ -66,6 +66,7 @@ class vgg16(Network):
 
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
+                 .meanfield_iteration(self.num_classes, name='meanfield', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob'))
 
             (self.feed('prob', 'depth', 'meta_data')
