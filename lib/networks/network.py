@@ -319,7 +319,7 @@ class Network(object):
 
     def make_3d_spatial_filter(self, name, size, channel, theta):
         depth = size
-        heigh = size
+        height = size
         width = size
         kernel = np.zeros([size, size, size])
         c = size / 2
@@ -328,11 +328,10 @@ class Network(object):
                 for w in range(width):
                     kernel[d, h, w] = np.exp( -1 * ((d - c) * (d - c) + (h - c) * (h - c) + (w - c) * (w - c)) / (2.0 * theta * theta) )
         kernel[c, c, c] = 0
-        print kernel
 
         weights = np.zeros([size, size, size, channel, channel])
         for i in range(channel):
-            weights[:, :, i, i] = kernel
+            weights[:, :, :, i, i] = kernel
 
         init = tf.constant_initializer(value=weights, dtype=tf.float32)
         var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=False)
