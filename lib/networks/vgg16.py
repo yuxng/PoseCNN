@@ -59,14 +59,15 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
-                 .deconv(32, 32, self.num_classes, 16, 16, name='score_up', reuse=reuse))
+                 .deconv(32, 32, self.num_classes, 16, 16, name='score_up', reuse=reuse)
+                 .meanfield_2d(3, self.num_classes, name='score_meanfield', reuse=reuse))
 
-            (self.feed('score_up', 'label', 'depth', 'meta_data')
+            (self.feed('score_meanfield', 'label', 'depth', 'meta_data')
                  .backproject(self.grid_size, 0.02, name='backprojection'))
 
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
-                 .meanfield_iteration(self.num_classes, name='meanfield', reuse=reuse)
+                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob'))
 
             (self.feed('prob', 'depth', 'meta_data')

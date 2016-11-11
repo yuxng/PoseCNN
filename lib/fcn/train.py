@@ -137,8 +137,8 @@ class SolverWrapper(object):
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
             timer.toc()
 
-            print 'iter: %d / %d, loss_cls: %.4f, lr: %f' %\
-                    (iter+1, max_iters, loss_cls_value, lr.eval())
+            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time: %.2f' %\
+                    (iter+1, max_iters, loss_cls_value, lr.eval(), timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
