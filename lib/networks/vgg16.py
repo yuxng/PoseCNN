@@ -58,11 +58,24 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_1', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
-                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
-                 .deconv(32, 32, self.num_classes, 16, 16, name='score_up', reuse=reuse)
-                 .meanfield_2d(3, self.num_classes, name='score_meanfield', reuse=reuse))
+                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv5', reuse=reuse)
+                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse))
 
-            (self.feed('score_meanfield', 'label', 'depth', 'meta_data')
+            (self.feed('conv4_3')
+                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv4', reuse=reuse))
+
+            (self.feed('score_conv4', 'upscore_conv5')
+                 .add(name='add1')
+                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv4', reuse=reuse))
+
+            (self.feed('conv3_3')
+                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv3', reuse=reuse))
+
+            (self.feed('score_conv3', 'upscore_conv4')
+                 .add(name='add2')
+                 .deconv(8, 8, self.num_classes, 4, 4, name='upscore', reuse=reuse))
+
+            (self.feed('upscore', 'label', 'depth', 'meta_data')
                  .backproject(self.grid_size, 0.02, name='backprojection'))
 
             (self.feed('backprojection', 'state')
