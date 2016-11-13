@@ -66,14 +66,7 @@ class vgg16(Network):
 
             (self.feed('score_conv4', 'upscore_conv5')
                  .add(name='add1')
-                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv4', reuse=reuse))
-
-            (self.feed('conv3_3')
-                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv3', reuse=reuse))
-
-            (self.feed('score_conv3', 'upscore_conv4')
-                 .add(name='add2')
-                 .deconv(8, 8, self.num_classes, 4, 4, name='upscore', reuse=reuse))
+                 .deconv(16, 16, self.num_classes, 8, 8, name='upscore', reuse=reuse))
 
             (self.feed('upscore', 'label', 'depth', 'meta_data')
                  .backproject(self.grid_size, 0.02, name='backprojection'))
