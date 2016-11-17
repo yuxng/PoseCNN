@@ -224,6 +224,12 @@ class shapenet_scene(datasets.imdb):
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
 
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
         # for each image
         for im_ind, index in enumerate(self.image_index):
             # read ground truth labels
@@ -249,6 +255,12 @@ class shapenet_scene(datasets.imdb):
             print filename
             cv2.imwrite(filename, label_image)
             """
+
+            # save matlab result
+            labels = {'labels': sg_labels}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, labels)
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()
