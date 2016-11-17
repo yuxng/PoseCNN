@@ -256,11 +256,13 @@ class shapenet_scene(datasets.imdb):
             cv2.imwrite(filename, label_image)
             """
 
+            """
             # save matlab result
             labels = {'labels': sg_labels}
             filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
             print filename
             scipy.io.savemat(filename, labels)
+            """
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()
