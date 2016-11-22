@@ -144,6 +144,43 @@ class Voxelizer(object):
 
         return np.array(X)
 
+    # backproject pixels into 3D points in camera's coordinate system
+    def backproject_camera(self, im_depth, meta_data):
+
+        depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+
+        # get intrinsic matrix
+        K = meta_data['intrinsic_matrix']
+        K = np.matrix(K)
+        Kinv = np.linalg.inv(K)
+
+        # compute the 3D points        
+        width = depth.shape[1]
+        height = depth.shape[0]
+
+        # construct the 2D points matrix
+        x, y = np.meshgrid(np.arange(width), np.arange(height))
+        ones = np.ones((height, width), dtype=np.float32)
+        x2d = np.stack((x, y, ones), axis=2).reshape(width*height, 3)
+
+        # backprojection
+        R = Kinv * x2d.transpose()
+
+        # compute the norm
+        N = np.linalg.norm(R, axis=0)
+        
+        # normalization
+        R = np.divide(R, np.tile(N, (3,1)))
+
+        # compute the 3D points
+        X = np.multiply(np.tile(depth.reshape(1, width*height), (3, 1)), R)
+
+        # mask
+        index = np.where(im_depth.flatten() == 0)
+        X[:,index] = np.nan
+
+        return np.array(X)
+
 def set_axes_equal(ax):
     '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
     cubes as cubes, etc..  This is one possible solution to Matplotlib's
