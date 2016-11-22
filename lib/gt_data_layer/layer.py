@@ -30,11 +30,19 @@ class GtDataLayer(object):
 
     def _get_next_minibatch_inds(self):
         """Return the roidb indices for the next minibatch."""
-        if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
-            self._shuffle_roidb_inds()
 
-        db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
-        self._cur += cfg.TRAIN.IMS_PER_BATCH
+        num_steps = cfg.TRAIN.NUM_STEPS
+        ims_per_batch = cfg.TRAIN.IMS_PER_BATCH
+        db_inds = np.zeros(num_steps * ims_per_batch, dtype=np.int32)
+        count = 0
+        while count < ims_per_batch:
+            ind = self._perm[self._cur]
+            if ind + num_steps - 1 < len(self._roidb) and self._roidb[ind]['video_id'] == self._roidb[ind+num_steps-1]['video_id']:
+                db_inds[count * num_steps : (count+1) * num_steps] = range(ind, ind + num_steps)
+                count += 1
+            self._cur += 1
+            if self._cur >= len(self._roidb):
+                self._shuffle_roidb_inds()
 
         return db_inds
 

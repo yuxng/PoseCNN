@@ -34,6 +34,8 @@ cfg = __C
 
 __C.TRAIN = edict()
 
+__C.TRAIN.SINGLE_FRAME = True
+
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
 __C.TRAIN.MOMENTUM = 0.9
@@ -48,6 +50,8 @@ __C.TRAIN.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 
 # Images to use per minibatch
 __C.TRAIN.IMS_PER_BATCH = 2
+__C.TRAIN.NUM_STEPS = 5
+__C.TRAIN.NUM_UNITS = 64
 
 # Use horizontally-flipped images during training?
 __C.TRAIN.USE_FLIPPED = True
@@ -68,6 +72,8 @@ __C.TRAIN.DISPLAY = 20
 #
 
 __C.TEST = edict()
+
+__C.TEST.SINGLE_FRAME = True
 
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)

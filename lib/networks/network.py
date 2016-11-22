@@ -3,6 +3,13 @@ from math import ceil
 import tensorflow as tf
 import backprojecting_layer.backprojecting_op as backproject_op
 import backprojecting_layer.backprojecting_op_grad
+import projecting_layer.projecting_op as project_op
+import projecting_layer.projecting_op_grad
+import computing_label_layer.computing_label_op as compute_label_op
+from gru2d import GRU2DCell
+from gru3d import GRU3DCell
+from vanilla2d import Vanilla2DCell
+from add2d import Add2DCell
 
 DEFAULT_PADDING = 'SAME'
 
@@ -106,13 +113,15 @@ class Network(object):
         return var
 
     @layer
-    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
+    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
         self.validate_padding(padding)
+        if isinstance(input, tuple):
+            input = input[0]
         c_i = input.get_shape()[-1]
         assert c_i%group==0
         assert c_o%group==0
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
-        with tf.variable_scope(name) as scope:
+        with tf.variable_scope(name, reuse=reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
@@ -126,14 +135,31 @@ class Network(object):
                 conv = tf.concat(3, output_groups)
             if relu:
                 bias = tf.nn.bias_add(conv, biases)
+                return tf.nn.relu(bias, name=scope.name)    
+        return tf.nn.bias_add(conv, biases, name=scope.name)
+
+
+    @layer
+    def conv3d(self, input, k_d, k_h, k_w, c_i, c_o, s_d, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, trainable=True):
+        self.validate_padding(padding)
+        if isinstance(input, tuple):
+            input = input[0]
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
+            init_biases = tf.constant_initializer(0.0)
+            kernel = self.make_var('weights', [k_d, k_h, k_w, c_i, c_o], init_weights, trainable)
+            biases = self.make_var('biases', [c_o], init_biases, trainable)
+            conv = tf.nn.conv3d(input, kernel, [1, s_d, s_h, s_w, 1], padding=padding)
+            if relu:
+                bias = tf.nn.bias_add(conv, biases)
                 return tf.nn.relu(bias, name=scope.name)
             return tf.nn.bias_add(conv, biases, name=scope.name)
 
     @layer
-    def deconv(self, input, k_h, k_w, c_o, s_h, s_w, name, padding=DEFAULT_PADDING, trainable=True):
+    def deconv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, padding=DEFAULT_PADDING, trainable=True):
         self.validate_padding(padding)
         c_i = input.get_shape()[-1]
-        with tf.variable_scope(name):
+        with tf.variable_scope(name, reuse=reuse) as scope:
             # Compute shape out of input
             in_shape = tf.shape(input)
             h = in_shape[1] * s_h
@@ -144,11 +170,43 @@ class Network(object):
             # filter
             f_shape = [k_h, k_w, c_o, c_i]
             weights = self.make_deconv_filter('weights', f_shape, trainable)
-        return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding)
+        return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer
-    def backproject(self, input, name):
-        return backproject_op.backproject(input[0], input[1], name=name)
+    def backproject(self, input, grid_size, threshold, name):
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, threshold, name=name)
+
+    @layer
+    def project(self, input, threshold, name):
+        return project_op.project(input[0], input[1], input[2], threshold, name=name)
+
+    @layer
+    def compute_label(self, input, name):
+        return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
+
+    @layer
+    def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            gru2d = GRU2DCell(num_units, channels)
+            return gru2d(input[0], input[1], scope)
+
+    @layer
+    def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            gru3d = GRU3DCell(num_units, channels)
+            return gru3d(input[0][0], input[1], scope)
+
+    @layer
+    def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            vanilla2d = Vanilla2DCell(num_units, channels)
+            return vanilla2d(input[0], input[1], scope)
+    
+    @layer
+    def rnn_add2d(self, input, num_units, channels, step, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            add2d = Add2DCell(num_units, channels)
+            return add2d(input[0], input[1], step, scope)
 
     @layer
     def relu(self, input, name):
@@ -186,8 +244,12 @@ class Network(object):
         return tf.concat(concat_dim=axis, values=inputs, name=name)
 
     @layer
-    def fc(self, input, num_out, name, relu=True, trainable=True):
-        with tf.variable_scope(name) as scope:
+    def add(self, inputs, name):
+        return tf.add(inputs[0], inputs[1])
+
+    @layer
+    def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):
+        with tf.variable_scope(name, reuse=reuse) as scope:
             # only use the first input
             if isinstance(input, tuple):
                 input = input[0]
@@ -211,15 +273,78 @@ class Network(object):
 
     @layer
     def softmax(self, input, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
         return tf.nn.softmax(input, name)
 
     @layer
     def softmax_high_dimension(self, input, num_classes, name):
-        with tf.variable_scope(name) as scope:
-            # only use the first input
-            if isinstance(input, tuple):
-                input = input[0]
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
 
+        m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        return tf.div(e, tf.tile(s, multiples))
+
+
+    @layer
+    def log_softmax_high_dimension(self, input, num_classes, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
+
+        m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        d = tf.sub(input, tf.tile(m, multiples))
+        e = tf.exp(d)
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        return tf.sub(d, tf.log(tf.tile(s, multiples)))
+
+    @layer
+    def dropout(self, input, keep_prob, name):
+        return tf.nn.dropout(input, keep_prob, name=name)
+
+
+    def make_3d_spatial_filter(self, name, size, channel, theta):
+        depth = size
+        height = size
+        width = size
+        kernel = np.zeros([size, size, size])
+        c = size / 2
+        for d in range(depth):
+            for h in range(height):
+                for w in range(width):
+                    kernel[d, h, w] = np.exp( -1 * ((d - c) * (d - c) + (h - c) * (h - c) + (w - c) * (w - c)) / (2.0 * theta * theta) )
+        kernel[c, c, c] = 0
+
+        weights = np.zeros([size, size, size, channel, channel])
+        for i in range(channel):
+            weights[:, :, :, i, i] = kernel
+
+        init = tf.constant_initializer(value=weights, dtype=tf.float32)
+        var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=False)
+        return var
+
+
+    @layer
+    def meanfield_3d(self, input, num_classes, name, reuse=None, trainable=True):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            # softmax
             input_shape = input.get_shape()
             ndims = input_shape.ndims
             array = np.ones(ndims)
@@ -229,9 +354,78 @@ class Network(object):
             multiples = tf.convert_to_tensor(array, dtype=tf.int32)
             e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
             s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
-            return tf.div(e, tf.tile(s, multiples))
+            Q = tf.div(e, tf.tile(s, multiples))
+
+            # message passing
+            weights_message = self.make_3d_spatial_filter('weights_message', 3, num_classes, 0.8)
+            message = tf.nn.conv3d(Q, weights_message, [1, 1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+            # compatibility transform
+            kernel = np.zeros([1, 1, 1, num_classes, num_classes])
+            for i in range(num_classes):
+                kernel[0, 0, 0, i, i] = 1
+            init_weights = tf.constant_initializer(value=kernel, dtype=tf.float32)
+            weights_comp = self.make_var('weights_comp', [1, 1, 1, num_classes, num_classes], init_weights, trainable)
+            compatibility = tf.nn.conv3d(message, weights_comp, [1, 1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+            # add unary potential
+            return input + compatibility
+
+    def make_2d_spatial_filter(self, name, size, channel, theta):
+        height = size
+        width = size
+        kernel = np.zeros([size, size])
+        c = size / 2
+        for h in range(height):
+            for w in range(width):
+                kernel[h, w] = np.exp( -1 * ((h - c) * (h - c) + (w - c) * (w - c)) / (2.0 * theta * theta) )
+        kernel[c, c] = 0
+
+        weights = np.zeros([size, size, channel, channel])
+        for i in range(channel):
+            weights[:, :, i, i] = kernel
+
+        init = tf.constant_initializer(value=weights, dtype=tf.float32)
+        var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=False)
+        return var
 
 
     @layer
-    def dropout(self, input, keep_prob, name):
-        return tf.nn.dropout(input, keep_prob, name=name)
+    def meanfield_2d(self, input, num_steps, num_classes, name, reuse=None, trainable=True):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        unary = input
+
+        for i in range(num_steps):
+            if i > 0:
+                reuse = True
+            with tf.variable_scope(name, reuse=reuse) as scope:
+                # softmax
+                m = tf.reduce_max(unary, reduction_indices=[ndims-1], keep_dims=True)
+                e = tf.exp(tf.sub(unary, tf.tile(m, multiples)))
+                s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+                Q = tf.div(e, tf.tile(s, multiples))
+
+                # message passing
+                weights_message = self.make_2d_spatial_filter('weights_message', 3, num_classes, 0.8)
+                message = tf.nn.conv2d(Q, weights_message, [1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+                # compatibility transform
+                kernel = np.zeros([1, 1, num_classes, num_classes])
+                for i in range(num_classes):
+                    kernel[0, 0, i, i] = 1            
+                init_weights = tf.constant_initializer(value=kernel, dtype=tf.float32)
+                weights_comp = self.make_var('weights_comp', [1, 1, num_classes, num_classes], init_weights, trainable)
+                compatibility = tf.nn.conv2d(message, weights_comp, [1, 1, 1, 1], padding=DEFAULT_PADDING)
+
+                # add unary potential
+                unary = unary + compatibility
+
+        return unary

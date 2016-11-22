@@ -10,9 +10,14 @@
 __sets = {}
 
 import networks.vgg16
+import networks.vgg16_convs
 import tensorflow as tf
+from fcn.config import cfg
 
-__sets['vgg16'] = networks.vgg16()
+if cfg.TRAIN.SINGLE_FRAME:
+    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.TRAIN.GRID_SIZE)
+else:
+    __sets['vgg16'] = networks.vgg16(cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_UNITS)
 
 def get_network(name):
     """Get a network by name."""

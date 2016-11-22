@@ -13,7 +13,6 @@ import _init_paths
 from fcn.train import get_training_roidb, train_net
 from fcn.config import cfg, cfg_from_file, get_output_dir
 from datasets.factory import get_imdb
-from networks.factory import get_network
 import argparse
 import pprint
 import numpy as np
@@ -80,6 +79,7 @@ if __name__ == '__main__':
     cfg.GPU_ID = args.gpu_id
     print device_name
 
+    from networks.factory import get_network
     network = get_network(args.network_name)
     print 'Use network `{:s}` in training'.format(args.network_name)
 

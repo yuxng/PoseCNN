@@ -17,6 +17,7 @@ class shapenet_scene(datasets.imdb):
         self._data_path = os.path.join(self._shapenet_scene_path, 'data')
         self._classes = ('__background__', 'table', 'bottle', 'bowl', 'keyboard', 'tvmonitor', 'mug')
         self._class_colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1)]
+        self._class_weights = [1, 1, 1, 1, 1, 1, 1]
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -153,12 +154,18 @@ class shapenet_scene(datasets.imdb):
 
         # metadata path
         metadata_path = self.metadata_path_from_index(index)
+
+        # parse image name
+        pos = index.find('/')
+        video_id = index[:pos]
         
         return {'image': image_path,
                 'depth': depth_path,
                 'label': label_path,
                 'meta_data': metadata_path,
+                'video_id': video_id,
                 'class_colors': self._class_colors,
+                'class_weights': self._class_weights,
                 'flipped': False}
 
     def _process_label_image(self, label_image):
@@ -217,6 +224,12 @@ class shapenet_scene(datasets.imdb):
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
 
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
         # for each image
         for im_ind, index in enumerate(self.image_index):
             # read ground truth labels
@@ -241,6 +254,14 @@ class shapenet_scene(datasets.imdb):
             filename = os.path.join(image_dir, '%04d.png' % im_ind)
             print filename
             cv2.imwrite(filename, label_image)
+            """
+
+            """
+            # save matlab result
+            labels = {'labels': sg_labels}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, labels)
             """
 
         # overall accuracy

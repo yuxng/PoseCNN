@@ -4,6 +4,6 @@
 *.tgz
 *.so
 *.o
-experiments/logs/*
 output/*
 data/*
+lib/icp/icp_main.cpp

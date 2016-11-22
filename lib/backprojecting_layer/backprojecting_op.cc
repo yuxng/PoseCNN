@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <stdio.h>
 #include <cfloat>
+#include <math.h> 
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/op.h"
@@ -28,17 +29,22 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Backproject")
     .Attr("T: {float, double}")
+    .Attr("grid_size: int")
+    .Attr("threshold: float")
     .Input("bottom_data: T")
-    .Input("bottom_pixel_locations: int32")
+    .Input("bottom_label: T")
+    .Input("bottom_depth: T")
+    .Input("bottom_meta_data: T")
     .Output("top_data: T")
-    .Output("top_count: int32")
-    .Output("top_voxel_locations: int32");
+    .Output("top_label: T");
 
 REGISTER_OP("BackprojectGrad")
     .Attr("T: {float, double}")
+    .Attr("grid_size: int")
+    .Attr("threshold: float")
     .Input("bottom_data: T")
-    .Input("top_count: int32")
-    .Input("top_voxel_locations: int32")
+    .Input("bottom_depth: T")
+    .Input("bottom_meta_data: T")
     .Input("grad: T")
     .Output("output: T");
 
@@ -46,168 +52,185 @@ template <typename Device, typename T>
 class BackprojectOp : public OpKernel {
  public:
   explicit BackprojectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the grid size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("grid_size", &grid_size_));
+    // Check that grid size is positive
+    OP_REQUIRES(context, grid_size_ >= 0,
+                errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
   }
 
   // bottom_data: (batch_size, height, width, channels)
-  // bottom_pixel_locations: (batch_size, grid_size, grid_size, grid_size, channels_location)
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
-    const Tensor& bottom_pixel_locations = context->input(1);
     auto bottom_data_flat = bottom_data.flat<T>();
-    auto bottom_pixel_locations_flat = bottom_pixel_locations.flat<int>();
+
+    const Tensor& bottom_label = context->input(1);
+    auto bottom_label_flat = bottom_label.flat<T>();
+
+    const Tensor& bottom_depth = context->input(2);
+    auto im_depth = bottom_depth.flat<T>();
+
+    // format of the meta_data
+    // projection matrix: meta_data[0 ~ 11]
+    // camera center: meta_data[12, 13, 14]
+    // voxel step size: meta_data[15, 16, 17]
+    // voxel min value: meta_data[18, 19, 20]
+    // backprojection matrix: meta_data[21 ~ 32]
+    const Tensor& bottom_meta_data = context->input(3);
+    auto meta_data = bottom_meta_data.flat<T>();
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
-    // pixel location should have 5 dimensions.
-    OP_REQUIRES(context, bottom_pixel_locations.dims() == 5,
-                errors::InvalidArgument("indexes must be 5-dimensional"));
+    OP_REQUIRES(context, bottom_label.dims() == 4,
+                errors::InvalidArgument("label must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_depth.dims() == 4,
+                errors::InvalidArgument("depth must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_meta_data.dims() == 4,
+                errors::InvalidArgument("meta data must be 4-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
-    // data height
-    int data_height = bottom_data.dim_size(1);
-    // data width
-    int data_width = bottom_data.dim_size(2);
-    // Number of channels
-    int num_channels_data = bottom_data.dim_size(3);
-    int num_channels_location = bottom_pixel_locations.dim_size(4);
-    // grid size
-    int grid_size = bottom_pixel_locations.dim_size(1);
+    // height
+    int height = bottom_data.dim_size(1);
+    // width
+    int width = bottom_data.dim_size(2);
+    // number of channels
+    int num_channels = bottom_data.dim_size(3);
+    int num_classes = bottom_label.dim_size(3);
+    int num_meta_data = bottom_meta_data.dim_size(3);
 
     // Create output tensors
     // top_data
     int dims[5];
     dims[0] = batch_size;
-    dims[1] = grid_size;
-    dims[2] = grid_size;
-    dims[3] = grid_size;
-    dims[4] = num_channels_data;
-    TensorShape output_shape_1;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_1);
+    dims[1] = grid_size_;
+    dims[2] = grid_size_;
+    dims[3] = grid_size_;
+    dims[4] = num_channels;
+    TensorShape output_shape;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape);
 
     Tensor* top_data_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape_1, &top_data_tensor));
+    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_data_tensor));
     auto top_data = top_data_tensor->template flat<T>();
-    
-    // top_count
-    TensorShape output_shape_2;
-    dims[4] = 1;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_2);
 
-    Tensor* top_count_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(1, output_shape_2, &top_count_tensor));
-    auto top_count = top_count_tensor->template flat<int>();
+    // top label
+    dims[4] = num_classes;
+    TensorShape output_shape_label;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
 
-    // top_voxel_locations    
-    int dims_1[4];
-    dims_1[0] = batch_size;
-    dims_1[1] = data_height;
-    dims_1[2] = data_width;
-    dims_1[3] = 1;
-    TensorShape output_shape_3;
-    TensorShapeUtils::MakeShape(dims_1, 4, &output_shape_3);
-    Tensor* top_voxel_locations_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(2, output_shape_3, &top_voxel_locations_tensor));
-    auto top_voxel_locations = top_voxel_locations_tensor->template flat<int>();
+    Tensor* top_label_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(1, output_shape_label, &top_label_tensor));
+    auto top_label = top_label_tensor->template flat<T>();
 
-    // Set all element of the voxel location tensor to -1.
-    const int N = top_voxel_locations.size();
-    for (int i = 0; i < N; i++) 
-      top_voxel_locations(i) = -1;
-
+    int index_meta_data = 0;    
     for(int n = 0; n < batch_size; n++)
     {
-      int index_batch_data = n * grid_size * grid_size * grid_size * num_channels_data;
-      int index_batch_location = n * grid_size * grid_size * grid_size * num_channels_location;
-      for(int d = 0; d < grid_size; d++)
+      int index_batch = n * grid_size_ * grid_size_ * grid_size_;
+      for(int d = 0; d < grid_size_; d++)
       {
-        int index_depth_data = d * grid_size * grid_size * num_channels_data;
-        int index_depth_location = d * grid_size * grid_size * num_channels_location;
-        for(int h = 0; h < grid_size; h++)
+        int index_depth = d * grid_size_ * grid_size_;
+        for(int h = 0; h < grid_size_; h++)
         {
-          int index_height_data = h * grid_size * num_channels_data;
-          int index_height_location = h * grid_size * num_channels_location;
-          for(int w = 0; w < grid_size; w++)
+          int index_height = h * grid_size_;
+          for(int w = 0; w < grid_size_; w++)
           {
-            // set to zero
-            for (int c = 0; c < num_channels_data; c++)
-            {
-              int index_data = w * num_channels_data + c;
-              top_data(index_batch_data + index_depth_data + index_height_data + index_data) = 0;
-            }
+            // voxel location in 3D
+            float X = d * meta_data(index_meta_data + 15) + meta_data(index_meta_data + 18);
+            float Y = h * meta_data(index_meta_data + 16) + meta_data(index_meta_data + 19);
+            float Z = w * meta_data(index_meta_data + 17) + meta_data(index_meta_data + 20);
 
-            // find the mapping of this voxel to pixels
-            int count = 0;
-            for(int c_index = 0; c_index < num_channels_location; c_index++)
+            // project the 3D point to image
+            float x1 = meta_data(index_meta_data + 0) * X + meta_data(index_meta_data + 1) * Y + meta_data(index_meta_data + 2) * Z + meta_data(index_meta_data + 3);
+            float x2 = meta_data(index_meta_data + 4) * X + meta_data(index_meta_data + 5) * Y + meta_data(index_meta_data + 6) * Z + meta_data(index_meta_data + 7);
+            float x3 = meta_data(index_meta_data + 8) * X + meta_data(index_meta_data + 9) * Y + meta_data(index_meta_data + 10) * Z + meta_data(index_meta_data + 11);
+            int px = round(x1 / x3);
+            int py = round(x2 / x3);
+
+            int flag = 0;
+            if (px >= 0 && px < width && py >= 0 && py < height)
             {
-              int index_location = w * num_channels_location + c_index;
-              int location = bottom_pixel_locations_flat(index_batch_location + index_depth_location + index_height_location + index_location);
-              if (location > 0)
+              int index_pixel = n * height * width + py * width + px;
+              T depth = im_depth(index_pixel);
+              // distance of this voxel to camera center
+              float dvoxel = sqrt((X - meta_data(index_meta_data + 12)) * (X - meta_data(index_meta_data + 12)) 
+                                + (Y - meta_data(index_meta_data + 13)) * (Y - meta_data(index_meta_data + 13)) 
+                                + (Z - meta_data(index_meta_data + 14)) * (Z - meta_data(index_meta_data + 14)));
+              // check if the voxel is on the surface
+              if (fabs(depth - dvoxel) < threshold_)
               {
-                count++;
-                int pixel_w = location % data_width;
-                int pixel_h = location / data_width;
-                for(int c = 0; c < num_channels_data; c++)
-                {
-                  int index_data = w * num_channels_data + c;
-                  int index_pixel = (n * data_height * data_width + pixel_h * data_width + pixel_w) * num_channels_data + c;
-                  top_data(index_batch_data + index_depth_data + index_height_data + index_data) += bottom_data_flat(index_pixel);
-                }
-                // store the voxel location
-                top_voxel_locations(n * data_height * data_width + pixel_h * data_width + pixel_w) = d * grid_size * grid_size + h * grid_size + w;
+                flag = 1;
+                // data
+                for(int c = 0; c < num_channels; c++)
+                  top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_flat(index_pixel * num_channels + c);
+                // label
+                for(int c = 0; c < num_classes; c++)
+                  top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_flat(index_pixel * num_classes + c);
               }
             }
-            // compute the mean
-            if (count > 1)
+            if (flag == 0)
             {
-              for(int c = 0; c < num_channels_data; c++)
-              {
-                int index_data = w * num_channels_data + c;
-                top_data(index_batch_data + index_depth_data + index_height_data + index_data) /= count;
-              }
+              // data
+              for (int c = 0; c < num_channels; c++)
+                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
+              // label
+              for(int c = 0; c < num_classes; c++)
+                top_label((index_batch + index_depth + index_height + w) * num_classes + c) = 0;
             }
-            // store count
-            top_count(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) = count;
           }
         }
       }
+      index_meta_data += num_meta_data;
     }
   }
+ private:
+  int grid_size_;
+  float threshold_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_CPU).TypeConstraint<float>("T"), BackprojectOp<CPUDevice, float>);
 REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_CPU).TypeConstraint<double>("T"), BackprojectOp<CPUDevice, double>);
 
 bool BackprojectForwardLaucher(
-    const float* bottom_data, const int* bottom_pixel_locations, const int batch_size, const int height,
-    const int width, const int channels, const int grid_size, const int channels_location,
-    float* top_data, int* top_count, int* top_voxel_locations, const Eigen::GpuDevice& d);
+    const float* bottom_data, const float* bottom_label,
+    const float* bottom_depth, const float* bottom_meta_data,
+    const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data,
+    const int grid_size, const float threshold,
+    float* top_data, float* top_label, const Eigen::GpuDevice& d);
 
 static void BackprojectingKernel(
-    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_pixel_locations,
-    const int batch_size, const int height, const int width, const int channels, const int grid_size, const int channels_location,
-    const TensorShape& tensor_output_shape_1, const TensorShape& tensor_output_shape_2, const TensorShape& tensor_output_shape_3) 
+    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_label,
+    const Tensor* bottom_depth, const Tensor* bottom_meta_data,
+    const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data, 
+    const int grid_size, const float threshold, const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_label) 
 {
   Tensor* top_data = nullptr;
-  Tensor* top_count = nullptr;
-  Tensor* top_voxel_locations = nullptr;
-  OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape_1, &top_data));
-  OP_REQUIRES_OK(context, context->allocate_output(1, tensor_output_shape_2, &top_count));
-  OP_REQUIRES_OK(context, context->allocate_output(2, tensor_output_shape_3, &top_voxel_locations));
+  Tensor* top_label = nullptr;
+  OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &top_data));
+  OP_REQUIRES_OK(context, context->allocate_output(1, tensor_output_shape_label, &top_label));
 
   if (!context->status().ok()) {
     return;
   }
 
   BackprojectForwardLaucher(
-    bottom_data->flat<float>().data(), bottom_pixel_locations->flat<int>().data(),
-    batch_size, height, width, channels, grid_size, channels_location,
-    top_data->flat<float>().data(), top_count->flat<int>().data(), 
-    top_voxel_locations->flat<int>().data(), context->eigen_device<Eigen::GpuDevice>());
+    bottom_data->flat<float>().data(), bottom_label->flat<float>().data(),
+    bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
+    batch_size, height, width, channels, num_classes, num_meta_data, grid_size, threshold,
+    top_data->flat<float>().data(), top_label->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 template <class T>
@@ -216,71 +239,87 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
   typedef Eigen::GpuDevice Device;
 
   explicit BackprojectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the grid size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("grid_size", &grid_size_));
+    // Check that grid size is positive
+    OP_REQUIRES(context, grid_size_ >= 0,
+                errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
   }
 
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
-    const Tensor& bottom_pixel_locations = context->input(1);
+    const Tensor& bottom_label = context->input(1);
+    const Tensor& bottom_depth = context->input(2);
+    const Tensor& bottom_meta_data = context->input(3);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
-    // pixel location should have 4 dimensions.
-    OP_REQUIRES(context, bottom_pixel_locations.dims() == 5,
-                errors::InvalidArgument("indexes must be 5-dimensional"));
+    OP_REQUIRES(context, bottom_label.dims() == 4,
+                errors::InvalidArgument("label must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_depth.dims() == 4,
+                errors::InvalidArgument("depth must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_meta_data.dims() == 4,
+                errors::InvalidArgument("meta data must be 4-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
-    // data height
-    int data_height = bottom_data.dim_size(1);
-    // data width
-    int data_width = bottom_data.dim_size(2);
+    // height
+    int height = bottom_data.dim_size(1);
+    // width
+    int width = bottom_data.dim_size(2);
     // Number of channels
-    int num_channels_data = bottom_data.dim_size(3);
-    int num_channels_location = bottom_pixel_locations.dim_size(4);
-    // grid size
-    int grid_size = bottom_pixel_locations.dim_size(1);
+    int num_channels = bottom_data.dim_size(3);
+    int num_classes = bottom_label.dim_size(3);
+    int num_meta_data = bottom_meta_data.dim_size(3);
 
-    // construct the output shape
+    // Create output tensors
+    // top_data
     int dims[5];
     dims[0] = batch_size;
-    dims[1] = grid_size;
-    dims[2] = grid_size;
-    dims[3] = grid_size;
-    dims[4] = num_channels_data;
-    TensorShape output_shape_1;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_1);
-    
-    TensorShape output_shape_2;
-    dims[4] = 1;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_2);
-    
-    int dims_1[4];
-    dims_1[0] = batch_size;
-    dims_1[1] = data_height;
-    dims_1[2] = data_width;
-    dims_1[3] = 1;
-    TensorShape output_shape_3;
-    TensorShapeUtils::MakeShape(dims_1, 4, &output_shape_3);
+    dims[1] = grid_size_;
+    dims[2] = grid_size_;
+    dims[3] = grid_size_;
+    dims[4] = num_channels;
+    TensorShape output_shape;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape);
 
-    BackprojectingKernel(context, &bottom_data, &bottom_pixel_locations, batch_size, data_height,
-      data_width, num_channels_data, grid_size, num_channels_location, output_shape_1, output_shape_2, output_shape_3);
+    // top label
+    dims[4] = num_classes;
+    TensorShape output_shape_label;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
+
+    BackprojectingKernel(context, &bottom_data, &bottom_label, &bottom_depth, &bottom_meta_data, batch_size, height,
+      width, num_channels, num_classes, num_meta_data, grid_size_, threshold_, output_shape, output_shape_label);
   }
+ private:
+  int grid_size_;
+  float threshold_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_GPU).TypeConstraint<float>("T"), BackprojectOp<Eigen::GpuDevice, float>);
 
 
-bool BackprojectBackwardLaucher(const float* top_diff, const int* top_count, const int* top_voxel_locations, const int batch_size,
-    const int height, const int width, const int channels, const int grid_size,
+bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size,
     float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void BackprojectingGradKernel(
-    OpKernelContext* context, const Tensor* bottom_data, const Tensor* top_count, const Tensor* top_voxel_locations, const Tensor* out_backprop,
-    const int batch_size, const int height, const int width, const int channels, const int grid_size, const TensorShape& tensor_output_shape) 
+    OpKernelContext* context, const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* out_backprop,
+    const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int grid_size,
+    const TensorShape& tensor_output_shape) 
 {
   Tensor* output = nullptr;
   OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &output));
@@ -290,8 +329,8 @@ static void BackprojectingGradKernel(
   }
 
   BackprojectBackwardLaucher(
-    out_backprop->flat<float>().data(), top_count->flat<int>().data(), top_voxel_locations->flat<int>().data(),
-    batch_size, height, width, channels, grid_size, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+    out_backprop->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
+    batch_size, height, width, channels, num_meta_data, grid_size, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 
@@ -300,48 +339,59 @@ template <class Device, class T>
 class BackprojectGradOp : public OpKernel {
  public:
   explicit BackprojectGradOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the grid size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("grid_size", &grid_size_));
+    // Check that grid size is positive
+    OP_REQUIRES(context, grid_size_ >= 0,
+                errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the threshold
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold", &threshold_));
+    // Check that threshold is positive
+    OP_REQUIRES(context, threshold_ >= 0,
+                errors::InvalidArgument("Need threshold >= 0, got ", threshold_));
   }
 
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
-    const Tensor& top_count = context->input(1);
-    const Tensor& top_voxel_locations = context->input(2);
+    const Tensor& bottom_depth = context->input(1);
+    const Tensor& bottom_meta_data = context->input(2);
     const Tensor& out_backprop = context->input(3);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
-    OP_REQUIRES(context, top_count.dims() == 5,
-                errors::InvalidArgument("count must be 5-dimensional"));
+    OP_REQUIRES(context, bottom_depth.dims() == 4,
+                errors::InvalidArgument("depth must be 4-dimensional"));
 
-    OP_REQUIRES(context, top_voxel_locations.dims() == 4,
-                errors::InvalidArgument("voxel_locations must be 4-dimensional"));
-
-    OP_REQUIRES(context, out_backprop.dims() == 5,
-                errors::InvalidArgument("out_backprop must be 5-dimensional"));
+    OP_REQUIRES(context, bottom_meta_data.dims() == 4,
+                errors::InvalidArgument("meta data must be 4-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
-    // data height
+    // height
     int height = bottom_data.dim_size(1);
-    // data width
+    // width
     int width = bottom_data.dim_size(2);
-    // Number of channels
-    int channels = bottom_data.dim_size(3);
-    // grid size
-    int grid_size = top_count.dim_size(1);
+    // number of channels
+    int num_channels = bottom_data.dim_size(3);
+    int num_meta_data = bottom_meta_data.dim_size(3);
 
     // construct the output shape
     TensorShape output_shape = bottom_data.shape();
 
     BackprojectingGradKernel(
-      context, &bottom_data, &top_count, &top_voxel_locations, &out_backprop,
-      batch_size, height, width, channels, grid_size, output_shape);
+      context, &bottom_depth, &bottom_meta_data, &out_backprop,
+      batch_size, height, width, num_channels, num_meta_data, grid_size_, output_shape);
 
   }
+ private:
+  int grid_size_;
+  float threshold_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("BackprojectGrad").Device(DEVICE_GPU).TypeConstraint<float>("T"), BackprojectGradOp<Eigen::GpuDevice, float>);

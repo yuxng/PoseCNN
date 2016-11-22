@@ -11,9 +11,9 @@
 
 import _init_paths
 from fcn.test import test_net
+from fcn.test import test_net_single_frame
 from fcn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
-from networks.factory import get_network
 import argparse
 import pprint
 import time, os, sys
@@ -72,14 +72,20 @@ if __name__ == '__main__':
     device_name = '/gpu:{:d}'.format(args.gpu_id)
     print device_name
 
+    cfg.TRAIN.NUM_STEPS = 1
+    from networks.factory import get_network
     network = get_network(args.network_name)
     print 'Use network `{:s}` in training'.format(args.network_name)
 
     # start a session
     saver = tf.train.Saver()
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
+    # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+    # sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 
-    test_net(sess, network, imdb, weights_filename)
+    if cfg.TEST.SINGLE_FRAME:
+        test_net_single_frame(sess, network, imdb, weights_filename)
+    else:
+        test_net(sess, network, imdb, weights_filename)

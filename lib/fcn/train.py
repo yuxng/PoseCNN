@@ -9,6 +9,7 @@
 
 from fcn.config import cfg
 from gt_data_layer.layer import GtDataLayer
+from gt_single_data_layer.layer import GtSingleDataLayer
 from utils.timer import Timer
 import numpy as np
 import os
@@ -52,29 +53,52 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
-    def loss_cross_entropy(self, prob_3d, labels, num_classes):
+    def loss_cross_entropy(self, scores, labels):
         """
-        prob_3d: [batch_size, grid_size, grid_size, grid_size, num_classes]
-        labels: [batch_size, grid_size, grid_size, grid_size, num_classes]
+        scores: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
         """
 
         with tf.name_scope('loss'):
-            labels_float = tf.cast(labels, tf.float32)
-            cross_entropy = -tf.reduce_sum(labels_float * tf.log(prob_3d), reduction_indices=[4])
-            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels_float))
+            loss = 0
+            for i in range(cfg.TRAIN.NUM_STEPS):
+                score = scores[i]
+                label = labels[i]
+                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
+                loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
+            loss /= cfg.TRAIN.NUM_STEPS
+        return loss
+
+    def loss_cross_entropy_single_frame(self, scores, labels):
+        """
+        scores: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+        labels: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+        """
+
+        with tf.name_scope('loss'):
+            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
+            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
+
         return loss
 
 
     def train_model(self, sess, max_iters):
         """Network training loop."""
 
-        # data layer
-        data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
-
-        # classification loss
-        prob_3d = self.net.get_output('prob')
-        label = tf.placeholder(tf.int32, shape=[None, None, None, None, self.imdb.num_classes])
-        loss = self.loss_cross_entropy(prob_3d, label, self.imdb.num_classes)
+        if cfg.TRAIN.SINGLE_FRAME:
+            # data layer
+            data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes)
+            # classification loss
+            scores = self.net.get_output('prob')
+            labels = self.net.get_output('backprojection')[1]
+            loss = self.loss_cross_entropy_single_frame(scores, labels)
+        else:
+            # data layer
+            data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
+            # classification loss
+            scores = self.net.get_output('outputs')
+            labels = self.net.get_output('labels_gt')
+            loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
         lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)
@@ -101,14 +125,20 @@ class SolverWrapper(object):
             blobs = data_layer.forward()
 
             # Make one SGD update
-            feed_dict={self.net.data: blobs['data_depth'], self.net.location: blobs['data_location'], label: blobs['data_label']}
+            if cfg.TRAIN.SINGLE_FRAME:
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data']}
+            else:
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
+                           self.net.state: blobs['data_state']}
             
             timer.tic()
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
             timer.toc()
 
-            print 'iter: %d / %d, loss_cls: %.4f, lr: %f' %\
-                    (iter+1, max_iters, loss_cls_value, lr.eval())
+            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time: %.2f' %\
+                    (iter+1, max_iters, loss_cls_value, lr.eval(), timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -134,8 +164,7 @@ def get_training_roidb(imdb):
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
 
         print 'Solving...'

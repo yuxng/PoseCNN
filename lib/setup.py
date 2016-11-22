@@ -81,7 +81,6 @@ def customize_compiler_for_nvcc(self):
     # object but distutils doesn't have the ability to change compilers
     # based on source extension: we add it.
     def _compile(obj, src, ext, cc_args, extra_postargs, pp_opts):
-        print extra_postargs
         if os.path.splitext(src)[1] == '.cu':
             # use the cuda for .cu files
             self.set_executable('compiler_so', CUDA['nvcc'])
@@ -106,22 +105,12 @@ class custom_build_ext(build_ext):
         build_ext.build_extensions(self)
 
 ext_modules = [
-    Extension('utils.gpu_build_voxel',
-        ['utils/voxelizer_kernel.cu', 'utils/gpu_build_voxel.pyx'],
-        library_dirs=[CUDA['lib64']],
-        libraries=['cudart'],
+    Extension(
+        'icp.icp_kernel',
+        sources=['icp/icp_main.pyx', 'icp/icp_kernel.cpp', 'icp/icp.cpp', 'icp/icpPointToPlane.cpp', 'icp/icpPointToPoint.cpp', 'icp/kdtree.cpp', 'icp/matrix.cpp'],
         language='c++',
-        runtime_library_dirs=[CUDA['lib64']],
-        # this syntax is specific to this build system
-        # we're only going to use certain compiler args with nvcc and not with gcc
-        # the implementation of this trick is in customize_compiler() below
-        extra_compile_args={'gcc': ["-Wno-unused-function"],
-                            'nvcc': ['-arch=sm_35',
-                                     '--ptxas-options=-v',
-                                     '-c',
-                                     '--compiler-options',
-                                     "'-fPIC'"]},
-        include_dirs = [numpy_include, CUDA['include']]
+        extra_compile_args={'gcc': ["-Wno-unused-function"]},
+        include_dirs = [numpy_include]
     )
 ]
 

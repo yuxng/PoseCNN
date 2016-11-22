@@ -13,19 +13,10 @@
 // namespace tensorflow {
 using namespace tensorflow;
 
-__global__ void Initialize(const int nthreads, int* top_voxel_locations) 
-{
-  CUDA_1D_KERNEL_LOOP(index, nthreads) 
-  {
-    top_voxel_locations[index] = -1;
-  }
-}
-
 template <typename Dtype>
-__global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
-    const int* bottom_pixel_locations, const int height, const int width, const int channels,
-    const int grid_size, const int channels_location,
-    Dtype* top_data, int* top_count, int* top_voxel_locations) 
+__global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_label, const Dtype* bottom_depth,
+    const Dtype* bottom_meta_data, const int height, const int width, const int channels, const int num_classes, const int num_meta_data,
+    const int grid_size, const float threshold, Dtype* top_data, Dtype* top_label) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -40,63 +31,75 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
     int d = n % grid_size;
     n /= grid_size;
 
-    // loop over the pixels in this voxel
-    Dtype val = 0;
-    int count = 0;
-    int offset_location = (n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * channels_location;
-    for(int c_location = 0; c_location < channels_location; c_location++)
-    {
-      int location = bottom_pixel_locations[offset_location + c_location];
-      if (location > 0)
-      {
-        count++;
-        int pixel_w = location % width;
-        int pixel_h = location / width;
-        int index_pixel = (n * height * width + pixel_h * width + pixel_w) * channels + c;
-        val += bottom_data[index_pixel];
+    // voxel location in 3D
+    const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
+    Dtype X = d * meta_data[15] + meta_data[18];
+    Dtype Y = h * meta_data[16] + meta_data[19];
+    Dtype Z = w * meta_data[17] + meta_data[20];
 
-        // store the voxel location
-        top_voxel_locations[n * height * width + pixel_h * width + pixel_w] = d * grid_size * grid_size + h * grid_size + w;
+    // project the 3D point to image
+    Dtype x1 = meta_data[0] * X + meta_data[1] * Y + meta_data[2] * Z + meta_data[3];
+    Dtype x2 = meta_data[4] * X + meta_data[5] * Y + meta_data[6] * Z + meta_data[7];
+    Dtype x3 = meta_data[8] * X + meta_data[9] * Y + meta_data[10] * Z + meta_data[11];
+    int px = round(x1 / x3);
+    int py = round(x2 / x3);
+
+    int flag = 0;
+    if (px >= 0 && px < width && py >= 0 && py < height)
+    {
+      int index_pixel = n * height * width + py * width + px;
+      Dtype depth = bottom_depth[index_pixel];
+
+      // distance of this voxel to camera center
+      Dtype dvoxel = sqrt((X - meta_data[12]) * (X - meta_data[12]) 
+                        + (Y - meta_data[13]) * (Y - meta_data[13]) 
+                        + (Z - meta_data[14]) * (Z - meta_data[14]));
+
+      // check if the voxel is on the surface
+      if (fabs(depth - dvoxel) < threshold)
+      {
+        flag = 1;
+        top_data[index] = bottom_data[index_pixel * channels + c];
+        // label
+        if (c == 0)
+        {
+          for(int cl = 0; cl < num_classes; cl++)
+            top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = bottom_label[index_pixel * num_classes + cl];
+        }
       }
     }
-    // compute the mean
-    if (count > 1)
-      val /= count;
-    top_data[index] = val;
-    // store count
-    if (c == 0)
-      top_count[n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w] = count;
+
+    if (flag == 0)
+    {
+      top_data[index] = 0;
+      // label
+      if (c == 0)
+      {
+        for(int cl = 0; cl < num_classes; cl++)
+          top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 0;
+      }
+    }
+
   }
 }
 
 // bottom_data: (batch_size, height, width, channels)
-// bottom_pixel_locations: (batch_size, grid_size, grid_size, grid_size, channels_location)
 bool BackprojectForwardLaucher(
-    const float* bottom_data, const int* bottom_pixel_locations,
-    const int batch_size, const int height, const int width, const int channels,
-    const int grid_size, const int channels_location,
-    float* top_data, int* top_count, int* top_voxel_locations, const Eigen::GpuDevice& d) 
+    const float* bottom_data, const float* bottom_label,
+    const float* bottom_depth, const float* bottom_meta_data,
+    const int batch_size, const int height, const int width,
+    const int channels, const int num_classes, const int num_meta_data, 
+    const int grid_size, const float threshold,
+    float* top_data, float* top_label, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
   cudaError_t err;
 
-  // initialize the top_voxel_locations
-  const int output_size_voxel = batch_size * height * width;
-  Initialize<<<(output_size_voxel + kThreadsPerBlock - 1) / kThreadsPerBlock,
-                       kThreadsPerBlock, 0, d.stream()>>>(output_size_voxel, top_voxel_locations);
-
-  err = cudaGetLastError();
-  if(cudaSuccess != err)
-  {
-    fprintf( stderr, "cudaCheckError() failed : %s\n", cudaGetErrorString( err ) );
-    exit( -1 );
-  }
-
   const int output_size = batch_size * grid_size * grid_size * grid_size * channels;
   BackprojectForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, bottom_data, bottom_pixel_locations, height, width, channels,
-      grid_size, channels_location, top_data, top_count, top_voxel_locations);
+      output_size, bottom_data, bottom_label, bottom_depth, bottom_meta_data, height, width, channels, num_classes, num_meta_data,
+      grid_size, threshold, top_data, top_label);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)
@@ -111,8 +114,8 @@ bool BackprojectForwardLaucher(
 
 template <typename Dtype>
 __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
-    const int* top_count, const int* top_voxel_locations, 
-    const int height, const int width, const int channels, 
+    const Dtype* bottom_depth, const Dtype* bottom_meta_data, 
+    const int height, const int width, const int channels, const int num_meta_data,
     const int grid_size, Dtype* bottom_diff) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
@@ -126,30 +129,62 @@ __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
     int h = n % height;
     n /= height;
 
-    Dtype gradient = 0;
-    // find the voxel for this pixel
-    int location = top_voxel_locations[n * height * width + h * width + w];
-    if (location > 0)
-    {
-      int voxel_w = location % grid_size;
-      location /= grid_size;
-      int voxel_h = location % grid_size;
-      int voxel_d = location / grid_size;
+    int index_pixel = n * height * width + h * width + w;
+    Dtype depth = bottom_depth[index_pixel];
 
-      int index_top_base = n * grid_size * grid_size * grid_size + voxel_d * grid_size * grid_size + voxel_h * grid_size + voxel_w;
-      int index_top = index_top_base * channels + c;
-      gradient = top_diff[index_top];
-      int count = top_count[index_top_base];
-      if (count > 1)
-        gradient /= count;
-    }
-    bottom_diff[index] = gradient;
+    // find the voxel for this pixel
+
+    // backproject the pixel to 3D
+    // format of the meta_data
+    // projection matrix: meta_data[0 ~ 11]
+    // camera center: meta_data[12, 13, 14]
+    // voxel step size: meta_data[15, 16, 17]
+    // voxel min value: meta_data[18, 19, 20]
+    // backprojection matrix: meta_data[21 ~ 32]
+    const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
+    int offset = 21;
+    Dtype X = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
+    Dtype Y = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
+    Dtype Z = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
+    Dtype W = meta_data[offset + 9] * w + meta_data[offset + 10] * h + meta_data[offset + 11];
+    X /= W;
+    Y /= W;
+    Z /= W;
+
+    // compute the ray
+    Dtype RX = X - meta_data[12];
+    Dtype RY = Y - meta_data[13];
+    Dtype RZ = Z - meta_data[14];
+
+    // compute the norm
+    Dtype N = sqrt(RX*RX + RY*RY + RZ*RZ);
+        
+    // normalization
+    RX /= N;
+    RY /= N;
+    RZ /= N;
+
+    // compute the 3D points
+    X = meta_data[12] + depth * RX;
+    Y = meta_data[13] + depth * RY;
+    Z = meta_data[14] + depth * RZ;
+
+    // voxel location in 3D
+    int vd = floor((X - meta_data[18]) / meta_data[15]);
+    int vh = floor((Y - meta_data[19]) / meta_data[16]);
+    int vw = floor((Z - meta_data[20]) / meta_data[17]);
+
+    // get the gradient
+    if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)
+      bottom_diff[index] = top_diff[(n * grid_size * grid_size * grid_size + vd * grid_size * grid_size + vh * grid_size + vw) * channels + c];
+    else
+      bottom_diff[index] = 0;
   }
 }
 
 
-bool BackprojectBackwardLaucher(const float* top_diff, const int* top_count, const int* top_voxel_locations, 
-    const int batch_size, const int height, const int width, const int channels, const int grid_size,
+bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, 
     float* bottom_diff, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -158,8 +193,8 @@ bool BackprojectBackwardLaucher(const float* top_diff, const int* top_count, con
 
   BackprojectBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, top_diff, top_count, top_voxel_locations, 
-      height, width, channels, grid_size, bottom_diff);
+      output_size, top_diff, bottom_depth, bottom_meta_data,
+      height, width, channels, num_meta_data, grid_size, bottom_diff);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)
