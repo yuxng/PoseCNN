@@ -103,6 +103,8 @@ if __name__ == '__main__':
     video_index = ''
     points_prev = np.zeros((3, 0), dtype=np.float32)
     transformations = []
+    cameras = []
+    RTs = []
     for i in xrange(num_images):
         print i
         # parse image name
@@ -120,6 +122,10 @@ if __name__ == '__main__':
                 for j in range(len(transformations)):
                     t = transformations[j]
                     ax.scatter(t[0, 3], t[1, 3], t[2, 3], c='g', marker='o')
+                    RT = RTs[0]
+                    C = cameras[j]
+                    C1 = np.dot(RT[0:3, 0:3], np.transpose(C)) + RT[0:3, 3].reshape((3,1))
+                    ax.scatter(C1[0, 0], C1[1, 0], C1[2, 0], c='b', marker='o')
                 ax.set_xlabel('X')
                 ax.set_ylabel('Y')
                 ax.set_zlabel('Z')
@@ -130,6 +136,8 @@ if __name__ == '__main__':
                 print 'start video {}'.format(video_index)
                 points_prev = np.zeros((3, 0), dtype=np.float32)
                 transformations = []
+                cameras = []
+                RTs = []
 
         # RGB image
         rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
@@ -143,6 +151,8 @@ if __name__ == '__main__':
 
         # load meta data
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+        RTs.append(meta_data['rotation_translation_matrix'])
+        cameras.append(meta_data['camera_location'])
 
         # backprojection
         points = backproject_camera(im_depth, meta_data)
@@ -155,7 +165,7 @@ if __name__ == '__main__':
             Z = points_prev[2,:]
             index = np.where(np.isfinite(X))[0]
             perm = np.random.permutation(np.arange(len(index)))
-            num_model = min(1000, len(index))
+            num_model = min(10000, len(index))
             index = index[perm[:num_model]]
             model_points = np.zeros((num_model, 3), dtype=np.float64)
             model_points[:,0] = X[index]
@@ -168,7 +178,7 @@ if __name__ == '__main__':
             Z = points[2,:]
             index = np.where(np.isfinite(X))[0]
             perm = np.random.permutation(np.arange(len(index)))
-            num_temp = min(1000, len(index))
+            num_temp = min(10000, len(index))
             index = index[perm[:num_temp]]
             temp_points = np.zeros((num_temp, 3), dtype=np.float64)
             temp_points[:,0] = X[index]
