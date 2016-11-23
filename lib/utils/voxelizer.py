@@ -26,29 +26,38 @@ class Voxelizer(object):
         self.data = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
         self.count = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
 
-    def update(self, bottom, grid_indexes):
-        height = bottom.shape[1]
-        width = bottom.shape[2]
-        assert bottom.shape[3] == self.num_classes, \
-               'in voxelizer.update, bottom channel {} not compatible {}'.format(bottom.shape[3], self.num_classes)
+    def update(self, im, grid_indexes):
+        height = im.shape[0]
+        width = im.shape[1]
         assert height*width == grid_indexes.shape[1], \
-               'in voxelizer.update, bottom shape {} not compatible to grid indexes {}'.format(height*width, grid_indexes.shape[1])
+               'in voxelizer.update, image shape {} not compatible to grid indexes {}'.format(height*width, grid_indexes.shape[1])
+        
+        index = np.where(im.flatten() > 0)[0]
+        for i in range(len(index)):
+            ind = index[i]
+            gx = grid_indexes[0, ind]
+            gy = grid_indexes[1, ind]
+            gz = grid_indexes[2, ind]
+            if np.isfinite(gx) and np.isfinite(gy) and np.isfinite(gz):
+                if gx >= 0 and gx < self.grid_size and gy >= 0 and gy < self.grid_size and gz >= 0 and gz < self.grid_size:
+                    self.data[int(gx), int(gy), int(gz), :] = 1
+                    self.count[int(gx), int(gy), int(gz)] += 1
 
-        labels = np.zeros((height, width), dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                ind = y * width + x
-                gx = grid_indexes[0, ind]
-                gy = grid_indexes[1, ind]
-                gz = grid_indexes[2, ind]
-                if np.isfinite(gx) and np.isfinite(gy) and np.isfinite(gz):
-                    if gx >= 0 and gx < self.grid_size and gy >= 0 and gy < self.grid_size and gz >= 0 and gz < self.grid_size:
-                        self.data[int(gx), int(gy), int(gz), :] += bottom[0, y, x, :]
-                        self.count[int(gx), int(gy), int(gz)] += 1
-                        labels[y, x] = np.argmax(self.data[int(gx), int(gy), int(gz), :] / self.count[int(gx), int(gy), int(gz)])
-                    else:
-                        labels[y, x] = np.argmax(bottom[0, y, x, :])
-        return labels
+    def draw(self):
+        index = np.where(self.count > 0)
+        X = index[0] * self.step_x + self.min_x
+        Y = index[1] * self.step_y + self.min_y
+        Z = index[2] * self.step_z + self.min_z
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(X, Y, Z, c='r', marker='o')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        set_axes_equal(ax)
+        plt.show()
 
     def reset(self):
         self.min_x = 0
@@ -87,12 +96,12 @@ class Voxelizer(object):
         indexes[2,:] = np.floor((points[2,:] - self.min_z) / self.step_z)
 
         # crash the grid indexes
-        grid_indexes = indexes[0,:] * self.grid_size * self.grid_size + indexes[1,:] * self.grid_size + indexes[2,:]
-        I = np.isnan(grid_indexes)
-        grid_indexes[I] = -1
-        grid_indexes = grid_indexes.reshape(self.height, self.width).astype(np.int32)
+        # grid_indexes = indexes[0,:] * self.grid_size * self.grid_size + indexes[1,:] * self.grid_size + indexes[2,:]
+        # I = np.isnan(grid_indexes)
+        # grid_indexes[I] = -1
+        # grid_indexes = grid_indexes.reshape(self.height, self.width).astype(np.int32)
 
-        return grid_indexes
+        return indexes
 
     # backproject pixels into 3D points
     def backproject(self, im_depth, meta_data):

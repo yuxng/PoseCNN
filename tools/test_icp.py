@@ -19,7 +19,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import numpy as np
 import scipy.io
-from utils.voxelizer import set_axes_equal
+from utils.voxelizer import Voxelizer, set_axes_equal
 from icp import icp_kernel
 
 def parse_args():
@@ -51,6 +51,62 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
+# backproject pixels into 3D points
+def backproject(im_depth, meta_data):
+    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+
+    # compute projection matrix
+    K = meta_data['intrinsic_matrix']
+    RT = np.zeros((3, 4), dtype=np.float32)
+    RT[0, 0] = 1
+    RT[1, 1] = 1
+    RT[2, 2] = 1
+    P = np.dot(K, RT)
+    P = np.matrix(P)
+    Pinv = np.linalg.pinv(P)
+
+    # compute the 3D points        
+    height = depth.shape[0]
+    width = depth.shape[1]
+
+    # camera location
+    C = np.zeros((1, 3), dtype=np.float32)
+    C = np.matrix(C).transpose()
+    Cmat = np.tile(C, (1, width*height))
+
+    # construct the 2D points matrix
+    x, y = np.meshgrid(np.arange(width), np.arange(height))
+    ones = np.ones((height, width), dtype=np.float32)
+    x2d = np.stack((x, y, ones), axis=2).reshape(width*height, 3)
+
+    # backprojection
+    x3d = Pinv * x2d.transpose()
+    if np.all(x3d[3,:] != 0):
+        x3d[0,:] = x3d[0,:] / x3d[3,:]
+        x3d[1,:] = x3d[1,:] / x3d[3,:]
+        x3d[2,:] = x3d[2,:] / x3d[3,:]
+    x3d = x3d[:3,:]
+
+    # compute the ray
+    R = x3d - Cmat
+
+    # compute the norm
+    N = np.linalg.norm(R, axis=0)
+        
+    # normalization
+    R = np.divide(R, np.tile(N, (3,1)))
+
+    # compute the 3D points
+    X = Cmat + np.multiply(np.tile(depth.reshape(1, width*height), (3, 1)), R)
+
+    # mask
+    index = np.where(im_depth.flatten() == 0)
+    X[:,index] = np.nan
+
+    return np.array(X)
+
+
 # backproject pixels into 3D points
 def backproject_camera(im_depth, meta_data):
 
@@ -72,6 +128,7 @@ def backproject_camera(im_depth, meta_data):
 
     # backprojection
     R = Kinv * x2d.transpose()
+    print R
 
     # compute the norm
     N = np.linalg.norm(R, axis=0)
@@ -100,6 +157,9 @@ if __name__ == '__main__':
     """Test a FCN on an image database."""
     num_images = len(imdb.image_index)
 
+    # voxelizer
+    voxelizer = Voxelizer(128, 7)
+
     video_index = ''
     points_prev = np.zeros((3, 0), dtype=np.float32)
     transformations = []
@@ -112,6 +172,7 @@ if __name__ == '__main__':
         pos = image_index.find('/')
         if video_index == '':
             video_index = image_index[:pos]
+            voxelizer.reset()
         else:
             if video_index != image_index[:pos]:
                 # show the camera positions
@@ -134,6 +195,7 @@ if __name__ == '__main__':
 
                 video_index = image_index[:pos]
                 print 'start video {}'.format(video_index)
+                voxelizer.reset()
                 points_prev = np.zeros((3, 0), dtype=np.float32)
                 transformations = []
                 cameras = []
@@ -155,7 +217,7 @@ if __name__ == '__main__':
         cameras.append(meta_data['camera_location'])
 
         # backprojection
-        points = backproject_camera(im_depth, meta_data)
+        points = backproject(im_depth, meta_data)
 
         # compute icp
         if points_prev.shape[1] > 0:
@@ -196,29 +258,16 @@ if __name__ == '__main__':
             else:
                 transformations.append(Tr)
 
-            """
             # apply the transformation to the template points
-            temp_fit = np.dot(Tr[0:3, 0:3], np.transpose(temp_points)) + np.dot(Tr[0:3, 3].reshape((3,1)), np.ones((1, num_temp), dtype=np.float64))
-            temp_fit = temp_fit.transpose()
+            Tr = transformations[-1]
+            temp_fit = np.dot(Tr[0:3, 0:3], points) + np.dot(Tr[0:3, 3].reshape((3,1)), np.ones((1, points.shape[1]), dtype=np.float64))
+        else:
+            temp_fit = points
 
-            # compute camera position
-
-            # show the current 3D points
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(temp_points[:,0], temp_points[:,1], temp_points[:,2], c='r', marker='o')
-            # show the previous 3D points
-            ax.scatter(model_points[:,0], model_points[:,1], model_points[:,2], c='g', marker='o')
-            # draw camera position
-            ax.scatter(0, 0, 0, c='g', marker='o')
-            for j in range(len(transformations)):
-                t = transformations[j]
-                ax.scatter(t[0, 3], t[1, 3], t[2, 3], c='r', marker='o')
-            ax.set_xlabel('X')
-            ax.set_ylabel('Y')
-            ax.set_zlabel('Z')
-            set_axes_equal(ax)
-            plt.show()
-            """
-
+        # update voxels
+        grid_indexes = voxelizer.voxelize(temp_fit)
+        voxelizer.update(im_depth, grid_indexes)
+        if i % 10 == 0:
+            voxelizer.draw()
+ 
         points_prev = points
