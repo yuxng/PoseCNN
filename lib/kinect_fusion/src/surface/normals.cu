@@ -1,0 +1,177 @@
+#include <df/surface/normals.h>
+
+#include <df/util/cudaHelpers.h>
+#include <df/util/macros.h>
+
+#include <df/voxel/tsdf.h> // TODO
+
+#include <Eigen/Geometry>
+
+namespace df {
+
+// TODO: maybe one thread per vertex, do a full-bandwidth read,
+// compute normal with every third thread,
+// broadcast, then do a full-bandwidth write?
+template <typename Scalar>
+__global__ void computeTriangularFaceNormalsKernel(const Tensor<2,Scalar,DeviceResident> vertices,
+                                     Tensor<2,Scalar,DeviceResident> normals) {
+
+    typedef Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> Vec3;
+
+    const uint x = threadIdx.x + blockDim.x * blockIdx.x;
+
+    if ( x < vertices.dimensionSize(1) / 3) {
+
+        const Eigen::Map<const Vec3> v1(&vertices(0,3*x));
+        const Eigen::Map<const Vec3> v2(&vertices(0,3*x+1));
+        const Eigen::Map<const Vec3> v3(&vertices(0,3*x+2));
+
+        Vec3 normal = (v3-v1).cross(v2-v1);
+        normal.normalize();
+
+        Eigen::Map<Vec3> n1(&normals(0,3*x));
+        Eigen::Map<Vec3> n2(&normals(0,3*x+1));
+        Eigen::Map<Vec3> n3(&normals(0,3*x+2));
+
+        n1 = normal;
+        n2 = normal;
+        n3 = normal;
+
+    }
+
+}
+
+template <typename Scalar>
+void computeTriangularFaceNormals(const Tensor<2,Scalar,DeviceResident> & vertices,
+                                  Tensor<2,Scalar,DeviceResident> & normals) {
+
+    assert(vertices.dimensionSize(0) == 3);
+    assert(normals.dimensionSize(0) == 3);
+
+    const int nVertices = vertices.dimensionSize(1);
+    assert(normals.dimensionSize(1) == nVertices);
+
+    const uint nFaces = nVertices / 3;
+
+    const dim3 block(512,1,1); // TODO
+    const dim3 grid(intDivideAndCeil(nFaces,block.x),1,1);
+
+    computeTriangularFaceNormalsKernel<<<grid,block>>>(vertices,normals);
+
+}
+
+#define COMPUTE_TRIANGULAR_FACE_NORMALS_EXPLICIT_INSTANTIATION(type)                    \
+    template void computeTriangularFaceNormals(const Tensor<2,type,DeviceResident> &, \
+                                               Tensor<2,type,DeviceResident> &)
+
+ALL_TYPES_INSTANTIATION(COMPUTE_TRIANGULAR_FACE_NORMALS_EXPLICIT_INSTANTIATION);
+
+template <typename Scalar, typename ... NormalizerT>
+inline __device__ Eigen::Matrix<Scalar,3,1> normalize(const Eigen::Matrix<Scalar,3,1> & vec, NormalizerT ... normalizer) {
+
+    return vec.normalized();
+
+}
+
+template <typename Scalar>
+inline __device__ Eigen::Matrix<Scalar,3,1> normalize(const Eigen::Matrix<Scalar,3,1> & vec, const Eigen::Matrix<Scalar,3,1> & normalizer) {
+
+    return vec.cwiseProduct(normalizer).normalized();
+
+}
+
+template <typename Scalar,
+          typename VoxelT,
+          typename ... NormalizerT>
+__global__ void computeSignedDistanceGradientNormalsKernel(const Tensor<2,Scalar,DeviceResident> vertices,
+                                                           Tensor<2,Scalar,DeviceResident> normals,
+                                                           Tensor<3,VoxelT,DeviceResident> voxelGrid,
+                                                           NormalizerT ... normalizer) {
+
+    typedef Eigen::Matrix<Scalar,3,1> Vec3;
+
+    const uint i = threadIdx.x + blockDim.x * blockIdx.x;
+
+    if (i < vertices.dimensionSize(1)) {
+        Eigen::Map<Vec3> normalMap(&normals(0,i));
+
+        if (voxelGrid.inBounds(vertices(0,i),vertices(1,i),vertices(2,i),1.f)) {
+
+            if (vertices(0,i) != floor(vertices(0,i))) {
+                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                          vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+            } else if (vertices(1,i) != floor(vertices(1,i))) {
+                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                          (int)vertices(0,i),vertices(1,i),(int)vertices(2,i)), normalizer...);
+            } else if (vertices(2,i) != floor(vertices(2,i))) {
+                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                          (int)vertices(0,i),vertices(1,i),vertices(2,i)), normalizer...);
+            } else {
+                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                          (int)vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+            }
+        } else {
+
+            normalMap = Vec3(0,0,0);
+
+        }
+
+    }
+
+}
+
+template <typename Scalar,
+          typename VoxelT>
+void computeSignedDistanceGradientNormals(const Tensor<2,Scalar,DeviceResident> & vertices,
+                                          Tensor<2,Scalar,DeviceResident> & normals,
+                                          VoxelGrid<Scalar,VoxelT,DeviceResident> & voxelGrid) {
+
+    typedef Eigen::Matrix<Scalar,3,1> Vec3;
+
+    assert(vertices.dimensionSize(0) == 3);
+    assert(normals.dimensionSize(0) == 3);
+
+    const int numVertices = vertices.dimensionSize(1);
+    assert(normals.dimensionSize(1) == numVertices);
+
+    const dim3 block(1024,1,1);
+    const dim3 grid(intDivideAndCeil(numVertices,1024),1,1);
+
+
+//    std::cout << normalizer.transpose() << std::endl;
+//    std::cout << std::abs(normalizer(0) - normalizer(1)) << std::endl;
+//    std::cout << std::abs(normalizer(0) - normalizer(2)) << std::endl;
+//    std::cout << std::numeric_limits<Scalar>::epsilon() << std::endl;
+
+    const Vec3 boundingBoxExtent = voxelGrid.boundingBox().max() - voxelGrid.boundingBox().min();
+
+    const Vec3 normalizer = voxelGrid.worldToGridScale();
+
+    const Vec3 voxelSize = boundingBoxExtent.cwiseProduct(normalizer);
+
+//    std::cout << std::abs(boundingBoxExtent(0) - boundingBoxExtent(1)) << std::endl;
+//    std::cout << std::abs(boundingBoxExtent(0) - boundingBoxExtent(2)) << std::endl;
+
+    if ( (std::abs(voxelSize(0) - voxelSize(1)) < std::numeric_limits<Scalar>::epsilon()) &&
+         (std::abs(voxelSize(0) - voxelSize(2)) < std::numeric_limits<Scalar>::epsilon())) {
+
+        std::cout << "computing isotropic normals" << std::endl;
+
+        computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid());
+
+    } else {
+
+        std::cout << "computing anisotropic normals" << std::endl;
+
+        computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid(), normalizer);
+
+    }
+
+
+}
+
+template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceResident> &,
+                                                   Tensor<2,float,DeviceResident> &,
+                                                   VoxelGrid<float,TsdfVoxel,DeviceResident> &);
+
+} // namespace df
