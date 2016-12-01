@@ -54,100 +54,6 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
-# backproject pixels into 3D points
-def backproject(im_depth, meta_data):
-    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
-
-    # compute projection matrix
-    K = meta_data['intrinsic_matrix']
-    RT = np.zeros((3, 4), dtype=np.float32)
-    RT[0, 0] = 1
-    RT[1, 1] = 1
-    RT[2, 2] = 1
-    P = np.dot(K, RT)
-    P = np.matrix(P)
-    Pinv = np.linalg.pinv(P)
-
-    # compute the 3D points        
-    height = depth.shape[0]
-    width = depth.shape[1]
-
-    # camera location
-    C = np.zeros((1, 3), dtype=np.float32)
-    C = np.matrix(C).transpose()
-    Cmat = np.tile(C, (1, width*height))
-
-    # construct the 2D points matrix
-    x, y = np.meshgrid(np.arange(width), np.arange(height))
-    ones = np.ones((height, width), dtype=np.float32)
-    x2d = np.stack((x, y, ones), axis=2).reshape(width*height, 3)
-
-    # backprojection
-    x3d = Pinv * x2d.transpose()
-    if np.all(x3d[3,:] != 0):
-        x3d[0,:] = x3d[0,:] / x3d[3,:]
-        x3d[1,:] = x3d[1,:] / x3d[3,:]
-        x3d[2,:] = x3d[2,:] / x3d[3,:]
-    x3d = x3d[:3,:]
-
-    # compute the ray
-    R = x3d - Cmat
-
-    # compute the norm
-    N = np.linalg.norm(R, axis=0)
-        
-    # normalization
-    R = np.divide(R, np.tile(N, (3,1)))
-
-    # compute the 3D points
-    X = Cmat + np.multiply(np.tile(depth.reshape(1, width*height), (3, 1)), R)
-
-    # mask
-    index = np.where(im_depth.flatten() == 0)
-    X[:,index] = np.nan
-
-    return np.array(X)
-
-
-# backproject pixels into 3D points
-def backproject_camera(im_depth, meta_data):
-
-    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
-
-    # get intrinsic matrix
-    K = meta_data['intrinsic_matrix']
-    K = np.matrix(K)
-    Kinv = np.linalg.inv(K)
-
-    # compute the 3D points        
-    width = depth.shape[1]
-    height = depth.shape[0]
-
-    # construct the 2D points matrix
-    x, y = np.meshgrid(np.arange(width), np.arange(height))
-    ones = np.ones((height, width), dtype=np.float32)
-    x2d = np.stack((x, y, ones), axis=2).reshape(width*height, 3)
-
-    # backprojection
-    R = Kinv * x2d.transpose()
-    print R
-
-    # compute the norm
-    N = np.linalg.norm(R, axis=0)
-        
-    # normalization
-    R = np.divide(R, np.tile(N, (3,1)))
-
-    # compute the 3D points
-    X = np.multiply(np.tile(depth.reshape(1, width*height), (3, 1)), R)
-
-    # mask
-    index = np.where(im_depth.flatten() == 0)
-    X[:,index] = np.nan
-
-    return np.array(X)
-
 if __name__ == '__main__':
     args = parse_args()
 
@@ -182,10 +88,15 @@ if __name__ == '__main__':
             have_prediction = False
         else:
             if video_index != image_index[:pos]:
-                # show the camera positions
+                # show the 3D points
                 fig = plt.figure()
                 ax = fig.add_subplot(111, projection='3d')
                 ax.scatter(temp_points[:,0], temp_points[:,1], temp_points[:,2], c='r', marker='o')
+                print 'X:', voxelizer.min_x, voxelizer.max_x
+                print 'Y:', voxelizer.min_y, voxelizer.max_y
+                print 'Z:', voxelizer.min_z, voxelizer.max_z
+
+                # show the camera positions
                 ax.scatter(0, 0, 0, c='g', marker='o')
                 for j in range(len(transformations)):
                     t = transformations[j]
@@ -194,6 +105,7 @@ if __name__ == '__main__':
                     C = cameras[j+1]
                     C1 = np.dot(RT[0:3, 0:3], np.transpose(C)) + RT[0:3, 3].reshape((3,1))
                     ax.scatter(C1[0, 0], C1[1, 0], C1[2, 0], c='b', marker='o')
+
                 ax.set_xlabel('X')
                 ax.set_ylabel('Y')
                 ax.set_zlabel('Z')
@@ -215,6 +127,30 @@ if __name__ == '__main__':
         # depth image
         im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
 
+        # load meta data
+        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+        RTs.append(meta_data['rotation_translation_matrix'])
+        cameras.append(meta_data['camera_location'])
+
+        # backprojection for the first frame
+        if not have_prediction:
+            points = voxelizer.backproject_camera(im_depth, meta_data)
+            voxelizer.voxelize(points)
+            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_y-voxelizer.min_y)
+
+            # sample template points
+            X = points[0,:]
+            Y = points[1,:]
+            Z = points[2,:]
+            index = np.where(np.isfinite(X))[0]
+            perm = np.random.permutation(np.arange(len(index)))
+            num_temp = min(10000, len(index))
+            index = index[perm[:num_temp]]
+            temp_points = np.zeros((num_temp, 3), dtype=np.float64)
+            temp_points[:,0] = X[index]
+            temp_points[:,1] = Y[index]
+            temp_points[:,2] = Z[index]
+
         # run kinect fusion
         KF.feed_data(im_depth, im, im.shape[1], im.shape[0])
         KF.back_project();
@@ -226,24 +162,3 @@ if __name__ == '__main__':
         KF.render()
         have_prediction = True
         KF.draw()
-
-        # load meta data
-        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-        RTs.append(meta_data['rotation_translation_matrix'])
-        cameras.append(meta_data['camera_location'])
-
-        # backprojection
-        points = backproject(im_depth, meta_data)
-
-        # sample template points
-        X = points[0,:]
-        Y = points[1,:]
-        Z = points[2,:]
-        index = np.where(np.isfinite(X))[0]
-        perm = np.random.permutation(np.arange(len(index)))
-        num_temp = min(10000, len(index))
-        index = index[perm[:num_temp]]
-        temp_points = np.zeros((num_temp, 3), dtype=np.float64)
-        temp_points[:,0] = X[index]
-        temp_points[:,1] = Y[index]
-        temp_points[:,2] = Z[index]

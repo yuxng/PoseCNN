@@ -11,12 +11,15 @@ class Voxelizer(object):
     def __init__(self, grid_size, num_classes):
         self.grid_size = grid_size
         self.num_classes = num_classes
-        self.margin = 0.1
+        self.margin = 0.3
         self.filter_h = 5
         self.filter_w = 5
         self.min_x = 0
         self.min_y = 0
         self.min_z = 0
+        self.max_x = 0
+        self.max_y = 0
+        self.max_z = 0
         self.step_x = 0
         self.step_y = 0
         self.step_z = 0
@@ -63,6 +66,9 @@ class Voxelizer(object):
         self.min_x = 0
         self.min_y = 0
         self.min_z = 0
+        self.max_x = 0
+        self.max_y = 0
+        self.max_z = 0
         self.step_x = 0
         self.step_y = 0
         self.step_z = 0
@@ -82,6 +88,9 @@ class Voxelizer(object):
             self.min_x = Xmin
             self.min_y = Ymin
             self.min_z = Zmin
+            self.max_x = Xmax
+            self.max_y = Ymax
+            self.max_z = Zmax
 
             # step size
             self.step_x = (Xmax-Xmin) / self.grid_size

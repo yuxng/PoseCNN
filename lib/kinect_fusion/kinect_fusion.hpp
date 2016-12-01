@@ -48,6 +48,7 @@ class KinectFusion
   void back_project();
   void feed_data(unsigned char* depth, unsigned char* color, int width, int height);
   void reset();
+  void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
 
   ManagedTensor<2, float>* depth_map() { return depth_map_; };
   pangolin::GlTexture* color_texture() { return colorTex_; };

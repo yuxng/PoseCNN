@@ -158,6 +158,17 @@ void KinectFusion::create_tensors()
 }
 
 
+// set the voxel grid size
+void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ)
+{
+  delete voxel_grid_;
+  voxel_grid_ = new DeviceVoxelGrid<float, TsdfVoxel>(voxel_data_->dimensions(), voxel_data_->data(),
+                                                      Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
+                                                                          Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
+
+  reset();
+}
+
 // estimate camera pose with ICP
 void KinectFusion::solve_pose(float* pose)
 {
