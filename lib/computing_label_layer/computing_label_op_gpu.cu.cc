@@ -31,28 +31,21 @@ __global__ void ComputingLabel(const int nthreads, const Dtype* bottom_data,
     Dtype depth = bottom_depth[index];
 
     // find the voxel for this pixel
-
     // backproject the pixel to 3D
-    // format of the meta_data
-    // projection matrix: meta_data[0 ~ 11]
-    // camera center: meta_data[12, 13, 14]
-    // voxel step size: meta_data[15, 16, 17]
-    // voxel min value: meta_data[18, 19, 20]
-    // backprojection matrix: meta_data[21 ~ 32]
-    const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
-    int offset = 21;
-    Dtype X = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
-    Dtype Y = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
-    Dtype Z = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
-    Dtype W = meta_data[offset + 9] * w + meta_data[offset + 10] * h + meta_data[offset + 11];
-    X /= W;
-    Y /= W;
-    Z /= W;
 
-    // compute the ray
-    Dtype RX = X - meta_data[12];
-    Dtype RY = Y - meta_data[13];
-    Dtype RZ = Z - meta_data[14];
+    // format of the meta_data
+    // intrinsic matrix: meta_data[0 ~ 8]
+    // inverse intrinsic matrix: meta_data[9 ~ 17]
+    // pose_world2live: meta_data[18 ~ 29]
+    // pose_live2world: meta_data[30 ~ 41]
+    // voxel step size: meta_data[42, 43, 44]
+    // voxel min value: meta_data[45, 46, 47]
+    const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
+    // apply the inverse intrinsic matrix
+    int offset = 9;
+    Dtype RX = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
+    Dtype RY = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
+    Dtype RZ = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
 
     // compute the norm
     Dtype N = sqrt(RX*RX + RY*RY + RZ*RZ);
@@ -62,15 +55,20 @@ __global__ void ComputingLabel(const int nthreads, const Dtype* bottom_data,
     RY /= N;
     RZ /= N;
 
-    // compute the 3D points
-    X = meta_data[12] + depth * RX;
-    Y = meta_data[13] + depth * RY;
-    Z = meta_data[14] + depth * RZ;
+    // compute the 3D points in camera's coordinate system
+    Dtype X = depth * RX;
+    Dtype Y = depth * RY;
+    Dtype Z = depth * RZ;
+
+    // apply pose_live2world
+    Dtype X1 = meta_data[30] * X + meta_data[31] * Y + meta_data[32] * Z + meta_data[33];
+    Dtype Y1 = meta_data[34] * X + meta_data[35] * Y + meta_data[36] * Z + meta_data[37];
+    Dtype Z1 = meta_data[38] * X + meta_data[39] * Y + meta_data[40] * Z + meta_data[41];
 
     // voxel location in 3D
-    int vd = floor((X - meta_data[18]) / meta_data[15]);
-    int vh = floor((Y - meta_data[19]) / meta_data[16]);
-    int vw = floor((Z - meta_data[20]) / meta_data[17]);
+    int vd = floor((X1 - meta_data[45]) / meta_data[42]);
+    int vh = floor((Y1 - meta_data[46]) / meta_data[43]);
+    int vw = floor((Z1 - meta_data[47]) / meta_data[44]);
 
     int label = 0;
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)

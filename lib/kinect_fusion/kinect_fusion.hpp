@@ -40,7 +40,7 @@ class KinectFusion
   void create_window();
   void create_tensors();
 
-  void solve_pose(float* pose);
+  void solve_pose(float* pose_worldToLive, float* pose_liveToWorld);
   void fuse_depth();
   void extract_surface();
   void render();

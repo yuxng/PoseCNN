@@ -170,7 +170,7 @@ void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY
 }
 
 // estimate camera pose with ICP
-void KinectFusion::solve_pose(float* pose)
+void KinectFusion::solve_pose(float* pose_worldToLive, float* pose_liveToWorld)
 {
   // copy predicted depth map
   predicted_verts_->copyFrom(*predicted_verts_device_);
@@ -188,20 +188,28 @@ void KinectFusion::solve_pose(float* pose)
   Sophus::SE3d T_prev_curr;
   icpOdom_->getIncrementalTransformation(T_prev_curr, threads, blocks);
   Sophus::SE3f update = T_prev_curr.inverse().cast<float>();
-  std::cout << update.matrix3x4() << std::endl << std::endl;
 
   transformer_->setWorldToLiveTransformation(update * transformer_->worldToLiveTransformation());
-  std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
+  // std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
+  // std::cout << transformer_->liveToWorldTransformation().matrix3x4() << std::endl << std::endl;
 
   // copy the pose
-  if (pose)
+  if (pose_worldToLive && pose_liveToWorld)
   {
-    float* m = &(transformer_->liveToWorldTransformation().matrix3x4()(0));
+    float* m = &(transformer_->worldToLiveTransformation().matrix3x4()(0));
     int count = 0;
     for (int j = 0; j < 4; j++)
     {
       for (int i = 0; i < 3; i++)
-        pose[i*4+j] = m[count++];
+        pose_worldToLive[i*4+j] = m[count++];
+    }
+
+    float* n = &(transformer_->liveToWorldTransformation().matrix3x4()(0));
+    count = 0;
+    for (int j = 0; j < 4; j++)
+    {
+      for (int i = 0; i < 3; i++)
+        pose_liveToWorld[i*4+j] = n[count++];
     }
   }
 }
@@ -227,7 +235,7 @@ void KinectFusion::extract_surface()
   dIndices_->resize(Eigen::Matrix<uint,1,1>(dVertices_->dimensionSize(1)));
   numUniqueVertices_ = weldVertices(*dVertices_, *dWeldedVertices_, *dIndices_);
 
-  std::cout << numUniqueVertices_ << " unique vertices / " << dVertices_->dimensionSize(1) << std::endl;
+  // std::cout << numUniqueVertices_ << " unique vertices / " << dVertices_->dimensionSize(1) << std::endl;
 
   dNormals_->resize({3, numUniqueVertices_});
   Tensor<2, float, DeviceResident> actualWeldedVertices(dNormals_->dimensions(), dWeldedVertices_->data());
@@ -415,7 +423,6 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 {
   // icp cuda
   icpOdom_->initICP(reinterpret_cast<ushort *>(depth));
-  std::cout << width * height * sizeof(ushort) << std::endl;
   // convert depth values
   std::transform(reinterpret_cast<ushort *>(depth),
                  reinterpret_cast<ushort *>(depth + width * height * sizeof(ushort)),
@@ -522,7 +529,7 @@ int main(int argc, char * * argv)
     {
       GlobalTimer::tick("solve pose");
       std::cout << "solve pose" << std::endl;
-      KF.solve_pose(NULL);
+      KF.solve_pose(NULL, NULL);
       GlobalTimer::tock("solve pose");
     }
 

@@ -155,13 +155,13 @@ void computeSignedDistanceGradientNormals(const Tensor<2,Scalar,DeviceResident> 
     if ( (std::abs(voxelSize(0) - voxelSize(1)) < std::numeric_limits<Scalar>::epsilon()) &&
          (std::abs(voxelSize(0) - voxelSize(2)) < std::numeric_limits<Scalar>::epsilon())) {
 
-        std::cout << "computing isotropic normals" << std::endl;
+        // std::cout << "computing isotropic normals" << std::endl;
 
         computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid());
 
     } else {
 
-        std::cout << "computing anisotropic normals" << std::endl;
+        // std::cout << "computing anisotropic normals" << std::endl;
 
         computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid(), normalizer);
 

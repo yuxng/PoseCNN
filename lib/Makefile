@@ -1,3 +1,3 @@
 all:
 	python setup.py build_ext --inplace
-	#sh make.sh
+	sh make.sh

@@ -80,11 +80,12 @@ class BackprojectOp : public OpKernel {
     auto im_depth = bottom_depth.flat<T>();
 
     // format of the meta_data
-    // projection matrix: meta_data[0 ~ 11]
-    // camera center: meta_data[12, 13, 14]
-    // voxel step size: meta_data[15, 16, 17]
-    // voxel min value: meta_data[18, 19, 20]
-    // backprojection matrix: meta_data[21 ~ 32]
+    // intrinsic matrix: meta_data[0 ~ 8]
+    // inverse intrinsic matrix: meta_data[9 ~ 17]
+    // pose_world2live: meta_data[18 ~ 29]
+    // pose_live2world: meta_data[30 ~ 41]
+    // voxel step size: meta_data[42, 43, 44]
+    // voxel min value: meta_data[45, 46, 47]
     const Tensor& bottom_meta_data = context->input(3);
     auto meta_data = bottom_meta_data.flat<T>();
 
@@ -149,14 +150,19 @@ class BackprojectOp : public OpKernel {
           for(int w = 0; w < grid_size_; w++)
           {
             // voxel location in 3D
-            float X = d * meta_data(index_meta_data + 15) + meta_data(index_meta_data + 18);
-            float Y = h * meta_data(index_meta_data + 16) + meta_data(index_meta_data + 19);
-            float Z = w * meta_data(index_meta_data + 17) + meta_data(index_meta_data + 20);
+            float X = d * meta_data(index_meta_data + 42) + meta_data(index_meta_data + 45);
+            float Y = h * meta_data(index_meta_data + 43) + meta_data(index_meta_data + 46);
+            float Z = w * meta_data(index_meta_data + 44) + meta_data(index_meta_data + 47);
 
-            // project the 3D point to image
-            float x1 = meta_data(index_meta_data + 0) * X + meta_data(index_meta_data + 1) * Y + meta_data(index_meta_data + 2) * Z + meta_data(index_meta_data + 3);
-            float x2 = meta_data(index_meta_data + 4) * X + meta_data(index_meta_data + 5) * Y + meta_data(index_meta_data + 6) * Z + meta_data(index_meta_data + 7);
-            float x3 = meta_data(index_meta_data + 8) * X + meta_data(index_meta_data + 9) * Y + meta_data(index_meta_data + 10) * Z + meta_data(index_meta_data + 11);
+            // apply pose_world2live
+            float X1 = meta_data(index_meta_data + 18) * X + meta_data(index_meta_data + 19) * Y + meta_data(index_meta_data + 20) * Z + meta_data(index_meta_data + 21);
+            float Y1 = meta_data(index_meta_data + 22) * X + meta_data(index_meta_data + 23) * Y + meta_data(index_meta_data + 24) * Z + meta_data(index_meta_data + 25);
+            float Z1 = meta_data(index_meta_data + 26) * X + meta_data(index_meta_data + 27) * Y + meta_data(index_meta_data + 28) * Z + meta_data(index_meta_data + 29);
+
+            // apply the intrinsic matrix
+            float x1 = meta_data(index_meta_data + 0) * X1 + meta_data(index_meta_data + 1) * Y1 + meta_data(index_meta_data + 2) * Z1;
+            float x2 = meta_data(index_meta_data + 3) * X1 + meta_data(index_meta_data + 4) * Y1 + meta_data(index_meta_data + 5) * Z1;
+            float x3 = meta_data(index_meta_data + 6) * X1 + meta_data(index_meta_data + 7) * Y1 + meta_data(index_meta_data + 8) * Z1;
             int px = round(x1 / x3);
             int py = round(x2 / x3);
 
@@ -166,9 +172,7 @@ class BackprojectOp : public OpKernel {
               int index_pixel = n * height * width + py * width + px;
               T depth = im_depth(index_pixel);
               // distance of this voxel to camera center
-              float dvoxel = sqrt((X - meta_data(index_meta_data + 12)) * (X - meta_data(index_meta_data + 12)) 
-                                + (Y - meta_data(index_meta_data + 13)) * (Y - meta_data(index_meta_data + 13)) 
-                                + (Z - meta_data(index_meta_data + 14)) * (Z - meta_data(index_meta_data + 14)));
+              float dvoxel = sqrt(X1 * X1 + Y1 * Y1 + Z1 * Z1);
               // check if the voxel is on the surface
               if (fabs(depth - dvoxel) < threshold_)
               {

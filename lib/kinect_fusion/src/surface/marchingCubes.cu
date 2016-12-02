@@ -377,7 +377,6 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
     uint lastNumVertices;
     cudaMemcpy(&lastNumVertices,dVertexCounts.data() + dVertexCounts.count()-1,sizeof(uint),cudaMemcpyDeviceToHost);
     numVertices += lastNumVertices;
-    printf("%d vertices\n",numVertices);
 
     static ManagedTensor<3,uint,DeviceResident> validVoxelScanResult(voxelGrid.dimensions());
     thrust::transform(thrust::device_ptr<uint>(dVertexCounts.data()),

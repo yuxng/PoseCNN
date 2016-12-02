@@ -21,6 +21,7 @@ import numpy as np
 import scipy.io
 from utils.voxelizer import Voxelizer, set_axes_equal
 from kinect_fusion import kfusion
+import time
 
 def parse_args():
     """
@@ -88,6 +89,9 @@ if __name__ == '__main__':
             have_prediction = False
         else:
             if video_index != image_index[:pos]:
+                # show the voxel space
+                voxelizer.draw()
+
                 # show the 3D points
                 fig = plt.figure()
                 ax = fig.add_subplot(111, projection='3d')
@@ -102,7 +106,7 @@ if __name__ == '__main__':
                     t = transformations[j]
                     ax.scatter(t[0, 3], t[1, 3], t[2, 3], c='g', marker='o')
                     RT = RTs[0]
-                    C = cameras[j+1]
+                    C = cameras[j]
                     C1 = np.dot(RT[0:3, 0:3], np.transpose(C)) + RT[0:3, 3].reshape((3,1))
                     ax.scatter(C1[0, 0], C1[1, 0], C1[2, 0], c='b', marker='o')
 
@@ -155,10 +159,31 @@ if __name__ == '__main__':
         KF.feed_data(im_depth, im, im.shape[1], im.shape[0])
         KF.back_project();
         if have_prediction:
-          pose = KF.solve_pose()
-          transformations.append(pose)
+            pose_world2live, pose_live2world = KF.solve_pose()
+        else:
+            pose_world2live = np.zeros((3,4), dtype=np.float32)
+            pose_world2live[0, 0] = 1
+            pose_world2live[1, 1] = 1
+            pose_world2live[2, 2] = 1
+            pose_live2world = pose_world2live
+        transformations.append(pose_live2world)
+        print pose_world2live
+        print pose_live2world
+
         KF.fuse_depth()
         KF.extract_surface()
         KF.render()
-        have_prediction = True
         KF.draw()
+
+        #"""
+        # update the voxels
+        points = voxelizer.backproject_camera(im_depth, meta_data)
+        RT = pose_live2world
+        points = np.dot(RT[0:3, 0:3], points) + np.dot(RT[0:3, 3].reshape((3,1)), np.ones((1, points.shape[1]), dtype=np.float32))
+        # time.sleep(3)
+        indexes = voxelizer.voxelize(points)
+        voxelizer.update(im_depth, indexes)
+        # voxelizer.draw()
+        #"""
+
+        have_prediction = True

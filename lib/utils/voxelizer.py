@@ -112,6 +112,7 @@ class Voxelizer(object):
 
         return indexes
 
+
     # backproject pixels into 3D points
     def backproject(self, im_depth, meta_data):
         depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']

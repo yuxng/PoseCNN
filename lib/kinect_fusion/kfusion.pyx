@@ -12,7 +12,7 @@ cimport numpy as np
 cdef extern from "kfusion.hpp" namespace "df":
     cdef cppclass KinectFusion:
         KinectFusion(string) except +
-        void solve_pose(float*)
+        void solve_pose(float*, float*)
         void fuse_depth()
         void extract_surface()
         void render()
@@ -32,9 +32,10 @@ cdef class PyKinectFusion:
         del self.kfusion
 
     def solve_pose(self):
-        cdef np.ndarray[np.float32_t, ndim=2] pose = np.zeros((3, 4), dtype=np.float32)
-        self.kfusion.solve_pose(&pose[0, 0])
-        return pose
+        cdef np.ndarray[np.float32_t, ndim=2] pose_world2live = np.zeros((3, 4), dtype=np.float32)
+        cdef np.ndarray[np.float32_t, ndim=2] pose_live2world = np.zeros((3, 4), dtype=np.float32)
+        self.kfusion.solve_pose(&pose_world2live[0, 0], &pose_live2world[0, 0])
+        return pose_world2live, pose_live2world
 
     def fuse_depth(self):
         return self.kfusion.fuse_depth()

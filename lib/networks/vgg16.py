@@ -12,7 +12,7 @@ class vgg16(Network):
         self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
         self.label = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
-        self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 33])
+        self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
         self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_units])
         self.layers = dict({'data': [], 'label': [], 'depth': [], 'meta_data': [], 'state': []})
         self.trainable = trainable

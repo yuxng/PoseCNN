@@ -19,6 +19,7 @@ import os
 import math
 import tensorflow as tf
 import scipy.io
+from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth):
     """Converts an image into a network input.
@@ -116,7 +117,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer):
     return labels[0,:,:,0], points
 
 
-def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
+def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world):
     """segment image
     """
 
@@ -126,38 +127,35 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
     # depth
     depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
 
-    # backprojection
-    points = voxelizer.backproject(im_depth, meta_data)
-    if not voxelizer.voxelized:
-        grid_indexes = voxelizer.voxelize(points)
-
     # construct the meta data
     """
     format of the meta_data
-    projection matrix: meta_data[0 ~ 11]
-    camera center: meta_data[12, 13, 14]
-    voxel step size: meta_data[15, 16, 17]
-    voxel min value: meta_data[18, 19, 20]
-    backprojection matrix: meta_data[21 ~ 32]
+    intrinsic matrix: meta_data[0 ~ 8]
+    inverse intrinsic matrix: meta_data[9 ~ 17]
+    pose_world2live: meta_data[18 ~ 29]
+    pose_live2world: meta_data[30 ~ 41]
+    voxel step size: meta_data[42, 43, 44]
+    voxel min value: meta_data[45, 46, 47]
     """
-    P = np.matrix(meta_data['projection_matrix'])
-    Pinv = np.linalg.pinv(P)
-    mdata = np.zeros(33, dtype=np.float32)
-    mdata[0:12] = P.flatten()
-    mdata[12:15] = meta_data['camera_location']
-    mdata[15] = voxelizer.step_x
-    mdata[16] = voxelizer.step_y
-    mdata[17] = voxelizer.step_z
-    mdata[18] = voxelizer.min_x
-    mdata[19] = voxelizer.min_y
-    mdata[20] = voxelizer.min_z
-    mdata[21:33] = Pinv.flatten()
+    K = np.matrix(meta_data['intrinsic_matrix'])
+    Kinv = np.linalg.pinv(K)
+    mdata = np.zeros(48, dtype=np.float32)
+    mdata[0:9] = K.flatten()
+    mdata[9:18] = Kinv.flatten()
+    mdata[18:30] = pose_world2live.flatten()
+    mdata[30:42] = pose_live2world.flatten()
+    mdata[42] = voxelizer.step_x
+    mdata[43] = voxelizer.step_y
+    mdata[44] = voxelizer.step_z
+    mdata[45] = voxelizer.min_x
+    mdata[46] = voxelizer.min_y
+    mdata[47] = voxelizer.min_z
 
     # construct blobs
     height = im_depth.shape[0]
     width = im_depth.shape[1]
     depth_blob = np.zeros((1, height, width, 1), dtype=np.float32)
-    meta_data_blob = np.zeros((1, 1, 1, 33), dtype=np.float32)
+    meta_data_blob = np.zeros((1, 1, 1, 48), dtype=np.float32)
     depth_blob[0,:,:,0] = depth
     meta_data_blob[0,0,0,:] = mdata
     # use a fake label blob
@@ -177,7 +175,7 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer):
     output, state = sess.run([net.get_output('labels_pred'), net.get_output('output_state')], feed_dict=feed_dict)
 
     labels = output[0]
-    return labels[0,:,:,0], points, state, voxelizer
+    return labels[0,:,:,0], state
 
 
 def vis_segmentations(im, im_depth, labels, points):
@@ -223,7 +221,7 @@ def vis_segmentations(im, im_depth, labels, points):
 ##################
 # test video
 ##################
-def test_net(sess, net, imdb, weights_filename):
+def test_net(sess, net, imdb, weights_filename, rig_filename):
 
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
@@ -247,10 +245,14 @@ def test_net(sess, net, imdb, weights_filename):
     # voxelizer
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
 
+    # kinect fusion
+    KF = kfusion.PyKinectFusion(rig_filename)
+
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
     video_count = 0
+    have_prediction = False
     for i in xrange(num_images):
     # for i in perm:
         # parse image name
@@ -260,10 +262,12 @@ def test_net(sess, net, imdb, weights_filename):
             video_index = image_index[:pos]
             video_count = 0
             voxelizer.reset()
+            have_prediction = False
             state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 voxelizer.reset()
+                have_prediction = False
                 video_count = 0
                 video_index = image_index[:pos]
                 state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
@@ -271,23 +275,50 @@ def test_net(sess, net, imdb, weights_filename):
             else:
                 if video_count % 20 == 0:
                     voxelizer.reset()
+                    have_prediction = False
                     state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                     print 'restart video {}'.format(video_index)
         video_count += 1
 
+        # read color image
         rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
         im = rgba[:,:,:3]
         alpha = rgba[:,:,3]
         I = np.where(alpha == 0)
         im[I[0], I[1], :] = 255
 
+        # read depth image
         im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
 
         # load meta data
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
+        # backprojection for the first frame
+        points = voxelizer.backproject_camera(im_depth, meta_data)
+        if not have_prediction:    
+            voxelizer.voxelize(points)
+            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_y-voxelizer.min_y)
+
+        # run kinect fusion
+        KF.feed_data(im_depth, rgba, im.shape[1], im.shape[0])
+        KF.back_project();
+        if have_prediction:
+            pose_world2live, pose_live2world = KF.solve_pose()
+        else:
+            pose_world2live = np.zeros((3,4), dtype=np.float32)
+            pose_world2live[0, 0] = 1
+            pose_world2live[1, 1] = 1
+            pose_world2live[2, 2] = 1
+            pose_live2world = pose_world2live
+
+        KF.fuse_depth()
+        KF.extract_surface()
+        KF.render()
+        KF.draw()
+        have_prediction = True
+
         _t['im_segment'].tic()
-        labels, points, state, voxelizer = im_segment(sess, net, im, im_depth, state, meta_data, voxelizer)
+        labels, state = im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
