@@ -120,6 +120,7 @@ void KinectFusion::create_tensors()
   vertBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_FLOAT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
   normBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dNormals_->dimensionSize(1), GL_FLOAT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
   indexBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlElementArrayBuffer, dIndices_->dimensionSize(0), GL_INT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
+  colorBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_UNSIGNED_BYTE, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
 
   // voxels
   voxel_data_ = new ManagedTensor<3, TsdfVoxel, DeviceResident>({256, 256, 256});

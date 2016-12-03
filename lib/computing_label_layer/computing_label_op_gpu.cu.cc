@@ -73,14 +73,22 @@ __global__ void ComputingLabel(const int nthreads, const Dtype* bottom_data,
     int label = 0;
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)
     {
-      Dtype maxval = -1;
+      Dtype maxval;
       for (int c = 0; c < num_classes; c++)
       {
         Dtype val = bottom_data[(n * grid_size * grid_size * grid_size + vd * grid_size * grid_size + vh * grid_size + vw) * num_classes + c];
-        if (val > maxval)
+        if (c == 0)
         {
           maxval = val;
           label = c;
+        }
+        else
+        {
+          if (val > maxval)
+          {
+            maxval = val;
+            label = c;
+          }
         }
       }
     }

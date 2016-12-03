@@ -103,6 +103,7 @@ class KinectFusion
   pangolin::GlBufferCudaPtr* vertBuffer_;
   pangolin::GlBufferCudaPtr* normBuffer_;
   pangolin::GlBufferCudaPtr* indexBuffer_;
+  pangolin::GlBufferCudaPtr* colorBuffer_;
 
   // render
   GLRenderer<VertAndNormalRenderType>* renderer_;

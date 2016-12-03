@@ -347,20 +347,12 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
     // 2. Richard's code claims that recalculating the voxel code is faster than storing it in
     // global memory. this should also be investigated
 
-//    ManagedTensor<3,uint,DeviceResident> voxelCodes(voxelGrid.dimensions());
     static ManagedTensor<3,uint,DeviceResident> dVertexCounts(voxelGrid.dimensions());
-
-//    int * dValidVoxelCount;
-//    cudaMalloc(&dValidVoxelCount,sizeof(int));
-//    cudaMemset(dValidVoxelCount,0,sizeof(int));
 
     {
         dim3 block(16,16,4);
         dim3 grid(voxelGrid.size(0)/block.x,voxelGrid.size(1)/block.y,voxelGrid.size(2)/block.z);
-
-        classifyVoxelsKernel<<<grid,block>>>(voxelGrid.grid(),weightThreshold,
-//                                             voxelCodes,
-                                             dVertexCounts);
+        classifyVoxelsKernel<<<grid,block>>>(voxelGrid.grid(), weightThreshold, dVertexCounts);
     }
 
     cudaDeviceSynchronize();
@@ -433,7 +425,6 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
         computeTrianglesKernel<<<intDivideAndCeil(numValidVoxels,nThreads),nThreads>>>(validVoxelIndices,
                                                                                        vertexCountScanResult,
                                                                                        voxelGrid.grid(),
-//                                                                                       voxelCodes,
                                                                                        vertices);
     }
 

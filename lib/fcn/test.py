@@ -20,6 +20,7 @@ import math
 import tensorflow as tf
 import scipy.io
 from kinect_fusion import kfusion
+import time
 
 def _get_image_blob(im, im_depth):
     """Converts an image into a network input.
@@ -172,9 +173,16 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2
 
     # forward pass
     feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.state: state, net.depth: depth_blob, net.meta_data: meta_data_blob}
-    output, state = sess.run([net.get_output('labels_pred'), net.get_output('output_state')], feed_dict=feed_dict)
+    outputs, labels_pred, state = sess.run([net.get_output('outputs'), net.get_output('labels_pred'), net.get_output('output_state')], feed_dict=feed_dict)
 
-    labels = output[0]
+    probs = outputs[0]
+    labels_3d = np.argmax(probs, axis=4)
+    labels = labels_pred[0]
+
+    print probs.max(), probs.min()
+    print labels_3d.shape, np.unique(labels_3d)
+    print labels.shape, np.unique(labels)
+
     return labels[0,:,:,0], state
 
 
@@ -315,6 +323,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['im_segment'].tic()
         labels, state = im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world)
+        # time.sleep(5)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
