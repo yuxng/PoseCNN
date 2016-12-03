@@ -13,6 +13,7 @@ class KinectFusion
   void draw();
   void back_project();
   void feed_data(unsigned char* depth, unsigned char* color, int width, int height);
+  void feed_label(unsigned char* label);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
 };

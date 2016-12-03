@@ -273,7 +273,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
                 state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                 print 'start video {}'.format(video_index)
             else:
-                if video_count % 20 == 0:
+                if video_count % 1000 == 0:
                     voxelizer.reset()
                     have_prediction = False
                     state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
@@ -310,12 +310,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_world2live[1, 1] = 1
             pose_world2live[2, 2] = 1
             pose_live2world = pose_world2live
-
-        KF.fuse_depth()
-        KF.extract_surface()
-        KF.render()
-        KF.draw()
-        have_prediction = True
+        print pose_world2live
+        print pose_live2world
 
         _t['im_segment'].tic()
         labels, state = im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world)
@@ -324,9 +320,20 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         _t['misc'].tic()
         seg = {'labels': labels}
         segmentations[i] = seg
+
+        # build the label image
+        im_label = imdb.labels_to_image(im, labels)
+
+        KF.feed_label(im_label)
+        KF.fuse_depth()
+        KF.extract_surface()
+        KF.render()
+        KF.draw()
+        have_prediction = True
+
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, labels, points)
+        # vis_segmentations(im, im_depth, im_label, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

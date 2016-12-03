@@ -198,17 +198,15 @@ class shapenet_scene(datasets.imdb):
 
         for i in xrange(len(class_colors)):
             color = class_colors[i]
-            if i == 0:
-                color = (1, 1, 1)
             I = np.where(labels == i)
             image_r[I] = 255 * color[0]
             image_g[I] = 255 * color[1]
             image_b[I] = 255 * color[2]
 
         image = np.stack((image_b, image_g, image_r), axis=-1)
-        index = np.where(image == 255)
-        image[index] = im[index]
-        image = 0.1*im + 0.9*image
+        # index = np.where(image == 255)
+        # image[index] = im[index]
+        # image = 0.1*im + 0.9*image
 
         return image.astype(np.uint8)
 

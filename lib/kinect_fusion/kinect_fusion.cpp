@@ -58,17 +58,20 @@ void KinectFusion::create_window()
   colorCamState_ = new pangolin::OpenGlRenderState(ProjectionMatrixRDF_TopLeft(*color_camera_, 0.01, 1000.0));
   colorView_ = &pangolin::Display("color");
   depthView_ = &pangolin::Display("depth");
+  labelView_ = &pangolin::Display("label");
 
   pangolin::CreatePanel("panel").SetBounds(0, 1, 0, pangolin::Attach::Pix(200));
-  pangolin::Display("multi").AddDisplay(*disp3d_).AddDisplay(*colorView_).AddDisplay(*depthView_)
+  pangolin::Display("multi").AddDisplay(*disp3d_).AddDisplay(*colorView_).AddDisplay(*depthView_).AddDisplay(*labelView_)
             .SetBounds(0, 1, pangolin::Attach::Pix(200), 1).SetLayout(pangolin::LayoutEqual);
 
   // texture
   colorTex_ = new pangolin::GlTexture(color_camera_->width(), color_camera_->height());
   depthTex_ = new pangolin::GlTexture(depth_camera_->width(), depth_camera_->height());
+  labelTex_ = new pangolin::GlTexture(depth_camera_->width(), depth_camera_->height());
 
   colorView_->SetAspect(colorTex_->width/static_cast<double>(colorTex_->height));
   depthView_->SetAspect(depthTex_->width/static_cast<double>(depthTex_->height));
+  labelView_->SetAspect(labelTex_->width/static_cast<double>(labelTex_->height));
 
   // lighting
   GLfloat lightPosition[] = { 0.0, 0.0, -1.0, 0.0 };
@@ -190,8 +193,8 @@ void KinectFusion::solve_pose(float* pose_worldToLive, float* pose_liveToWorld)
   Sophus::SE3f update = T_prev_curr.inverse().cast<float>();
 
   transformer_->setWorldToLiveTransformation(update * transformer_->worldToLiveTransformation());
-  // std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
-  // std::cout << transformer_->liveToWorldTransformation().matrix3x4() << std::endl << std::endl;
+  std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
+  std::cout << transformer_->liveToWorldTransformation().matrix3x4() << std::endl << std::endl;
 
   // copy the pose
   if (pose_worldToLive && pose_liveToWorld)
@@ -329,23 +332,13 @@ void KinectFusion::draw()
   glColor3ub(255, 0, 0);
   Eigen::AlignedBox3f bb = voxel_grid_->boundingBox();
   pangolin::glDrawAlignedBox(bb);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glPushMatrix();
-  glVoxelGridCoords(*voxel_grid_);
-  glColor3ub(0, 255, 0);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_);
-  glPopMatrix();
-  glDisable(GL_LIGHTING);
 
-  // show prediction
+  // show predicted points
   predicted_verts_->copyFrom(*predicted_verts_device_);
   predicted_normals_->copyFrom(*predicted_normals_device_);
-
   glPushMatrix();
   glMultMatrixX(transformer_->liveToWorldTransformation().matrix());
-  glColor3ub(0, 0, 255);
-  glEnable(GL_LIGHTING);
+  glColor3ub(0, 255, 0);
   glEnableClientState(GL_VERTEX_ARRAY);
   glVertexPointer(3, GL_FLOAT, 4*sizeof(float), predicted_verts_->data());
   glEnableClientState(GL_NORMAL_ARRAY);
@@ -353,7 +346,6 @@ void KinectFusion::draw()
   glDrawArrays(GL_POINTS, 0, predicted_verts_->count());
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
-  glDisable(GL_LIGHTING);
   glPopMatrix();
 
   // show color image
@@ -378,6 +370,10 @@ void KinectFusion::draw()
   // show depth image
   depthView_->ActivateScissorAndClear();
   depthTex_->RenderToViewportFlipY();
+
+  // show label image
+  labelView_->ActivateScissorAndClear();
+  labelTex_->RenderToViewportFlipY();
 
   pangolin::FinishFrame();
 }
@@ -431,6 +427,13 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 
   color_texture()->Upload(color, GL_RGBA, GL_UNSIGNED_BYTE);
   depth_texture()->Upload(depth_map()->data(), GL_LUMINANCE, GL_FLOAT);
+}
+
+
+// feed predicted labels
+void KinectFusion::feed_label(unsigned char* label)
+{
+  label_texture()->Upload(label, GL_RGB, GL_UNSIGNED_BYTE);
 }
 
 
