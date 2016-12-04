@@ -174,7 +174,7 @@ class Network(object):
 
     @layer
     def backproject(self, input, grid_size, threshold, name):
-        return backproject_op.backproject(input[0], input[1], input[2], input[3], grid_size, threshold, name=name)
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], input[5], grid_size, threshold, name=name)
 
     @layer
     def project(self, input, threshold, name):

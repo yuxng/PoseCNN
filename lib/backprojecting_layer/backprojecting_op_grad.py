@@ -38,4 +38,4 @@ def _backproject_grad(op, grad, _):
   # compute gradient
   data_grad = backprojecting_op.backproject_grad(data, depth, meta_data, grad, grid_size, threshold)
 
-  return [data_grad, None, None, None]  # List of one Tensor, since we have four input
+  return [data_grad, None, None, None, None, None]  # List of one Tensor, since we have six input

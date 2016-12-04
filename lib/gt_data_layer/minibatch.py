@@ -13,6 +13,7 @@ import numpy.random as npr
 import cv2
 from fcn.config import cfg
 from utils.blob import im_list_to_blob
+from utils.se3 import *
 import scipy.io
 
 def get_minibatch(roidb, voxelizer):
@@ -27,7 +28,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, state_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, state_blob, data_3d_blob, label_3d_blob = _get_label_blob(roidb, voxelizer)
 
     # reshape the blobs
     num_steps = cfg.TRAIN.NUM_STEPS
@@ -49,7 +50,9 @@ def get_minibatch(roidb, voxelizer):
              'data_depth': depth_blob,
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
-             'data_state': state_blob}
+             'data_state': state_blob,
+             'data_3d': data_3d_blob,
+             'data_label_3d': label_3d_blob}
 
     return blobs
 
@@ -145,31 +148,40 @@ def _get_label_blob(roidb, voxelizer):
 
         # voxelization
         if i % cfg.TRAIN.NUM_STEPS == 0:
-            points = voxelizer.backproject(im_depth, meta_data)
+            points = voxelizer.backproject_camera(im_depth, meta_data)
             voxelizer.voxelized = False
             voxelizer.voxelize(points)
+            # store the RT for the first frame
+            RT_world = meta_data['rotation_translation_matrix']
+
+        # compute camera poses
+        RT_live = meta_data['rotation_translation_matrix']
+        pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+        pose_live2world = se3_inverse(pose_world2live)
 
         # construct the meta data
         """
         format of the meta_data
-        projection matrix: meta_data[0 ~ 11]
-        camera center: meta_data[12, 13, 14]
-        voxel step size: meta_data[15, 16, 17]
-        voxel min value: meta_data[18, 19, 20]
-        backprojection matrix: meta_data[21 ~ 32]
+        intrinsic matrix: meta_data[0 ~ 8]
+        inverse intrinsic matrix: meta_data[9 ~ 17]
+        pose_world2live: meta_data[18 ~ 29]
+        pose_live2world: meta_data[30 ~ 41]
+        voxel step size: meta_data[42, 43, 44]
+        voxel min value: meta_data[45, 46, 47]
         """
-        P = np.matrix(meta_data['projection_matrix'])
-        Pinv = np.linalg.pinv(P)
-        mdata = np.zeros(33, dtype=np.float32)
-        mdata[0:12] = P.flatten()
-        mdata[12:15] = meta_data['camera_location']
-        mdata[15] = voxelizer.step_x
-        mdata[16] = voxelizer.step_y
-        mdata[17] = voxelizer.step_z
-        mdata[18] = voxelizer.min_x
-        mdata[19] = voxelizer.min_y
-        mdata[20] = voxelizer.min_z
-        mdata[21:33] = Pinv.flatten()
+        K = np.matrix(meta_data['intrinsic_matrix'])
+        Kinv = np.linalg.pinv(K)
+        mdata = np.zeros(48, dtype=np.float32)
+        mdata[0:9] = K.flatten()
+        mdata[9:18] = Kinv.flatten()
+        mdata[18:30] = pose_world2live.flatten()
+        mdata[30:42] = pose_live2world.flatten()
+        mdata[42] = voxelizer.step_x
+        mdata[43] = voxelizer.step_y
+        mdata[44] = voxelizer.step_z
+        mdata[45] = voxelizer.min_x
+        mdata[46] = voxelizer.min_y
+        mdata[47] = voxelizer.min_z
         processed_meta_data.append(mdata)
 
     # construct the blobs
@@ -178,7 +190,7 @@ def _get_label_blob(roidb, voxelizer):
     num_classes = voxelizer.num_classes
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
-    meta_data_blob = np.zeros((num_images, 1, 1, 33), dtype=np.float32)
+    meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
         label_blob[i,:,:,:] = processed_label[i]
@@ -187,7 +199,13 @@ def _get_label_blob(roidb, voxelizer):
     grid_size = voxelizer.grid_size
     state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
 
-    return depth_blob, label_blob, meta_data_blob, state_blob
+    # data in 3D
+    data_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
+
+    # labels in 3D
+    label_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
+
+    return depth_blob, label_blob, meta_data_blob, state_blob, data_3d_blob, label_3d_blob
 
 
 def _vis_minibatch(im_blob, im_depth_blob, label_blob):

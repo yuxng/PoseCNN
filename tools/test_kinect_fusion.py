@@ -22,6 +22,7 @@ import scipy.io
 from utils.voxelizer import Voxelizer, set_axes_equal
 from kinect_fusion import kfusion
 import time
+from utils.se3 import *
 
 def parse_args():
     """
@@ -167,8 +168,19 @@ if __name__ == '__main__':
             pose_world2live[2, 2] = 1
             pose_live2world = pose_world2live
         transformations.append(pose_live2world)
+
+        # compute pose from GT from comparison
+        RT_world = RTs[0]
+        RT_live = RTs[-1]
+        RT_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+        RT_live2world = se3_inverse(RT_world2live)
+        print "pose_world2live:"
         print pose_world2live
+        print RT_world2live
+        print "pose_live2world:"
         print pose_live2world
+        print RT_live2world
+        time.sleep(3)
 
         KF.fuse_depth()
         KF.extract_surface()
