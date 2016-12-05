@@ -21,7 +21,7 @@ class GRU3DCell(tf.nn.rnn_cell.RNNCell):
 
     # inputs: [batch_size, grid_size, grid_size, grid_size, channels]
     # state:  [batch_size, grid_size, grid_size, grid_size, num_units]
-    def __call__(self, inputs, state, scope=None):
+    def __call__(self, inputs, flag, state, scope=None):
         with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
             inputs_shape = tf.shape(inputs)
             inputs = tf.reshape(inputs, [inputs_shape[0], inputs_shape[1], inputs_shape[2], inputs_shape[3], self._channels])
@@ -56,5 +56,7 @@ class GRU3DCell(tf.nn.rnn_cell.RNNCell):
                 # c = tf.nn.tanh(tf.nn.bias_add(conv_1, biases_1))
                 c = tf.nn.bias_add(conv_1, biases_1)
             """
-            new_h = tf.nn.relu(u * state + (1 - u) * inputs)
+            new_state = tf.mul(flag, tf.nn.relu(u * state + (1 - u) * inputs))
+            old_state = tf.mul(tf.sub(tf.ones(tf.shape(state), tf.float32), flag), state)
+            new_h = new_state + old_state
         return new_h, new_h

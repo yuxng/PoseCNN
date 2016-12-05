@@ -28,7 +28,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, state_blob, data_3d_blob, label_3d_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, state_blob, label_3d_blob = _get_label_blob(roidb, voxelizer)
 
     # reshape the blobs
     num_steps = cfg.TRAIN.NUM_STEPS
@@ -51,7 +51,6 @@ def get_minibatch(roidb, voxelizer):
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
              'data_state': state_blob,
-             'data_3d': data_3d_blob,
              'data_label_3d': label_3d_blob}
 
     return blobs
@@ -199,13 +198,10 @@ def _get_label_blob(roidb, voxelizer):
     grid_size = voxelizer.grid_size
     state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
 
-    # data in 3D
-    data_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
-
     # labels in 3D
     label_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
 
-    return depth_blob, label_blob, meta_data_blob, state_blob, data_3d_blob, label_3d_blob
+    return depth_blob, label_blob, meta_data_blob, state_blob, label_3d_blob
 
 
 def _vis_minibatch(im_blob, im_depth_blob, label_blob):

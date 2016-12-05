@@ -118,7 +118,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer):
     return labels[0,:,:,0], points
 
 
-def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world):
+def im_segment(sess, net, im, im_depth, state, data_3d, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world):
     """segment image
     """
 
@@ -172,8 +172,10 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.state: state, net.depth: depth_blob, net.meta_data: meta_data_blob}
-    outputs, labels_pred, state = sess.run([net.get_output('outputs'), net.get_output('labels_pred'), net.get_output('output_state')], feed_dict=feed_dict)
+    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.state: state, net.depth: depth_blob, \
+                 net.meta_data: meta_data_blob, net.data_3d: data_3d, net.label_3d: label_3d}
+    outputs, labels_pred, state, data_3d, label_3d = sess.run([net.get_output('outputs'), net.get_output('labels_pred'), \
+        net.get_output('output_state'),  net.get_output('output_data_3d'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
 
     probs = outputs[0]
     labels_3d = np.argmax(probs, axis=4)
@@ -183,7 +185,7 @@ def im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2
     print labels_3d.shape, np.unique(labels_3d)
     print labels.shape, np.unique(labels)
 
-    return labels[0,:,:,0], state
+    return labels[0,:,:,0], state, data_3d, label_3d
 
 
 def vis_segmentations(im, im_depth, labels, points):
@@ -272,6 +274,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             voxelizer.reset()
             have_prediction = False
             state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+            data_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
+            label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 voxelizer.reset()
@@ -279,12 +283,16 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
                 video_count = 0
                 video_index = image_index[:pos]
                 state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+                data_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
+                label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
                 print 'start video {}'.format(video_index)
             else:
                 if video_count % 1000 == 0:
                     voxelizer.reset()
                     have_prediction = False
                     state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+                    data_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
+                    label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
                     print 'restart video {}'.format(video_index)
         video_count += 1
 
@@ -322,7 +330,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         print pose_live2world
 
         _t['im_segment'].tic()
-        labels, state = im_segment(sess, net, im, im_depth, state, meta_data, voxelizer, pose_world2live, pose_live2world)
+        labels, state, data_3d, label_3d = im_segment(sess, net, im, im_depth, state, data_3d, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world)
         # time.sleep(5)
         _t['im_segment'].toc()
 

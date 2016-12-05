@@ -17,14 +17,14 @@ namespace tensorflow {
 // argmax indices are not written.
 bool BackprojectForwardLaucher(
     const float* bottom_data, const float* bottom_label,
-    const float* bottom_depth, const float* bottom_meta_data, const float* bottom_data_3d, const float* bottom_label_3d,
+    const float* bottom_depth, const float* bottom_meta_data, const float* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data, 
     const int grid_size, const float threshold,
-    float* top_data, float* top_label, int* top_flag, const Eigen::GpuDevice& d);
+    float* top_data, float* top_label, float* top_flag, const Eigen::GpuDevice& d);
 
-bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int* bottom_flag,
+bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int grid_size, 
-    float* bottom_diff, float* bottom_diff_3d, const Eigen::GpuDevice& d);
+    float* bottom_diff, const Eigen::GpuDevice& d);
 
 }  // namespace tensorflow
 

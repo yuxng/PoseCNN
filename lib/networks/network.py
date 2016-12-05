@@ -174,7 +174,7 @@ class Network(object):
 
     @layer
     def backproject(self, input, grid_size, threshold, name):
-        return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], input[5], grid_size, threshold, name=name)
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, threshold, name=name)
 
     @layer
     def project(self, input, threshold, name):
@@ -194,7 +194,7 @@ class Network(object):
     def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse) as scope:
             gru3d = GRU3DCell(num_units, channels)
-            return gru3d(input[0][0], input[1], scope)
+            return gru3d(input[0][0], input[0][2], input[1], scope)
 
     @layer
     def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):

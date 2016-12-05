@@ -35,11 +35,10 @@ REGISTER_OP("Backproject")
     .Input("bottom_label: T")
     .Input("bottom_depth: T")
     .Input("bottom_meta_data: T")
-    .Input("bottom_data_3d: T")
     .Input("bottom_label_3d: T")
     .Output("top_data: T")
     .Output("top_label: T")
-    .Output("top_flag: int32");
+    .Output("top_flag: T");
 
 REGISTER_OP("BackprojectGrad")
     .Attr("T: {float, double}")
@@ -48,10 +47,8 @@ REGISTER_OP("BackprojectGrad")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
     .Input("bottom_meta_data: T")
-    .Input("bottom_flag: int32")
     .Input("grad: T")
-    .Output("output: T")
-    .Output("output_3d: T");
+    .Output("output: T");
 
 template <typename Device, typename T>
 class BackprojectOp : public OpKernel {
@@ -94,10 +91,7 @@ class BackprojectOp : public OpKernel {
     const Tensor& bottom_meta_data = context->input(3);
     auto meta_data = bottom_meta_data.flat<T>();
 
-    const Tensor& bottom_data_3d = context->input(4);
-    auto bottom_data_3d_flat = bottom_data_3d.flat<T>();
-
-    const Tensor& bottom_label_3d = context->input(5);
+    const Tensor& bottom_label_3d = context->input(4);
     auto bottom_label_3d_flat = bottom_label_3d.flat<T>();
 
     // data should have 4 dimensions.
@@ -112,9 +106,6 @@ class BackprojectOp : public OpKernel {
 
     OP_REQUIRES(context, bottom_meta_data.dims() == 4,
                 errors::InvalidArgument("meta data must be 4-dimensional"));
-
-    OP_REQUIRES(context, bottom_data_3d.dims() == 5,
-                errors::InvalidArgument("data 3D must be 5-dimensional"));
 
     OP_REQUIRES(context, bottom_label_3d.dims() == 5,
                 errors::InvalidArgument("label 3D must be 5-dimensional"));
@@ -145,6 +136,14 @@ class BackprojectOp : public OpKernel {
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_data_tensor));
     auto top_data = top_data_tensor->template flat<T>();
 
+    // top flag
+    TensorShape output_shape_flag;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape_flag);
+
+    Tensor* top_flag_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(2, output_shape_flag, &top_flag_tensor));
+    auto top_flag = top_flag_tensor->template flat<T>();
+
     // top label
     dims[4] = num_classes;
     TensorShape output_shape_label;
@@ -153,15 +152,6 @@ class BackprojectOp : public OpKernel {
     Tensor* top_label_tensor = NULL;
     OP_REQUIRES_OK(context, context->allocate_output(1, output_shape_label, &top_label_tensor));
     auto top_label = top_label_tensor->template flat<T>();
-
-    // top flag
-    dims[4] = 1;
-    TensorShape output_shape_flag;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_flag);
-
-    Tensor* top_flag_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(2, output_shape_flag, &top_flag_tensor));
-    auto top_flag = top_flag_tensor->flat<int>();
 
     int index_meta_data = 0;    
     for(int n = 0; n < batch_size; n++)
@@ -203,9 +193,12 @@ class BackprojectOp : public OpKernel {
               if (fabs(depth - dvoxel) < threshold_)
               {
                 flag = 1;
-                // data
+                // data and flag
                 for(int c = 0; c < num_channels; c++)
+                {
                   top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_flat(index_pixel * num_channels + c);
+                  top_flag((index_batch + index_depth + index_height + w) * num_channels + c) = 1;
+                }
                 // label
                 for(int c = 0; c < num_classes; c++)
                   top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_flat(index_pixel * num_classes + c);
@@ -213,15 +206,16 @@ class BackprojectOp : public OpKernel {
             }
             if (flag == 0)
             {
-              // data
+              // data and flag
               for (int c = 0; c < num_channels; c++)
-                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_3d_flat((index_batch + index_depth + index_height + w) * num_channels + c);
+              {
+                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
+                top_flag((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
+              }
               // label
               for(int c = 0; c < num_classes; c++)
                 top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_3d_flat((index_batch + index_depth + index_height + w) * num_classes + c);
             }
-            // flag
-            top_flag(index_batch + index_depth + index_height + w) = flag;
           }
         }
       }
@@ -238,14 +232,14 @@ REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_CPU).TypeConstraint<do
 
 bool BackprojectForwardLaucher(
     const float* bottom_data, const float* bottom_label,
-    const float* bottom_depth, const float* bottom_meta_data, const float* bottom_data_3d, const float* bottom_label_3d,
+    const float* bottom_depth, const float* bottom_meta_data, const float* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data,
     const int grid_size, const float threshold,
-    float* top_data, float* top_label, int* top_flag, const Eigen::GpuDevice& d);
+    float* top_data, float* top_label, float* top_flag, const Eigen::GpuDevice& d);
 
 static void BackprojectingKernel(
     OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_label,
-    const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* bottom_data_3d, const Tensor* bottom_label_3d,
+    const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data, 
     const int grid_size, const float threshold, const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_label, const TensorShape& tensor_output_shape_flag) 
 {
@@ -262,10 +256,9 @@ static void BackprojectingKernel(
 
   BackprojectForwardLaucher(
     bottom_data->flat<float>().data(), bottom_label->flat<float>().data(),
-    bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(), 
-    bottom_data_3d->flat<float>().data(), bottom_label_3d->flat<float>().data(),
+    bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(), bottom_label_3d->flat<float>().data(),
     batch_size, height, width, channels, num_classes, num_meta_data, grid_size, threshold,
-    top_data->flat<float>().data(), top_label->flat<float>().data(), top_flag->flat<int>().data(), context->eigen_device<Eigen::GpuDevice>());
+    top_data->flat<float>().data(), top_label->flat<float>().data(), top_flag->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 template <class T>
@@ -295,8 +288,7 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     const Tensor& bottom_label = context->input(1);
     const Tensor& bottom_depth = context->input(2);
     const Tensor& bottom_meta_data = context->input(3);
-    const Tensor& bottom_data_3d = context->input(4);
-    const Tensor& bottom_label_3d = context->input(5);
+    const Tensor& bottom_label_3d = context->input(4);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
@@ -310,9 +302,6 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
 
     OP_REQUIRES(context, bottom_meta_data.dims() == 4,
                 errors::InvalidArgument("meta data must be 4-dimensional"));
-
-    OP_REQUIRES(context, bottom_data_3d.dims() == 5,
-                errors::InvalidArgument("data 3D must be 5-dimensional"));
 
     OP_REQUIRES(context, bottom_label_3d.dims() == 5,
                 errors::InvalidArgument("label 3D must be 5-dimensional"));
@@ -339,17 +328,16 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     TensorShape output_shape;
     TensorShapeUtils::MakeShape(dims, 5, &output_shape);
 
+    // top flag
+    TensorShape output_shape_flag;
+    TensorShapeUtils::MakeShape(dims, 5, &output_shape_flag);
+
     // top label
     dims[4] = num_classes;
     TensorShape output_shape_label;
     TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
-    
-    // top flag
-    dims[4] = 1;
-    TensorShape output_shape_flag;
-    TensorShapeUtils::MakeShape(dims, 5, &output_shape_flag);
 
-    BackprojectingKernel(context, &bottom_data, &bottom_label, &bottom_depth, &bottom_meta_data, &bottom_data_3d, &bottom_label_3d, batch_size, height,
+    BackprojectingKernel(context, &bottom_data, &bottom_label, &bottom_depth, &bottom_meta_data, &bottom_label_3d, batch_size, height,
       width, num_channels, num_classes, num_meta_data, grid_size_, threshold_, output_shape, output_shape_label, output_shape_flag);
   }
  private:
@@ -360,27 +348,25 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("Backproject").Device(DEVICE_GPU).TypeConstraint<float>("T"), BackprojectOp<Eigen::GpuDevice, float>);
 
 
-bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int* bottom_flag, const int batch_size,
+bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
     const int height, const int width, const int channels, const int num_meta_data, const int grid_size,
-    float* bottom_diff, float* bottom_diff_3d, const Eigen::GpuDevice& d);
+    float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void BackprojectingGradKernel(
-    OpKernelContext* context, const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* bottom_flag, const Tensor* out_backprop,
+    OpKernelContext* context, const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* out_backprop,
     const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int grid_size,
-    const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_3d) 
+    const TensorShape& tensor_output_shape) 
 {
   Tensor* output = nullptr;
   OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &output));
-  Tensor* output_3d = nullptr;
-  OP_REQUIRES_OK(context, context->allocate_output(1, tensor_output_shape_3d, &output_3d));
 
   if (!context->status().ok()) {
     return;
   }
 
   BackprojectBackwardLaucher(
-    out_backprop->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(), bottom_flag->flat<int>().data(),
-    batch_size, height, width, channels, num_meta_data, grid_size, output->flat<float>().data(), output_3d->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+    out_backprop->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
+    batch_size, height, width, channels, num_meta_data, grid_size, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 
@@ -409,8 +395,7 @@ class BackprojectGradOp : public OpKernel {
     const Tensor& bottom_data = context->input(0);
     const Tensor& bottom_depth = context->input(1);
     const Tensor& bottom_meta_data = context->input(2);
-    const Tensor& bottom_flag = context->input(3);
-    const Tensor& out_backprop = context->input(4);
+    const Tensor& out_backprop = context->input(3);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
@@ -421,9 +406,6 @@ class BackprojectGradOp : public OpKernel {
 
     OP_REQUIRES(context, bottom_meta_data.dims() == 4,
                 errors::InvalidArgument("meta data must be 4-dimensional"));
-
-    OP_REQUIRES(context, bottom_flag.dims() == 5,
-                errors::InvalidArgument("flag must be 5-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
@@ -437,11 +419,10 @@ class BackprojectGradOp : public OpKernel {
 
     // construct the output shape
     TensorShape output_shape = bottom_data.shape();
-    TensorShape output_shape_3d = out_backprop.shape();
 
     BackprojectingGradKernel(
-      context, &bottom_depth, &bottom_meta_data, &bottom_flag, &out_backprop,
-      batch_size, height, width, num_channels, num_meta_data, grid_size_, output_shape, output_shape_3d);
+      context, &bottom_depth, &bottom_meta_data, &out_backprop,
+      batch_size, height, width, num_channels, num_meta_data, grid_size_, output_shape);
 
   }
  private:

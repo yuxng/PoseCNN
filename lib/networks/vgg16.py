@@ -14,9 +14,8 @@ class vgg16(Network):
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
         self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_units])
-        self.data_3d = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
         self.label_3d = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
-        self.layers = dict({'data': [], 'label': [], 'depth': [], 'meta_data': [], 'state': [], 'data_3d': [], 'label_3d': []})
+        self.layers = dict({'data': [], 'label': [], 'depth': [], 'meta_data': [], 'state': [], 'label_3d': []})
         self.trainable = trainable
         self.setup()
 
@@ -26,7 +25,6 @@ class vgg16(Network):
         input_depth = tf.unpack(self.depth)
         input_meta_data = tf.unpack(self.meta_data)
         input_state = self.state
-        input_data_3d = self.data_3d
         input_label_3d = self.label_3d
         outputs = []
         labels_gt = []
@@ -39,7 +37,6 @@ class vgg16(Network):
             self.layers['depth'] = input_depth[i]
             self.layers['meta_data'] = input_meta_data[i]
             self.layers['state'] = input_state
-            self.layers['data_3d'] = input_data_3d
             self.layers['label_3d'] = input_label_3d
             if i == 0:
                 reuse = None
@@ -74,7 +71,7 @@ class vgg16(Network):
                  .add(name='add1')
                  .deconv(16, 16, self.num_classes, 8, 8, name='upscore', reuse=reuse))
 
-            (self.feed('upscore', 'label', 'depth', 'meta_data', 'data_3d', 'label_3d')
+            (self.feed('upscore', 'label', 'depth', 'meta_data', 'label_3d')
                  .backproject(self.grid_size, 0.02, name='backprojection'))
 
             (self.feed('backprojection', 'state')
@@ -87,7 +84,6 @@ class vgg16(Network):
 
             # collect outputs
             input_state = self.get_output('gru3d')[1]
-            input_data_3d = self.get_output('backprojection')[0]
             input_label_3d = self.get_output('backprojection')[1]
             outputs.append(self.get_output('prob'))
             labels_gt.append(self.get_output('backprojection')[1])
@@ -97,3 +93,4 @@ class vgg16(Network):
         self.layers['labels_gt'] = labels_gt
         self.layers['labels_pred'] = labels_pred
         self.layers['output_state'] = input_state
+        self.layers['output_label_3d'] = input_label_3d
