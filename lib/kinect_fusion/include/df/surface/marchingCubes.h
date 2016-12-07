@@ -17,4 +17,9 @@ uint weldVertices(const Tensor<2,Scalar,DeviceResident> & vertices,
 
 void initMarchingCubesTables();
 
+template <typename Scalar, typename VoxelT>
+void computeColors(const Tensor<2, Scalar, DeviceResident> & vertices, int* labels,
+                   unsigned char* class_colors, const VoxelGrid<Scalar, VoxelT, DeviceResident> & voxelGrid,
+                   Tensor<2, unsigned char, DeviceResident> & colors, int dimension, int num_classes);
+
 } // namespace df

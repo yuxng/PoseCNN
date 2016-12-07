@@ -178,14 +178,22 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
         net.get_output('output_state'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
 
     probs = outputs[0]
-    labels_3d = np.argmax(probs, axis=4)
     labels = labels_pred[0]
 
+    # find empty voxels
+    flag = np.max(label_3d, axis=4)
+    flag = flag[0,:,:,:]
+    index = np.where(flag == 0)
+    probs[0, index[0], index[1], index[2], :] = 0
+
+    # voxel labels
+    labels_voxel = np.argmax(probs, axis=4)
+
     print probs.max(), probs.min()
-    print labels_3d.shape, np.unique(labels_3d)
+    print labels_voxel.shape, np.unique(labels_voxel)
     print labels.shape, np.unique(labels)
 
-    return labels[0,:,:,0], state, label_3d
+    return labels[0,:,:,0], labels_voxel[0,:,:,:].astype(np.int32), state, label_3d
 
 
 def vis_segmentations(im, im_depth, labels, points):
@@ -258,6 +266,13 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
     # kinect fusion
     KF = kfusion.PyKinectFusion(rig_filename)
 
+    # construct colors
+    colors = np.zeros((3, imdb.num_classes), dtype=np.uint8)
+    for i in range(imdb.num_classes):
+        colors[0, i] = 255 * imdb._class_colors[i][0]
+        colors[1, i] = 255 * imdb._class_colors[i][1]
+        colors[2, i] = 255 * imdb._class_colors[i][2]
+
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
@@ -327,9 +342,12 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         print pose_live2world
 
         _t['im_segment'].tic()
-        labels, state, label_3d = im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world)
-        # time.sleep(5)
+        labels, labels_voxel, state, label_3d = im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
+        # time.sleep(3)
+
+        # show voxel labels
+        # voxelizer.draw(labels_voxel, imdb._class_colors)
 
         _t['misc'].tic()
         seg = {'labels': labels}
@@ -338,10 +356,10 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
-        KF.feed_label(im_label)
         KF.fuse_depth()
         KF.extract_surface()
         KF.render()
+        KF.feed_label(im_label, labels_voxel, colors)
         KF.draw()
         have_prediction = True
 

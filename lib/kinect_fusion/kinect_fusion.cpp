@@ -94,6 +94,7 @@ void KinectFusion::create_window()
 // allocate tensors
 void KinectFusion::create_tensors()
 {
+
   // depth map
   depth_map_ = new ManagedTensor<2, float>({depth_camera_->width(), depth_camera_->height()});
   depth_map_device_ = new ManagedTensor<2, float, DeviceResident>(depth_map_->dimensions());
@@ -114,6 +115,7 @@ void KinectFusion::create_tensors()
   dWeldedVertices_ = new ManagedTensor<2, float, DeviceResident>({3,1});
   dIndices_ = new ManagedTensor<1, int, DeviceResident>(Eigen::Matrix<uint,1,1>(1));
   dNormals_ = new ManagedTensor<2, float, DeviceResident>({3,1});
+  dColors_ = new ManagedTensor<2, unsigned char, DeviceResident>({3,1});
   numUniqueVertices_ = 0;
 
   // for rendering
@@ -362,10 +364,10 @@ void KinectFusion::draw()
   glPushMatrix();
   glMultMatrixX(T_dc_.inverse().matrix());
   glVoxelGridCoords(*voxel_grid_);
-  glEnable(GL_LIGHTING);
+  // glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_);
-  glDisable(GL_LIGHTING);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_,  *colorBuffer_);
+  // glDisable(GL_LIGHTING);
   glPopMatrix();
 
   // show depth image
@@ -394,11 +396,15 @@ void KinectFusion::back_project()
 
 
 // render model
-void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer)
+void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer, pangolin::GlBufferCudaPtr & colorBuffer)
 {
   vertBuffer.Bind();
   glEnableClientState(GL_VERTEX_ARRAY);
   glVertexPointer(3,GL_FLOAT,0,0);
+
+  colorBuffer.Bind();
+  glEnableClientState(GL_COLOR_ARRAY);
+  glColorPointer(3, GL_UNSIGNED_BYTE, 0, 0);
 
   normBuffer.Bind();
   glEnableClientState(GL_NORMAL_ARRAY);
@@ -410,8 +416,10 @@ void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin:
   indexBuffer.Unbind();;
   vertBuffer.Unbind();
   normBuffer.Unbind();
+  colorBuffer.Unbind();
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
+  glDisableClientState(GL_COLOR_ARRAY);
 }
 
 
@@ -432,9 +440,35 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 
 
 // feed predicted labels
-void KinectFusion::feed_label(unsigned char* label)
+void KinectFusion::feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes)
 {
-  label_texture()->Upload(label, GL_RGB, GL_UNSIGNED_BYTE);
+  label_texture()->Upload(im_label, GL_RGB, GL_UNSIGNED_BYTE);
+
+  // compute the color for vertices
+  dColors_->resize(dWeldedVertices_->dimensions());
+
+  // locate device memory
+  int* labels_voxel_device = NULL;
+  unsigned char* colors_device = NULL;
+
+  checkCuda( cudaMalloc((void **)&labels_voxel_device, dimension * dimension * dimension * sizeof(int)) );
+  checkCuda( cudaMalloc((void **)&colors_device, num_classes * 3 * sizeof(unsigned char)) );
+
+  checkCuda( cudaMemcpy(labels_voxel_device, labels_voxel, dimension * dimension * dimension * sizeof(int), cudaMemcpyHostToDevice));
+  checkCuda( cudaMemcpy(colors_device, colors, num_classes * 3 * sizeof(unsigned char), cudaMemcpyHostToDevice));
+
+  computeColors(*dWeldedVertices_, labels_voxel_device, colors_device, *voxel_grid_, *dColors_, dimension, num_classes);
+
+  // copy colors
+  const uint numVertices = dWeldedVertices_->dimensionSize(1);
+  colorBuffer_->Resize(numVertices);
+  {
+    pangolin::CudaScopedMappedPtr scopedPtr(*colorBuffer_);
+    checkCuda(cudaMemcpy(*scopedPtr, dColors_->data(), numVertices*3*sizeof(unsigned char), cudaMemcpyDeviceToDevice));
+  }
+
+  checkCuda( cudaFree(labels_voxel_device) );
+  checkCuda( cudaFree(colors_device) );
 }
 
 
