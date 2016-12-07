@@ -467,6 +467,66 @@ uint weldVertices(const Tensor<2,Scalar,DeviceResident> & vertices,
     return numUniqueVertices;
 }
 
+// compute colors of vertices
+template <typename Scalar>
+__global__ void computeColorsKernel(const Tensor<2, Scalar, DeviceResident> vertices,
+                                    int* labels,
+                                    unsigned char* class_colors,
+                                    Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> min_val,
+                                    Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> max_val,
+                                    Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> offset,
+                                    Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> scale,
+                                    Tensor<2, unsigned char, DeviceResident> colors, int dimension, int num_classes) 
+{
+  const uint i = threadIdx.x + blockDim.x * blockIdx.x;
+
+  if (i < vertices.dimensionSize(1))
+  {
+    // 3D point
+    Scalar X = vertices(0, i) * scale(0) + offset(0);
+    Scalar Y = vertices(1, i) * scale(1) + offset(1);
+    Scalar Z = vertices(2, i) * scale(2) + offset(2);
+
+    // voxel grid
+    Scalar step_x = (max_val(0) - min_val(0)) / dimension;
+    Scalar step_y = (max_val(1) - min_val(1)) / dimension;
+    Scalar step_z = (max_val(2) - min_val(2)) / dimension;
+
+    // grid location
+    int x = floor((X - min_val(0)) / step_x);
+    int y = floor((Y - min_val(1)) / step_y);
+    int z = floor((Z - min_val(2)) / step_z);
+
+    if (x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension)
+    {
+      int label = labels[x * dimension * dimension + y * dimension + z];
+      colors(0, i) = class_colors[0 * num_classes + label];
+      colors(1, i) = class_colors[1 * num_classes + label];
+      colors(2, i) = class_colors[2 * num_classes + label];
+    }
+    else
+    {
+      colors(0, i) = 0;
+      colors(1, i) = 0;
+      colors(2, i) = 0;
+    }
+  }
+
+}
+
+
+template <typename Scalar, typename VoxelT>
+void computeColors(const Tensor<2, Scalar, DeviceResident> & vertices, int* labels,
+                   unsigned char* class_colors, const VoxelGrid<Scalar, VoxelT, DeviceResident> & voxelGrid,
+                   Tensor<2, unsigned char, DeviceResident> & colors, int dimension, int num_classes)
+{
+  const uint numVertices = vertices.dimensionSize(1);
+
+  const uint nThreads = 256;
+  computeColorsKernel<<<intDivideAndCeil(numVertices, nThreads), nThreads>>>(vertices, labels, class_colors, voxelGrid.min(), voxelGrid.max(), 
+    voxelGrid.gridToWorldOffset(), voxelGrid.gridToWorldScale(), colors, dimension, num_classes);
+}
+
 
 template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
                              const VoxelGrid<float,TsdfVoxel,DeviceResident> &,
@@ -475,5 +535,9 @@ template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
 template uint weldVertices(const Tensor<2,float,DeviceResident> &,
                            Tensor<2,float,DeviceResident> &,
                            ManagedTensor<1,int,DeviceResident> &);
+
+template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
+                   unsigned char*, const VoxelGrid<float, TsdfVoxel, DeviceResident> &,
+                   Tensor<2, unsigned char, DeviceResident> &, int, int);
 
 } // namespace df

@@ -203,7 +203,7 @@ class shapenet_scene(datasets.imdb):
             image_g[I] = 255 * color[1]
             image_b[I] = 255 * color[2]
 
-        image = np.stack((image_b, image_g, image_r), axis=-1)
+        image = np.stack((image_r, image_g, image_b), axis=-1)
         # index = np.where(image == 255)
         # image[index] = im[index]
         # image = 0.1*im + 0.9*image

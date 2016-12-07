@@ -47,7 +47,7 @@ class KinectFusion
   void draw();
   void back_project();
   void feed_data(unsigned char* depth, unsigned char* color, int width, int height);
-  void feed_label(unsigned char* label);
+  void feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
 
@@ -56,7 +56,7 @@ class KinectFusion
   pangolin::GlTexture* depth_texture() { return depthTex_; };
   pangolin::GlTexture* label_texture() { return labelTex_; };
 
-  void renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer);
+  void renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer, pangolin::GlBufferCudaPtr & colorBuffer);
 
  private:
 
@@ -89,6 +89,7 @@ class KinectFusion
   ManagedTensor<2, float, DeviceResident>* dWeldedVertices_;
   ManagedTensor<1, int, DeviceResident>* dIndices_;
   ManagedTensor<2, float, DeviceResident>* dNormals_;
+  ManagedTensor<2, unsigned char, DeviceResident>* dColors_;
   uint numUniqueVertices_;
 
   // voxels

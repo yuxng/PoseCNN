@@ -35,9 +35,9 @@ time ./tools/train_net.py --gpu 0 \
   --iters 40000
 
 # test FCN for multiple frames
-#time ./tools/test_net.py --gpu $1 \
+#time ./tools/test_net.py --gpu 0 \
 #  --network vgg16 \
-#  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_multi_frame_shapenet_scene_iter_10000.ckpt \
+#  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_depth_multi_frame_shapenet_scene_iter_40000.ckpt \
 #  --imdb shapenet_scene_val \
 #  --cfg experiments/cfgs/shapenet_scene.yml \
 #  --rig lib/kinect_fusion/data/camera.json
