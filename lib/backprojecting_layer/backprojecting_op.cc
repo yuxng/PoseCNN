@@ -214,7 +214,8 @@ class BackprojectOp : public OpKernel {
               }
               // label
               for(int c = 0; c < num_classes; c++)
-                top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_3d_flat((index_batch + index_depth + index_height + w) * num_classes + c);
+                top_label((index_batch + index_depth + index_height + w) * num_classes + c) = 0;
+                // top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_3d_flat((index_batch + index_depth + index_height + w) * num_classes + c);
             }
           }
         }

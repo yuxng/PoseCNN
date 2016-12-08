@@ -94,8 +94,9 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
       if (c == 0)
       {
         for(int cl = 0; cl < num_classes; cl++)
-          top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 
-            bottom_label_3d[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl];
+          top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 0;
+          // top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 
+          //  bottom_label_3d[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl];
       }
     }
   }
