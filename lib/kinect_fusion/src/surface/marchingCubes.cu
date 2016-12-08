@@ -493,9 +493,9 @@ __global__ void computeColorsKernel(const Tensor<2, Scalar, DeviceResident> vert
     Scalar step_z = (max_val(2) - min_val(2)) / dimension;
 
     // grid location
-    int x = floor((X - min_val(0)) / step_x);
-    int y = floor((Y - min_val(1)) / step_y);
-    int z = floor((Z - min_val(2)) / step_z);
+    int x = std::round((X - min_val(0)) / step_x);
+    int y = std::round((Y - min_val(1)) / step_y);
+    int z = std::round((Z - min_val(2)) / step_z);
 
     if (x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension)
     {

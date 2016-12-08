@@ -188,7 +188,7 @@ class BackprojectOp : public OpKernel {
               int index_pixel = n * height * width + py * width + px;
               T depth = im_depth(index_pixel);
               // distance of this voxel to camera center
-              float dvoxel = sqrt(X1 * X1 + Y1 * Y1 + Z1 * Z1);
+              float dvoxel = Z1;
               // check if the voxel is on the surface
               if (fabs(depth - dvoxel) < threshold_)
               {

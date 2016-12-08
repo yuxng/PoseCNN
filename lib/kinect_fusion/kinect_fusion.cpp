@@ -87,6 +87,8 @@ void KinectFusion::create_window()
   glMaterialfv(GL_FRONT, GL_SPECULAR, modelSpecularColor);
   GLfloat shininess[] = {50};
   glMaterialfv(GL_FRONT, GL_SHININESS, shininess);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_COLOR_MATERIAL);
   glEnable(GL_DEPTH_TEST);
 }
 
@@ -364,10 +366,10 @@ void KinectFusion::draw()
   glPushMatrix();
   glMultMatrixX(T_dc_.inverse().matrix());
   glVoxelGridCoords(*voxel_grid_);
-  // glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_,  *colorBuffer_);
-  // glDisable(GL_LIGHTING);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_, *colorBuffer_);
+  glDisable(GL_LIGHTING);
   glPopMatrix();
 
   // show depth image

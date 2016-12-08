@@ -325,7 +325,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         points = voxelizer.backproject_camera(im_depth, meta_data)
         if not have_prediction:    
             voxelizer.voxelize(points)
-            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_y-voxelizer.min_y)
+            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
 
         # run kinect fusion
         KF.feed_data(im_depth, rgba, im.shape[1], im.shape[0])
@@ -346,9 +346,6 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         _t['im_segment'].toc()
         # time.sleep(3)
 
-        # show voxel labels
-        # voxelizer.draw(labels_voxel, imdb._class_colors)
-
         _t['misc'].tic()
         seg = {'labels': labels}
         segmentations[i] = seg
@@ -362,6 +359,9 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         KF.feed_label(im_label, labels_voxel, colors)
         KF.draw()
         have_prediction = True
+
+        # show voxel labels
+        # voxelizer.draw(labels_voxel, imdb._class_colors)
 
         _t['misc'].toc()
 

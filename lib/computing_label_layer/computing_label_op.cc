@@ -117,14 +117,6 @@ class ComputeLabelOp : public OpKernel {
           T RY = meta_data(offset + 3) * w + meta_data(offset + 4) * h + meta_data(offset + 5);
           T RZ = meta_data(offset + 6) * w + meta_data(offset + 7) * h + meta_data(offset + 8);
 
-          // compute the norm
-          T N = sqrt(RX*RX + RY*RY + RZ*RZ);
-        
-          // normalization
-          RX /= N;
-          RY /= N;
-          RZ /= N;
-
           // compute the 3D points in camera's coordinate system
           T X = depth * RX;
           T Y = depth * RY;

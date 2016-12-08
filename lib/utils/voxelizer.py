@@ -188,12 +188,6 @@ class Voxelizer(object):
         # backprojection
         R = Kinv * x2d.transpose()
 
-        # compute the norm
-        N = np.linalg.norm(R, axis=0)
-        
-        # normalization
-        R = np.divide(R, np.tile(N, (3,1)))
-
         # compute the 3D points
         X = np.multiply(np.tile(depth.reshape(1, width*height), (3, 1)), R)
 
