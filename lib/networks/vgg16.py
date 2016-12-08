@@ -62,7 +62,8 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score_conv5', reuse=reuse)
-                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse))
+                 .deconv(32, 32, self.num_classes, 16, 16, name='upscore_conv5', reuse=reuse))
+                 #.deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse))
 
             #(self.feed('conv4_3')
             #     .conv(1, 1, self.num_classes, 1, 1, name='score_conv4', reuse=reuse))
