@@ -65,7 +65,7 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
       Dtype depth = bottom_depth[index_pixel];
 
       // distance of this voxel to camera center
-      Dtype dvoxel = sqrt(X1 * X1 + Y1 * Y1 + Z1 * Z1);
+      Dtype dvoxel = Z1;
 
       // check if the voxel is on the surface
       if (fabs(depth - dvoxel) < threshold)
@@ -167,14 +167,6 @@ __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
     Dtype RX = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
     Dtype RY = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
     Dtype RZ = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
-
-    // compute the norm
-    Dtype N = sqrt(RX*RX + RY*RY + RZ*RZ);
-        
-    // normalization
-    RX /= N;
-    RY /= N;
-    RZ /= N;
 
     // compute the 3D points in camera's coordinate system
     Dtype X = depth * RX;

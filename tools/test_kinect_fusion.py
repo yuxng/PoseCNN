@@ -14,15 +14,15 @@ from datasets.factory import get_imdb
 import argparse
 import pprint
 import time, os, sys
+from utils.voxelizer import Voxelizer, set_axes_equal
+from kinect_fusion import kfusion
+import time
+from utils.se3 import *
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import numpy as np
 import scipy.io
-from utils.voxelizer import Voxelizer, set_axes_equal
-from kinect_fusion import kfusion
-import time
-from utils.se3 import *
 
 def parse_args():
     """
@@ -141,7 +141,7 @@ if __name__ == '__main__':
         if not have_prediction:
             points = voxelizer.backproject_camera(im_depth, meta_data)
             voxelizer.voxelize(points)
-            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_y-voxelizer.min_y)
+            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
 
             # sample template points
             X = points[0,:]
