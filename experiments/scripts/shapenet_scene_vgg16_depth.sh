@@ -32,7 +32,7 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb shapenet_scene_train \
   --cfg experiments/cfgs/shapenet_scene.yml \
-  --iters 40000
+  --iters 20000
 
 # test FCN for multiple frames
 #time ./tools/test_net.py --gpu 0 \
