@@ -272,6 +272,10 @@ class Network(object):
             return fc
 
     @layer
+    def argmax_3d(self, input, name):
+        return tf.argmax(input, 4, name)
+
+    @layer
     def softmax(self, input, name):
         # only use the first input
         if isinstance(input, tuple):

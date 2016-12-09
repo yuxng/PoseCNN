@@ -129,9 +129,9 @@ class SolverWrapper(object):
                 feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
                            self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data']}
             else:
-                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
+                feed_dict={self.net.data: blobs['data_depth_image'], self.net.gt_label_2d: blobs['data_label'], \
                            self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
-                           self.net.state: blobs['data_state'], self.net.label_3d: blobs['data_label_3d']}
+                           self.net.state: blobs['data_state'], self.net.gt_label_3d: blobs['data_label_3d']}
             
             timer.tic()
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)

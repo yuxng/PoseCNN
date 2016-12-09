@@ -172,28 +172,15 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.state: state, net.depth: depth_blob, \
-                 net.meta_data: meta_data_blob, net.label_3d: label_3d}
-    outputs, labels_pred, state, label_3d = sess.run([net.get_output('outputs'), net.get_output('labels_pred'), \
+    feed_dict = {net.data: im_depth_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+                 net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
+    labels_pred_2d, labels_pred_3d, state, label_3d = sess.run([net.get_output('labels_pred_2d'), net.get_output('labels_pred_3d'), \
         net.get_output('output_state'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
 
-    probs = outputs[0]
-    labels = labels_pred[0]
+    labels_2d = labels_pred_2d[0]
+    labels_3d = labels_pred_3d[0]
 
-    # find empty voxels
-    flag = np.max(label_3d, axis=4)
-    flag = flag[0,:,:,:]
-    index = np.where(flag == 0)
-    probs[0, index[0], index[1], index[2], :] = 0
-
-    # voxel labels
-    labels_voxel = np.argmax(probs, axis=4)
-
-    print probs.max(), probs.min()
-    print labels_voxel.shape, np.unique(labels_voxel)
-    print labels.shape, np.unique(labels)
-
-    return labels[0,:,:,0], labels_voxel[0,:,:,:].astype(np.int32), state, label_3d
+    return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32), state, label_3d
 
 
 def vis_segmentations(im, im_depth, labels, points):
