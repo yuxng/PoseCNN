@@ -62,30 +62,30 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score_conv5', reuse=reuse)
-                 .deconv(32, 32, self.num_classes, 16, 16, name='upscore_conv5', reuse=reuse))
-                 #.deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse))
+                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse))
+                 #.deconv(32, 32, self.num_classes, 16, 16, name='upscore_conv5', reuse=reuse))
 
-            #(self.feed('conv4_3')
-            #     .conv(1, 1, self.num_classes, 1, 1, name='score_conv4', reuse=reuse))
+            (self.feed('conv4_3')
+                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv4', reuse=reuse))
 
-            #(self.feed('score_conv4', 'upscore_conv5')
-            #     .add(name='add1')
-            #     .deconv(16, 16, self.num_classes, 8, 8, name='upscore', reuse=reuse))
+            (self.feed('score_conv4', 'upscore_conv5')
+                 .add(name='add1')
+                 .deconv(16, 16, self.num_classes, 8, 8, name='upscore', reuse=reuse))
 
-            (self.feed('upscore_conv5', 'label', 'depth', 'meta_data', 'label_3d')
-                 .backproject(self.grid_size, 0.02, name='backprojection')
-                 .log_softmax_high_dimension(self.num_classes, name='prob'))
-
-            #(self.feed('backprojection', 'state')
-            #     .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
-            #     .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
+            (self.feed('upscore', 'label', 'depth', 'meta_data', 'label_3d')
+                 .backproject(self.grid_size, 0.02, name='backprojection'))
             #     .log_softmax_high_dimension(self.num_classes, name='prob'))
+
+            (self.feed('backprojection', 'state')
+                 .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
+                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
+                 .log_softmax_high_dimension(self.num_classes, name='prob'))
 
             (self.feed('prob', 'depth', 'meta_data')
                  .compute_label(name='label'))
 
             # collect outputs
-            # input_state = self.get_output('gru3d')[1]
+            input_state = self.get_output('gru3d')[1]
             input_label_3d = self.get_output('backprojection')[1]
             outputs.append(self.get_output('prob'))
             labels_gt.append(self.get_output('backprojection')[1])
