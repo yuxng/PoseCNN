@@ -9,7 +9,7 @@ class vgg16(Network):
         self.num_steps = num_steps
         self.num_units = num_units
 
-        self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
+        self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 6])
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
@@ -45,7 +45,7 @@ class vgg16(Network):
                 reuse = True
 
             (self.feed('data')
-                 .conv(3, 3, 64, 1, 1, name='conv1_1', reuse=reuse)
+                 .conv(3, 3, 64, 1, 1, name='conv1_1_new', reuse=reuse)
                  .conv(3, 3, 64, 1, 1, name='conv1_2', reuse=reuse)
                  .max_pool(2, 2, 2, 2, name='pool1')
                  .conv(3, 3, 128, 1, 1, name='conv2_1', reuse=reuse)

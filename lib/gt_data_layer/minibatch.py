@@ -41,12 +41,12 @@ def get_minibatch(roidb, voxelizer):
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
+    im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=4)
 
     # For debug visualizations
     # _vis_minibatch(im_blob, im_depth_blob, label_blob)
 
-    blobs = {'data_rgb_image': im_blob,
-             'data_depth_image': im_depth_blob,
+    blobs = {'data_image': im_rgbd_blob,
              'data_depth': depth_blob,
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
