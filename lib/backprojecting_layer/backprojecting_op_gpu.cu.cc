@@ -45,7 +45,7 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
     Dtype X = d * meta_data[42] + meta_data[45];
     Dtype Y = h * meta_data[43] + meta_data[46];
     Dtype Z = w * meta_data[44] + meta_data[47];
-
+    
     // apply pose_world2live
     Dtype X1 = meta_data[18] * X + meta_data[19] * Y + meta_data[20] * Z + meta_data[21];
     Dtype Y1 = meta_data[22] * X + meta_data[23] * Y + meta_data[24] * Z + meta_data[25];
@@ -179,9 +179,9 @@ __global__ void BackprojectBackward(const int nthreads, const Dtype* top_diff,
     Dtype Z1 = meta_data[38] * X + meta_data[39] * Y + meta_data[40] * Z + meta_data[41];
 
     // voxel location in 3D
-    int vd = floor((X1 - meta_data[45]) / meta_data[42]);
-    int vh = floor((Y1 - meta_data[46]) / meta_data[43]);
-    int vw = floor((Z1 - meta_data[47]) / meta_data[44]);
+    int vd = round((X1 - meta_data[45]) / meta_data[42]);
+    int vh = round((Y1 - meta_data[46]) / meta_data[43]);
+    int vw = round((Z1 - meta_data[47]) / meta_data[44]);
 
     // get the gradient
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)

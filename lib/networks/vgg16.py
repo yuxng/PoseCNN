@@ -4,7 +4,7 @@ from networks.network import Network
 class vgg16(Network):
     def __init__(self, grid_size, num_steps, num_units, trainable=True):
         self.inputs = []
-        self.num_classes = 7
+        self.num_classes = num_units
         self.grid_size = grid_size
         self.num_steps = num_steps
         self.num_units = num_units
@@ -70,16 +70,16 @@ class vgg16(Network):
 
             (self.feed('score_conv4', 'upscore_conv5')
                  .add(name='add1')
-                 .deconv(16, 16, self.num_classes, 8, 8, name='upscore', reuse=reuse, trainable=False))
+                 .deconv(32, 32, self.num_classes, 16, 16, name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
                  .backproject(self.grid_size, 0.02, name='backprojection'))
 
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
-                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob')
                  .argmax_3d(name='label_3d'))
+                 # .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
 
             (self.feed('prob', 'depth', 'meta_data')
                  .compute_label(name='label_2d'))

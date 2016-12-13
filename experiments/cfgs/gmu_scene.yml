@@ -1,0 +1,20 @@
+EXP_DIR: gmu_scene
+TRAIN:
+  SINGLE_FRAME: False
+  LEARNING_RATE: 0.0001
+  MOMENTUM: 0.9
+  GAMMA: 0.1
+  STEPSIZE: 10000
+  SCALES_BASE: !!python/tuple [0.5]
+  IMS_PER_BATCH: 1
+  NUM_STEPS: 3 
+  NUM_UNITS: 12
+  SNAPSHOT_ITERS: 5000
+  SNAPSHOT_INFIX: gmu_scene
+  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_multi_frame
+  USE_FLIPPED: False
+  GRID_SIZE: 128
+TEST:
+  SINGLE_FRAME: False
+  SCALES_BASE: !!python/tuple [0.5]
+  GRID_SIZE: 128

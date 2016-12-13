@@ -12,7 +12,7 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from fcn.config import cfg
-from utils.blob import im_list_to_blob
+from utils.blob import im_list_to_blob, pad_im
 from utils.se3 import *
 import scipy.io
 
@@ -33,11 +33,14 @@ def get_minibatch(roidb, voxelizer):
     # reshape the blobs
     num_steps = cfg.TRAIN.NUM_STEPS
     ims_per_batch = cfg.TRAIN.IMS_PER_BATCH
+
     height = im_blob.shape[1]
     width = im_blob.shape[2]
-
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+
+    height = label_blob.shape[1]
+    width = label_blob.shape[2]
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
@@ -65,11 +68,14 @@ def _get_image_blob(roidb, scale_ind):
     im_scales = []
     for i in xrange(num_images):
         # rgba
-        rgba = cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED)
-        im = rgba[:,:,:3]
-        alpha = rgba[:,:,3]
-        I = np.where(alpha == 0)
-        im[I[0], I[1], :] = 255
+        rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = rgba[:,:,:3]
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = 255
+        else:
+            im = rgba
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
@@ -82,7 +88,7 @@ def _get_image_blob(roidb, scale_ind):
         processed_ims.append(im)
 
         # depth
-        im_depth = cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED).astype(np.float32)
+        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16).astype(np.float32)
         im_depth = im_depth / im_depth.max() * 255
         im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
         if roidb[i]['flipped']:
@@ -108,13 +114,18 @@ def _process_label_image(label_image, class_colors, class_weights):
     num_classes = len(class_colors)
     label_index = np.zeros((height, width, num_classes), dtype=np.float32)
 
-    # label image is in BRG order
-    index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
-    for i in xrange(len(class_colors)):
-        color = class_colors[i]
-        ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
-        I = np.where(index == ind)
-        label_index[I[0], I[1], i] = class_weights[i]
+    if len(label_image.shape) == 3:
+        # label image is in BRG order
+        index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
+        for i in xrange(len(class_colors)):
+            color = class_colors[i]
+            ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
+            I = np.where(index == ind)
+            label_index[I[0], I[1], i] = class_weights[i]
+    else:
+        for i in xrange(len(class_colors)):
+            I = np.where(label_image == i)
+            label_index[I[0], I[1], i] = class_weights[i]
     
     return label_index
 
@@ -132,14 +143,14 @@ def _get_label_blob(roidb, voxelizer):
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
 
         # read label image
-        im = cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED)
+        im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # depth
-        im_depth = cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED)
+        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
         depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
@@ -181,6 +192,10 @@ def _get_label_blob(roidb, voxelizer):
         mdata[45] = voxelizer.min_x
         mdata[46] = voxelizer.min_y
         mdata[47] = voxelizer.min_z
+
+        mdata[0] = -1 * mdata[0]
+        mdata[9] = -1 * mdata[9]
+        mdata[11] = -1 * mdata[11]
         processed_meta_data.append(mdata)
 
     # construct the blobs

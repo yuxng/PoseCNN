@@ -175,6 +175,8 @@ class Voxelizer(object):
         K = meta_data['intrinsic_matrix']
         K = np.matrix(K)
         Kinv = np.linalg.inv(K)
+        Kinv[0, 0] = -1 * Kinv[0, 0]
+        Kinv[0, 2] = -1 * Kinv[0, 2]
 
         # compute the 3D points        
         width = depth.shape[1]

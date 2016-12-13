@@ -170,9 +170,10 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
+    im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=4)
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+    feed_dict = {net.data: im_rgbd_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
                  net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
     labels_pred_2d, labels_pred_3d, state, label_3d = sess.run([net.get_output('labels_pred_2d'), net.get_output('labels_pred_3d'), \
         net.get_output('output_state'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
