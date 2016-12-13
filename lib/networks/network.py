@@ -173,8 +173,8 @@ class Network(object):
         return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
     @layer
-    def backproject(self, input, grid_size, threshold, name):
-        return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, threshold, name=name)
+    def backproject(self, input, grid_size, kernel_size, threshold, name):
+        return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, kernel_size, threshold, name=name)
 
     @layer
     def project(self, input, threshold, name):

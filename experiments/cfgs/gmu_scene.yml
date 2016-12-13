@@ -16,5 +16,6 @@ TRAIN:
   GRID_SIZE: 128
 TEST:
   SINGLE_FRAME: False
+  KINECT_FUSION: False
   SCALES_BASE: !!python/tuple [0.5]
   GRID_SIZE: 128

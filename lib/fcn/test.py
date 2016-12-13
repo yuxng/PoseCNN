@@ -10,8 +10,9 @@
 from fcn.config import cfg, get_output_dir
 import argparse
 from utils.timer import Timer
-from utils.blob import im_list_to_blob
+from utils.blob import im_list_to_blob, pad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
+from utils.se3 import *
 import numpy as np
 import cv2
 import cPickle
@@ -165,8 +166,11 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     # reshape the blobs
     num_steps = 1
     ims_per_batch = 1
-    im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
-    im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    height_blob = im_blob.shape[1]
+    width_blob = im_blob.shape[2]
+    im_blob = im_blob.reshape((num_steps, ims_per_batch, height_blob, width_blob, -1))
+    im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height_blob, width_blob, -1))
+
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
@@ -184,7 +188,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32), state, label_3d
 
 
-def vis_segmentations(im, im_depth, labels, points):
+def vis_segmentations(im, im_depth, labels, labels_gt, points):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -205,7 +209,12 @@ def vis_segmentations(im, im_depth, labels, points):
     plt.imshow(labels)
     ax.set_title('class labels')
 
+    ax = fig.add_subplot(224)
+    plt.imshow(labels_gt)
+    ax.set_title('gt class labels')
+
     # show the 3D points
+    '''
     from mpl_toolkits.mplot3d import Axes3D
     ax = fig.add_subplot(224, projection='3d')
     ax.set_aspect('equal')
@@ -221,7 +230,7 @@ def vis_segmentations(im, im_depth, labels, points):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     set_axes_equal(ax)
-
+    '''
     plt.show()
 
 ##################
@@ -252,7 +261,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
 
     # kinect fusion
-    KF = kfusion.PyKinectFusion(rig_filename)
+    if cfg.TEST.KINECT_FUSION:
+        KF = kfusion.PyKinectFusion(rig_filename)
 
     # construct colors
     colors = np.zeros((3, imdb.num_classes), dtype=np.uint8)
@@ -297,35 +307,52 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         video_count += 1
 
         # read color image
-        rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
-        im = rgba[:,:,:3]
-        alpha = rgba[:,:,3]
-        I = np.where(alpha == 0)
-        im[I[0], I[1], :] = 255
+        rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = rgba[:,:,:3]
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = 255
+        else:
+            im = rgba
 
         # read depth image
-        im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
+        im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
         # load meta data
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+
+        # read label image
+        im_label_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
         # backprojection for the first frame
         points = voxelizer.backproject_camera(im_depth, meta_data)
         if not have_prediction:    
             voxelizer.voxelize(points)
-            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
+            if cfg.TEST.KINECT_FUSION:
+                KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
+            else:
+                # store the RT for the first frame
+                RT_world = meta_data['rotation_translation_matrix']
 
         # run kinect fusion
-        KF.feed_data(im_depth, rgba, im.shape[1], im.shape[0])
-        KF.back_project();
-        if have_prediction:
-            pose_world2live, pose_live2world = KF.solve_pose()
+        if cfg.TEST.KINECT_FUSION:
+            KF.feed_data(im_depth, rgba, im.shape[1], im.shape[0])
+            KF.back_project();
+            if have_prediction:
+                pose_world2live, pose_live2world = KF.solve_pose()
+            else:
+                pose_world2live = np.zeros((3,4), dtype=np.float32)
+                pose_world2live[0, 0] = 1
+                pose_world2live[1, 1] = 1
+                pose_world2live[2, 2] = 1
+                pose_live2world = pose_world2live
         else:
-            pose_world2live = np.zeros((3,4), dtype=np.float32)
-            pose_world2live[0, 0] = 1
-            pose_world2live[1, 1] = 1
-            pose_world2live[2, 2] = 1
-            pose_live2world = pose_world2live
+            # compute camera poses
+            RT_live = meta_data['rotation_translation_matrix']
+            pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+            pose_live2world = se3_inverse(pose_world2live)
+
         print pose_world2live
         print pose_live2world
 
@@ -341,11 +368,12 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
-        KF.fuse_depth()
-        KF.extract_surface()
-        KF.render()
-        KF.feed_label(im_label, labels_voxel, colors)
-        KF.draw()
+        if cfg.TEST.KINECT_FUSION:
+            KF.fuse_depth()
+            KF.extract_surface()
+            KF.render()
+            KF.feed_label(im_label, labels_voxel, colors)
+            KF.draw()
         have_prediction = True
 
         # show voxel labels
@@ -353,7 +381,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, points)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

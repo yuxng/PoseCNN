@@ -17,7 +17,7 @@ template <typename Dtype>
 __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_label, const Dtype* bottom_depth,
     const Dtype* bottom_meta_data, const Dtype* bottom_label_3d, 
     const int height, const int width, const int channels, const int num_classes, const int num_meta_data,
-    const int grid_size, const float threshold, Dtype* top_data, Dtype* top_label, float* top_flag) 
+    const int grid_size, const int kernel_size, const float threshold, Dtype* top_data, Dtype* top_label, float* top_flag) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -58,36 +58,47 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
     int px = round(x1 / x3);
     int py = round(x2 / x3);
 
-    int flag = 0;
-    if (px >= 0 && px < width && py >= 0 && py < height)
+    // initialization
+    top_data[index] = 0;
+    if (c == 0)
     {
-      int index_pixel = n * height * width + py * width + px;
-      Dtype depth = bottom_depth[index_pixel];
+      for(int cl = 0; cl < num_classes; cl++)
+        top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 0;
+    }
 
-      // distance of this voxel to camera center
-      Dtype dvoxel = Z1;
-
-      // check if the voxel is on the surface
-      if (fabs(depth - dvoxel) < threshold)
+    // check a neighborhood around (px, py)
+    int count = 0;
+    for (int x = px - kernel_size; x <= px + kernel_size; x++)
+    {
+      for (int y = py - kernel_size; y <= py + kernel_size; y++)
       {
-        flag = 1;
-        // data
-        top_data[index] = bottom_data[index_pixel * channels + c];
-        // flag
-        top_flag[index] = 1;
-        // label
-        if (c == 0)
+        if (x >= 0 && x < width && y >= 0 && y < height)
         {
-          for(int cl = 0; cl < num_classes; cl++)
-            top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = bottom_label[index_pixel * num_classes + cl];
+          int index_pixel = n * height * width + y * width + x;
+          Dtype depth = bottom_depth[index_pixel];
+
+          // distance of this voxel to camera center
+          Dtype dvoxel = Z1;
+
+          // check if the voxel is on the surface
+          if (fabs(depth - dvoxel) < threshold)
+          {
+            count++;
+            // data
+            top_data[index] += bottom_data[index_pixel * channels + c];
+            // label
+            if (c == 0)
+            {
+              for(int cl = 0; cl < num_classes; cl++)
+                top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] += bottom_label[index_pixel * num_classes + cl];
+            }
+          }
         }
       }
     }
 
-    if (flag == 0)
+    if (count == 0)
     {
-      // data
-      top_data[index] = 0;
       // flag
       top_flag[index] = 0;
       // label
@@ -96,6 +107,19 @@ __global__ void BackprojectForward(const int nthreads, const Dtype* bottom_data,
         for(int cl = 0; cl < num_classes; cl++)
           top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] = 
             bottom_label_3d[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl];
+      }
+    }
+    else
+    {
+      // data
+      top_data[index] /= count;
+      // flag
+      top_flag[index] = 1;
+      // label
+      if (c == 0)
+      {
+        for(int cl = 0; cl < num_classes; cl++)
+          top_label[(n * grid_size * grid_size * grid_size + d * grid_size * grid_size + h * grid_size + w) * num_classes + cl] /= count;
       }
     }
   }
@@ -107,7 +131,7 @@ bool BackprojectForwardLaucher(
     const float* bottom_depth, const float* bottom_meta_data, const float* bottom_label_3d,
     const int batch_size, const int height, const int width,
     const int channels, const int num_classes, const int num_meta_data, 
-    const int grid_size, const float threshold,
+    const int grid_size, const int kernel_size, const float threshold,
     float* top_data, float* top_label, float* top_flag, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -117,7 +141,7 @@ bool BackprojectForwardLaucher(
   BackprojectForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, bottom_data, bottom_label, bottom_depth, bottom_meta_data, bottom_label_3d, height, width, channels, num_classes, num_meta_data,
-      grid_size, threshold, top_data, top_label, top_flag);
+      grid_size, kernel_size, threshold, top_data, top_label, top_flag);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)

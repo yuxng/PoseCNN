@@ -19,7 +19,7 @@ bool BackprojectForwardLaucher(
     const float* bottom_data, const float* bottom_label,
     const float* bottom_depth, const float* bottom_meta_data, const float* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data, 
-    const int grid_size, const float threshold,
+    const int grid_size, const int kernel_size, const float threshold,
     float* top_data, float* top_label, float* top_flag, const Eigen::GpuDevice& d);
 
 bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data,

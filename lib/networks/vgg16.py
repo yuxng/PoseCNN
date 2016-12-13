@@ -73,7 +73,7 @@ class vgg16(Network):
                  .deconv(32, 32, self.num_classes, 16, 16, name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
-                 .backproject(self.grid_size, 0.02, name='backprojection'))
+                 .backproject(self.grid_size, 16, 0.02, name='backprojection'))
 
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)

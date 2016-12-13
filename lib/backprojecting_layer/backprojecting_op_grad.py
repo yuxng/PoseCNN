@@ -34,9 +34,10 @@ def _backproject_grad(op, grad, tmp, _):
   depth = op.inputs[2]
   meta_data = op.inputs[3]
   grid_size = op.get_attr('grid_size')
+  kernel_size = op.get_attr('kernel_size')
   threshold = op.get_attr('threshold')
 
   # compute gradient
-  data_grad = backprojecting_op.backproject_grad(data, depth, meta_data, grad, grid_size, threshold)
+  data_grad = backprojecting_op.backproject_grad(data, depth, meta_data, grad, grid_size, kernel_size, threshold)
 
   return [data_grad, None, None, None, None]  # List of one Tensor, since we have five input

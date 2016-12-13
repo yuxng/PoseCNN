@@ -75,6 +75,8 @@ __C.TEST = edict()
 
 __C.TEST.SINGLE_FRAME = True
 
+__C.TEST.KINECT_FUSION = True
+
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 

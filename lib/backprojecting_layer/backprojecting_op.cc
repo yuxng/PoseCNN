@@ -30,6 +30,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 REGISTER_OP("Backproject")
     .Attr("T: {float, double}")
     .Attr("grid_size: int")
+    .Attr("kernel_size: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_label: T")
@@ -43,6 +44,7 @@ REGISTER_OP("Backproject")
 REGISTER_OP("BackprojectGrad")
     .Attr("T: {float, double}")
     .Attr("grid_size: int")
+    .Attr("kernel_size: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
@@ -60,6 +62,12 @@ class BackprojectOp : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -166,56 +174,76 @@ class BackprojectOp : public OpKernel {
           for(int w = 0; w < grid_size_; w++)
           {
             // voxel location in 3D
-            float X = d * meta_data(index_meta_data + 42) + meta_data(index_meta_data + 45);
-            float Y = h * meta_data(index_meta_data + 43) + meta_data(index_meta_data + 46);
-            float Z = w * meta_data(index_meta_data + 44) + meta_data(index_meta_data + 47);
+            T X = d * meta_data(index_meta_data + 42) + meta_data(index_meta_data + 45);
+            T Y = h * meta_data(index_meta_data + 43) + meta_data(index_meta_data + 46);
+            T Z = w * meta_data(index_meta_data + 44) + meta_data(index_meta_data + 47);
 
             // apply pose_world2live
-            float X1 = meta_data(index_meta_data + 18) * X + meta_data(index_meta_data + 19) * Y + meta_data(index_meta_data + 20) * Z + meta_data(index_meta_data + 21);
-            float Y1 = meta_data(index_meta_data + 22) * X + meta_data(index_meta_data + 23) * Y + meta_data(index_meta_data + 24) * Z + meta_data(index_meta_data + 25);
-            float Z1 = meta_data(index_meta_data + 26) * X + meta_data(index_meta_data + 27) * Y + meta_data(index_meta_data + 28) * Z + meta_data(index_meta_data + 29);
+            T X1 = meta_data(index_meta_data + 18) * X + meta_data(index_meta_data + 19) * Y + meta_data(index_meta_data + 20) * Z + meta_data(index_meta_data + 21);
+            T Y1 = meta_data(index_meta_data + 22) * X + meta_data(index_meta_data + 23) * Y + meta_data(index_meta_data + 24) * Z + meta_data(index_meta_data + 25);
+            T Z1 = meta_data(index_meta_data + 26) * X + meta_data(index_meta_data + 27) * Y + meta_data(index_meta_data + 28) * Z + meta_data(index_meta_data + 29);
 
             // apply the intrinsic matrix
-            float x1 = meta_data(index_meta_data + 0) * X1 + meta_data(index_meta_data + 1) * Y1 + meta_data(index_meta_data + 2) * Z1;
-            float x2 = meta_data(index_meta_data + 3) * X1 + meta_data(index_meta_data + 4) * Y1 + meta_data(index_meta_data + 5) * Z1;
-            float x3 = meta_data(index_meta_data + 6) * X1 + meta_data(index_meta_data + 7) * Y1 + meta_data(index_meta_data + 8) * Z1;
+            T x1 = meta_data(index_meta_data + 0) * X1 + meta_data(index_meta_data + 1) * Y1 + meta_data(index_meta_data + 2) * Z1;
+            T x2 = meta_data(index_meta_data + 3) * X1 + meta_data(index_meta_data + 4) * Y1 + meta_data(index_meta_data + 5) * Z1;
+            T x3 = meta_data(index_meta_data + 6) * X1 + meta_data(index_meta_data + 7) * Y1 + meta_data(index_meta_data + 8) * Z1;
             int px = round(x1 / x3);
             int py = round(x2 / x3);
 
-            int flag = 0;
-            if (px >= 0 && px < width && py >= 0 && py < height)
+            // initialization
+            for(int c = 0; c < num_channels; c++)
+              top_data((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
+            for(int c = 0; c < num_classes; c++)
+              top_label((index_batch + index_depth + index_height + w) * num_classes + c) = 0;
+
+            // check a neighborhood around (px, py)
+            int count = 0;
+            for (int x = px - kernel_size_; x <= px + kernel_size_; x++)
             {
-              int index_pixel = n * height * width + py * width + px;
-              T depth = im_depth(index_pixel);
-              // distance of this voxel to camera center
-              float dvoxel = Z1;
-              // check if the voxel is on the surface
-              if (fabs(depth - dvoxel) < threshold_)
+              for (int y = py - kernel_size_; y <= py + kernel_size_; y++)
               {
-                flag = 1;
-                // data and flag
-                for(int c = 0; c < num_channels; c++)
+                if (x >= 0 && x < width && y >= 0 && y < height)
                 {
-                  top_data((index_batch + index_depth + index_height + w) * num_channels + c) = bottom_data_flat(index_pixel * num_channels + c);
-                  top_flag((index_batch + index_depth + index_height + w) * num_channels + c) = 1;
+                  int index_pixel = n * height * width + y * width + x;
+                  T depth = im_depth(index_pixel);
+                  // distance of this voxel to camera center
+                  T dvoxel = Z1;
+                  // check if the voxel is on the surface
+                  if (fabs(depth - dvoxel) < threshold_)
+                  {
+                    count++;
+                    // data
+                    for(int c = 0; c < num_channels; c++)
+                      top_data((index_batch + index_depth + index_height + w) * num_channels + c) += bottom_data_flat(index_pixel * num_channels + c);
+                    // label
+                    for(int c = 0; c < num_classes; c++)
+                      top_label((index_batch + index_depth + index_height + w) * num_classes + c) += bottom_label_flat(index_pixel * num_classes + c);
+                  }
                 }
-                // label
-                for(int c = 0; c < num_classes; c++)
-                  top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_flat(index_pixel * num_classes + c);
               }
             }
-            if (flag == 0)
+            if (count == 0)
             {
-              // data and flag
+              // flag
               for (int c = 0; c < num_channels; c++)
-              {
-                top_data((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
                 top_flag((index_batch + index_depth + index_height + w) * num_channels + c) = 0;
-              }
               // label
               for(int c = 0; c < num_classes; c++)
                 top_label((index_batch + index_depth + index_height + w) * num_classes + c) = bottom_label_3d_flat((index_batch + index_depth + index_height + w) * num_classes + c);
             }
+            else
+            {
+              // data and flag
+              for (int c = 0; c < num_channels; c++)
+              {
+                top_data((index_batch + index_depth + index_height + w) * num_channels + c) /= count;
+                top_flag((index_batch + index_depth + index_height + w) * num_channels + c) = 1;
+              }
+              // label
+              for(int c = 0; c < num_classes; c++)
+                top_label((index_batch + index_depth + index_height + w) * num_classes + c) /= count;
+            }
+            // end checking neighborhood
           }
         }
       }
@@ -224,6 +252,7 @@ class BackprojectOp : public OpKernel {
   }
  private:
   int grid_size_;
+  int kernel_size_;
   float threshold_;
 };
 
@@ -234,14 +263,15 @@ bool BackprojectForwardLaucher(
     const float* bottom_data, const float* bottom_label,
     const float* bottom_depth, const float* bottom_meta_data, const float* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data,
-    const int grid_size, const float threshold,
+    const int grid_size, const int kernel_size, const float threshold,
     float* top_data, float* top_label, float* top_flag, const Eigen::GpuDevice& d);
 
 static void BackprojectingKernel(
     OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_label,
     const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* bottom_label_3d,
     const int batch_size, const int height, const int width, const int channels, const int num_classes, const int num_meta_data, 
-    const int grid_size, const float threshold, const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_label, const TensorShape& tensor_output_shape_flag) 
+    const int grid_size, const int kernel_size, const float threshold, 
+    const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_label, const TensorShape& tensor_output_shape_flag) 
 {
   Tensor* top_data = nullptr;
   Tensor* top_label = nullptr;
@@ -257,7 +287,7 @@ static void BackprojectingKernel(
   BackprojectForwardLaucher(
     bottom_data->flat<float>().data(), bottom_label->flat<float>().data(),
     bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(), bottom_label_3d->flat<float>().data(),
-    batch_size, height, width, channels, num_classes, num_meta_data, grid_size, threshold,
+    batch_size, height, width, channels, num_classes, num_meta_data, grid_size, kernel_size, threshold,
     top_data->flat<float>().data(), top_label->flat<float>().data(), top_flag->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
@@ -273,6 +303,12 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -338,10 +374,11 @@ class BackprojectOp<Eigen::GpuDevice, T> : public OpKernel {
     TensorShapeUtils::MakeShape(dims, 5, &output_shape_label);
 
     BackprojectingKernel(context, &bottom_data, &bottom_label, &bottom_depth, &bottom_meta_data, &bottom_label_3d, batch_size, height,
-      width, num_channels, num_classes, num_meta_data, grid_size_, threshold_, output_shape, output_shape_label, output_shape_flag);
+      width, num_channels, num_classes, num_meta_data, grid_size_, kernel_size_, threshold_, output_shape, output_shape_label, output_shape_flag);
   }
  private:
   int grid_size_;
+  int kernel_size_;
   float threshold_;
 };
 
@@ -381,6 +418,12 @@ class BackprojectGradOp : public OpKernel {
     // Check that grid size is positive
     OP_REQUIRES(context, grid_size_ >= 0,
                 errors::InvalidArgument("Need grid_size >= 0, got ", grid_size_));
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -427,6 +470,7 @@ class BackprojectGradOp : public OpKernel {
   }
  private:
   int grid_size_;
+  int kernel_size_;
   float threshold_;
 };
 
