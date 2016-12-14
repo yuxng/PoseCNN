@@ -28,13 +28,15 @@ __C = edict()
 #   from fast_rcnn_config import cfg
 cfg = __C
 
+__C.FLIP_X = False
+
 #
 # Training options
 #
 
 __C.TRAIN = edict()
 
-__C.TRAIN.SINGLE_FRAME = True
+__C.TRAIN.SINGLE_FRAME = False
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
@@ -73,7 +75,7 @@ __C.TRAIN.DISPLAY = 20
 
 __C.TEST = edict()
 
-__C.TEST.SINGLE_FRAME = True
+__C.TEST.SINGLE_FRAME = False
 
 __C.TEST.KINECT_FUSION = True
 

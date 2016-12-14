@@ -192,10 +192,10 @@ def _get_label_blob(roidb, voxelizer):
         mdata[45] = voxelizer.min_x
         mdata[46] = voxelizer.min_y
         mdata[47] = voxelizer.min_z
-
-        mdata[0] = -1 * mdata[0]
-        mdata[9] = -1 * mdata[9]
-        mdata[11] = -1 * mdata[11]
+        if cfg.FLIP_X:
+            mdata[0] = -1 * mdata[0]
+            mdata[9] = -1 * mdata[9]
+            mdata[11] = -1 * mdata[11]
         processed_meta_data.append(mdata)
 
     # construct the blobs

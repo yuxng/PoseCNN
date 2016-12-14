@@ -152,6 +152,10 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     mdata[45] = voxelizer.min_x
     mdata[46] = voxelizer.min_y
     mdata[47] = voxelizer.min_z
+    if cfg.FLIP_X:
+        mdata[0] = -1 * mdata[0]
+        mdata[9] = -1 * mdata[9]
+        mdata[11] = -1 * mdata[11]
 
     # construct blobs
     height = im_depth.shape[0]
@@ -381,7 +385,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, points)
+        vis_segmentations(im, im_depth, im_label, im_label_gt, points)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

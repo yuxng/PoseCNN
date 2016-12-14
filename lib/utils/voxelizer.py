@@ -5,6 +5,7 @@
 # Written by Yu Xiang
 # --------------------------------------------------------
 
+from fcn.config import cfg
 import numpy as np
 
 class Voxelizer(object):
@@ -175,8 +176,9 @@ class Voxelizer(object):
         K = meta_data['intrinsic_matrix']
         K = np.matrix(K)
         Kinv = np.linalg.inv(K)
-        Kinv[0, 0] = -1 * Kinv[0, 0]
-        Kinv[0, 2] = -1 * Kinv[0, 2]
+        if cfg.FLIP_X:
+            Kinv[0, 0] = -1 * Kinv[0, 0]
+            Kinv[0, 2] = -1 * Kinv[0, 2]
 
         # compute the 3D points        
         width = depth.shape[1]

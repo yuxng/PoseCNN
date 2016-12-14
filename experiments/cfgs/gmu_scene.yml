@@ -1,4 +1,5 @@
 EXP_DIR: gmu_scene
+FLIP_X: True
 TRAIN:
   SINGLE_FRAME: False
   LEARNING_RATE: 0.00001
