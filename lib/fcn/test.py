@@ -192,9 +192,10 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32), state, label_3d
 
 
-def vis_segmentations(im, im_depth, labels, labels_gt, points):
+def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, voxelizer):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
     fig = plt.figure()
 
     # show image
@@ -204,9 +205,10 @@ def vis_segmentations(im, im_depth, labels, labels_gt, points):
     ax.set_title('input image')
 
     # show depth
-    ax = fig.add_subplot(222)
-    plt.imshow(im_depth)
-    ax.set_title('input depth')
+    ax = fig.add_subplot(222, projection='3d')
+    voxelizer.draw(labels_voxel, colors, ax)
+    # plt.imshow(im_depth)
+    # ax.set_title('input depth')
 
     # show class label
     ax = fig.add_subplot(223)
@@ -327,7 +329,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
         # read label image
-        im_label_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        im_label_gt = imdb.labels_to_image(im, labels_gt)
 
         # backprojection for the first frame
         points = voxelizer.backproject_camera(im_depth, meta_data)
@@ -357,6 +360,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
             pose_live2world = se3_inverse(pose_world2live)
 
+        print RT_world
+        print RT_live
         print pose_world2live
         print pose_live2world
 
@@ -385,7 +390,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, im_label, im_label_gt, points)
+        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

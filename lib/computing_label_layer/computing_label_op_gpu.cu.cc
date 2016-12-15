@@ -58,9 +58,9 @@ __global__ void ComputingLabel(const int nthreads, const Dtype* bottom_data,
     Dtype Z1 = meta_data[38] * X + meta_data[39] * Y + meta_data[40] * Z + meta_data[41];
 
     // voxel location in 3D
-    int vd = floor((X1 - meta_data[45]) / meta_data[42]);
-    int vh = floor((Y1 - meta_data[46]) / meta_data[43]);
-    int vw = floor((Z1 - meta_data[47]) / meta_data[44]);
+    int vd = round((X1 - meta_data[45]) / meta_data[42]);
+    int vh = round((Y1 - meta_data[46]) / meta_data[43]);
+    int vw = round((Z1 - meta_data[47]) / meta_data[44]);
 
     int label = 0;
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)

@@ -47,11 +47,7 @@ class Voxelizer(object):
                     self.data[int(gx), int(gy), int(gz), :] = 1
                     self.count[int(gx), int(gy), int(gz)] += 1
 
-    def draw(self, labels, colors):
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    def draw(self, labels, colors, ax):
 
         for i in range(1, len(colors)):
             index = np.where(labels == i)
@@ -64,7 +60,6 @@ class Voxelizer(object):
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
         set_axes_equal(ax)
-        plt.show()
 
     def reset(self):
         self.min_x = 0

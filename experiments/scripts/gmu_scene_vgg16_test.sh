@@ -14,7 +14,7 @@ echo Logging output to "$LOG"
 # test FCN for multiple frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16 \
-  --model output/gmu_scene/gmu_scene_train/vgg16_fcn_rgbd_multi_frame_gmu_scene_iter_5000.ckpt \
-  --imdb gmu_scene_train \
+  --model output/gmu_scene/gmu_scene_train/vgg16_fcn_rgbd_multi_frame_gmu_scene_iter_15000.ckpt \
+  --imdb gmu_scene_val \
   --cfg experiments/cfgs/gmu_scene.yml \
   --rig lib/kinect_fusion/data/camera.json

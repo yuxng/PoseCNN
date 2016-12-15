@@ -21,7 +21,7 @@ for split in ['train', 'val']:
             datasets.shapenet_scene(split))
 
 # gmu scene dataset
-for split in ['train']:
+for split in ['train', 'val']:
     name = 'gmu_scene_{}'.format(split)
     print name
     __sets[name] = (lambda split=split:
