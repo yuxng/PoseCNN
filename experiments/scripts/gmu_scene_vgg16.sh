@@ -17,4 +17,4 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb gmu_scene_train \
   --cfg experiments/cfgs/gmu_scene.yml \
-  --iters 20000
+  --iters 40000

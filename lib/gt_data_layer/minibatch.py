@@ -49,7 +49,7 @@ def get_minibatch(roidb, voxelizer):
     # For debug visualizations
     # _vis_minibatch(im_blob, im_depth_blob, label_blob)
 
-    blobs = {'data_image': im_rgbd_blob,
+    blobs = {'data_image': im_blob,
              'data_depth': depth_blob,
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
