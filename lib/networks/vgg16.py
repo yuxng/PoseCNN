@@ -2,12 +2,13 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16(Network):
-    def __init__(self, grid_size, num_steps, num_units, trainable=True):
+    def __init__(self, grid_size, num_steps, num_units, scales, trainable=True):
         self.inputs = []
         self.num_classes = num_units
         self.grid_size = grid_size
         self.num_steps = num_steps
         self.num_units = num_units
+        self.scale = int(1 / scales[0])
 
         self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 6])
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
@@ -70,7 +71,7 @@ class vgg16(Network):
 
             (self.feed('score_conv4', 'upscore_conv5')
                  .add(name='add1')
-                 .deconv(32, 32, self.num_classes, 16, 16, name='upscore', reuse=reuse, trainable=False))
+                 .deconv(16*self.scale, 16*self.scale, self.num_classes, 8*self.scale, 8*self.scale, name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
                  .backproject(self.grid_size, 8, 0.02, name='backprojection'))

@@ -8,6 +8,7 @@
 from .imdb import imdb
 from .shapenet_scene import shapenet_scene
 from .gmu_scene import gmu_scene
+from .rgbd_scene import rgbd_scene
 from . import factory
 
 import os.path as osp
