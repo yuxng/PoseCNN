@@ -127,6 +127,12 @@ ext_modules = [
         sources=['kinect_fusion/kfusion.pyx'],
         language='c++',
         extra_objects=["kinect_fusion/build/libkfusion.so"],
+        extra_compile_args={'gcc': ["-Wno-unused-function"],
+                            'nvcc': ['-arch=sm_35',
+                                     '--ptxas-options=-v',
+                                     '-c',
+                                     '--compiler-options',
+                                     "'-fPIC'"]},
         include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
       )
 ]
