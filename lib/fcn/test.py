@@ -22,8 +22,9 @@ import tensorflow as tf
 import scipy.io
 from kinect_fusion import kfusion
 import time
+from normals import gpu_normals
 
-def _get_image_blob(im, im_depth):
+def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
 
     Arguments:
@@ -47,10 +48,21 @@ def _get_image_blob(im, im_depth):
     im_scale_factors.append(im_scale)
     processed_ims.append(im)
 
-    # depth
-    im_orig = im_depth.astype(np.float32, copy=True)
-    im_orig = im_orig / im_orig.max() * 255
-    im_orig = np.tile(im_orig[:,:,np.newaxis], (1,1,3))
+    # meta data
+    K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+
+    # normals
+    depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+    nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+    im_normal = 127.5 * nmap + 127.5
+    im_normal = im_normal.astype(np.uint8)
+    im_normal = im_normal[:, :, (2, 1, 0)]
+
+    im_orig = im_normal.astype(np.float32, copy=True)
     im_orig -= cfg.PIXEL_MEANS
 
     processed_ims_depth = []
@@ -69,7 +81,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer):
     """
 
     # compute image blob
-    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
+    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
 
     # depth
     depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
@@ -124,7 +136,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     """
 
     # compute image blob
-    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth)
+    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
 
     # depth
     depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
@@ -360,8 +372,6 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
             pose_live2world = se3_inverse(pose_world2live)
 
-        print RT_world
-        print RT_live
         print pose_world2live
         print pose_live2world
 
