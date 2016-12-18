@@ -10,7 +10,7 @@
 from fcn.config import cfg, get_output_dir
 import argparse
 from utils.timer import Timer
-from utils.blob import im_list_to_blob, pad_im
+from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
 import numpy as np
@@ -294,6 +294,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
     video_index = ''
     video_count = 0
     have_prediction = False
+    restart = False
     for i in xrange(num_images):
     # for i in perm:
         # parse image name
@@ -304,21 +305,24 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             video_count = 0
             voxelizer.reset()
             have_prediction = False
+            restart = False
             state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
             label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 voxelizer.reset()
                 have_prediction = False
+                restart = False
                 video_count = 0
                 video_index = image_index[:pos]
                 state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                 label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
                 print 'start video {}'.format(video_index)
             else:
-                if video_count % 1000 == 0:
+                if restart:
                     voxelizer.reset()
                     have_prediction = False
+                    restart = False
                     state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                     label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
                     print 'restart video {}'.format(video_index)
@@ -372,12 +376,19 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
             pose_live2world = se3_inverse(pose_world2live)
 
+        # check if points outside voxel space
+        flag = voxelizer.check_points(points, pose_live2world)
+        if not flag:
+            print 'points outside voxel space, restart from next frame'
+            restart = True
+
         _t['im_segment'].tic()
         labels, labels_voxel, state, label_3d = im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
         # time.sleep(3)
 
         _t['misc'].tic()
+        labels = unpad_im(labels, 16)
         seg = {'labels': labels}
         segmentations[i] = seg
 
