@@ -196,6 +196,23 @@ class Voxelizer(object):
 
         return np.array(X)
 
+    def check_points(self, points, pose):
+        # transform the points
+        R = pose[0:3, 0:3]
+        T = pose[0:3, 3].reshape((3,1))
+        points = np.dot(R, points) + np.tile(T, (1, points.shape[1]))
+
+        Xmin = np.nanmin(points[0,:])
+        Xmax = np.nanmax(points[0,:])
+        Ymin = np.nanmin(points[1,:])
+        Ymax = np.nanmax(points[1,:])
+        Zmin = np.nanmin(points[2,:])
+        Zmax = np.nanmax(points[2,:])
+        if Xmin >= self.min_x and Xmax <= self.max_x and Ymin >= self.min_y and Ymax <= self.max_y and Zmin >= self.min_z and Zmax <= self.max_z:
+            return True
+        else:
+            return False
+
 def set_axes_equal(ax):
     '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
     cubes as cubes, etc..  This is one possible solution to Matplotlib's
