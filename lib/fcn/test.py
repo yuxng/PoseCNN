@@ -20,7 +20,6 @@ import os
 import math
 import tensorflow as tf
 import scipy.io
-from kinect_fusion import kfusion
 import time
 from normals import gpu_normals
 
@@ -255,6 +254,9 @@ def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, vox
 # test video
 ##################
 def test_net(sess, net, imdb, weights_filename, rig_filename):
+
+    if cfg.TEST.KINECT_FUSION:
+        from kinect_fusion import kfusion
 
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
