@@ -239,7 +239,7 @@ class gmu_scene(datasets.imdb):
         for im_ind, index in enumerate(self.image_index):
             # read ground truth labels
             im = cv2.imread(self.label_path_from_index(index), cv2.IMREAD_UNCHANGED)
-            gt_labels = self._process_label_image(im)
+            gt_labels = im.astype(np.float32)
 
             # predicated labels
             sg_labels = segmentations[im_ind]['labels']
