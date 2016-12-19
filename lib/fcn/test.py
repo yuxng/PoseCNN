@@ -348,7 +348,12 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         # read label image
         labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-        im_label_gt = imdb.labels_to_image(im, labels_gt)
+        if len(labels_gt.shape) == 2:
+            im_label_gt = imdb.labels_to_image(im, labels_gt)
+        else:
+            im_label_gt = np.copy(labels_gt[:,:,:3])
+            im_label_gt[:,:,0] = labels_gt[:,:,2]
+            im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         # backprojection for the first frame
         points = voxelizer.backproject_camera(im_depth, meta_data)
