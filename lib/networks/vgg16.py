@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16(Network):
-    def __init__(self, grid_size, num_steps, num_units, scales, trainable=True):
+    def __init__(self, input_format, grid_size, num_steps, num_units, scales, trainable=True):
         self.inputs = []
         self.num_classes = num_units
         self.grid_size = grid_size
@@ -10,7 +10,13 @@ class vgg16(Network):
         self.num_units = num_units
         self.scale = int(1 / scales[0])
 
-        self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 6])
+        if input_format == 'RGBD':
+            self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 6])
+            self.conv1_name = 'conv1_1_new'
+        else:
+            self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 3])
+            self.conv1_name = 'conv1_1'
+
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
@@ -46,7 +52,7 @@ class vgg16(Network):
                 reuse = True
 
             (self.feed('data')
-                 .conv(3, 3, 64, 1, 1, name='conv1_1_new', reuse=reuse)
+                 .conv(3, 3, 64, 1, 1, name=self.conv1_name, reuse=reuse)
                  .conv(3, 3, 64, 1, 1, name='conv1_2', reuse=reuse)
                  .max_pool(2, 2, 2, 2, name='pool1')
                  .conv(3, 3, 128, 1, 1, name='conv2_1', reuse=reuse)

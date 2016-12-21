@@ -17,4 +17,4 @@ time ./tools/test_net.py --gpu 0 \
   --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_rgbd_multi_frame_shapenet_scene_iter_40000.ckpt \
   --imdb shapenet_scene_val \
   --cfg experiments/cfgs/shapenet_scene.yml \
-  --rig lib/kinect_fusion/data/camera.json
+  --rig data/ShapeNetScene/camera.json

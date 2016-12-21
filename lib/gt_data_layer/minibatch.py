@@ -50,7 +50,14 @@ def get_minibatch(roidb, voxelizer):
     # For debug visualizations
     # _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob)
 
-    blobs = {'data_image': im_rgbd_blob,
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_rgbd_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
+
+    blobs = {'data_image': data_blob,
              'data_depth': depth_blob,
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
@@ -71,7 +78,7 @@ def _get_image_blob(roidb, scale_ind):
         # rgba
         rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
         if rgba.shape[2] == 4:
-            im = rgba[:,:,:3]
+            im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
             im[I[0], I[1], :] = 255
@@ -103,6 +110,7 @@ def _get_image_blob(roidb, scale_ind):
         im_normal = 127.5 * nmap + 127.5
         im_normal = im_normal.astype(np.uint8)
         im_normal = im_normal[:, :, (2, 1, 0)]
+        im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
         if roidb[i]['flipped']:
             im_normal = im_normal[:, ::-1, :]
 

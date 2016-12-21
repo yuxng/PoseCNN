@@ -29,6 +29,7 @@ __C = edict()
 cfg = __C
 
 __C.FLIP_X = False
+__C.INPUT = 'RGBD'
 
 #
 # Training options

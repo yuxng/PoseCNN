@@ -90,14 +90,14 @@ void pyrDown(const DeviceArray2D<unsigned short> & src, DeviceArray2D<unsigned s
     cudaSafeCall( cudaGetLastError() );
 };
 
-__global__ void computeVmapKernel(const PtrStepSz<unsigned short> depth, PtrStep<float> vmap, float fx_inv, float fy_inv, float cx, float cy, float depthCutoff)
+__global__ void computeVmapKernel(const PtrStepSz<unsigned short> depth, PtrStep<float> vmap, float fx_inv, float fy_inv, float cx, float cy, float depthCutoff, float depthFactor)
 {
     int u = threadIdx.x + blockIdx.x * blockDim.x;
     int v = threadIdx.y + blockIdx.y * blockDim.y;
 
     if(u < depth.cols && v < depth.rows)
     {
-        float z = depth.ptr(v)[u] / 10000.f; // load and convert: mm -> meters
+        float z = depth.ptr(v)[u] / depthFactor; // load and convert: mm -> meters
 
         if(z != 0 && z < depthCutoff)
         {
@@ -116,7 +116,7 @@ __global__ void computeVmapKernel(const PtrStepSz<unsigned short> depth, PtrStep
     }
 }
 
-void createVMap(const Intr& intr, const DeviceArray2D<unsigned short> & depth, DeviceArray2D<float> & vmap, const float depthCutoff)
+void createVMap(const Intr& intr, const DeviceArray2D<unsigned short> & depth, DeviceArray2D<float> & vmap, const float depthCutoff, const float depthFactor)
 {
     vmap.create(depth.rows() * 3, depth.cols());
 
@@ -128,7 +128,7 @@ void createVMap(const Intr& intr, const DeviceArray2D<unsigned short> & depth, D
     float fx = intr.fx, cx = intr.cx;
     float fy = intr.fy, cy = intr.cy;
 
-    computeVmapKernel<<<grid, block>>>(depth, vmap, 1.f / fx, 1.f / fy, cx, cy, depthCutoff);
+    computeVmapKernel<<<grid, block>>>(depth, vmap, 1.f / fx, 1.f / fy, cx, cy, depthCutoff, depthFactor);
     cudaSafeCall(cudaGetLastError());
 }
 

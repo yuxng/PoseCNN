@@ -22,6 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
+from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -60,6 +61,7 @@ def _get_image_blob(im, im_depth, meta_data):
     im_normal = 127.5 * nmap + 127.5
     im_normal = im_normal.astype(np.uint8)
     im_normal = im_normal[:, :, (2, 1, 0)]
+    im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
 
     im_orig = im_normal.astype(np.float32, copy=True)
     im_orig -= cfg.PIXEL_MEANS
@@ -75,59 +77,73 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_depth, np.array(im_scale_factors)
 
 
-def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer):
+def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_world2live, pose_live2world):
     """segment image
     """
 
     # compute image blob
     im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
+    im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=3)
 
     # depth
-    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
-
-    # backprojection
-    points = voxelizer.backproject(im_depth, meta_data)
-    voxelizer.voxelized = False
-    grid_indexes = voxelizer.voxelize(points)
+    depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
 
     # construct the meta data
     """
     format of the meta_data
-    projection matrix: meta_data[0 ~ 11]
-    camera center: meta_data[12, 13, 14]
-    voxel step size: meta_data[15, 16, 17]
-    voxel min value: meta_data[18, 19, 20]
-    backprojection matrix: meta_data[21 ~ 32]
+    intrinsic matrix: meta_data[0 ~ 8]
+    inverse intrinsic matrix: meta_data[9 ~ 17]
+    pose_world2live: meta_data[18 ~ 29]
+    pose_live2world: meta_data[30 ~ 41]
+    voxel step size: meta_data[42, 43, 44]
+    voxel min value: meta_data[45, 46, 47]
     """
-    P = np.matrix(meta_data['projection_matrix'])
-    Pinv = np.linalg.pinv(P)
-    mdata = np.zeros(33, dtype=np.float32)
-    mdata[0:12] = P.flatten()
-    mdata[12:15] = meta_data['camera_location']
-    mdata[15] = voxelizer.step_x
-    mdata[16] = voxelizer.step_y
-    mdata[17] = voxelizer.step_z
-    mdata[18] = voxelizer.min_x
-    mdata[19] = voxelizer.min_y
-    mdata[20] = voxelizer.min_z
-    mdata[21:33] = Pinv.flatten()
+    K = np.matrix(meta_data['intrinsic_matrix'])
+    Kinv = np.linalg.pinv(K)
+    mdata = np.zeros(48, dtype=np.float32)
+    mdata[0:9] = K.flatten()
+    mdata[9:18] = Kinv.flatten()
+    mdata[18:30] = pose_world2live.flatten()
+    mdata[30:42] = pose_live2world.flatten()
+    mdata[42] = voxelizer.step_x
+    mdata[43] = voxelizer.step_y
+    mdata[44] = voxelizer.step_z
+    mdata[45] = voxelizer.min_x
+    mdata[46] = voxelizer.min_y
+    mdata[47] = voxelizer.min_z
+    if cfg.FLIP_X:
+        mdata[0] = -1 * mdata[0]
+        mdata[9] = -1 * mdata[9]
+        mdata[11] = -1 * mdata[11]
 
     # construct blobs
     height = im_depth.shape[0]
     width = im_depth.shape[1]
     depth_blob = np.zeros((1, height, width, 1), dtype=np.float32)
-    meta_data_blob = np.zeros((1, 1, 1, 33), dtype=np.float32)
+    meta_data_blob = np.zeros((1, 1, 1, 48), dtype=np.float32)
     depth_blob[0,:,:,0] = depth
     meta_data_blob[0,0,0,:] = mdata
-    # use a fake label blob
-    label_blob = np.zeros((1, height, width, voxelizer.num_classes), dtype=np.float32)
+    # use a fake label blob of ones
+    label_blob = np.ones((1, height, width, voxelizer.num_classes), dtype=np.float32)
+    label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, voxelizer.num_classes), dtype=np.float32)
 
     # forward pass
-    feed_dict = {net.data: im_depth_blob, net.label: label_blob, net.depth: depth_blob, net.meta_data: meta_data_blob}
-    output = sess.run([net.get_output('label')], feed_dict=feed_dict)
-    labels = output[0]
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_rgbd_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_depth_blob
+    feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.depth: depth_blob, \
+                 net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
 
-    return labels[0,:,:,0], points
+    # labels_2d, labels_3d = sess.run([net.get_output('label_2d'), net.get_output('label_3d')], feed_dict=feed_dict)
+    # return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32)
+
+    output = sess.run([net.get_output('label_2d')], feed_dict=feed_dict)
+    labels_2d = output[0]
+    labels_3d = np.zeros((cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE), dtype=np.int32)
+    return labels_2d[0,:,:], labels_3d
 
 
 def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -138,7 +154,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
 
     # depth
-    depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+    depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
 
     # construct the meta data
     """
@@ -192,7 +208,13 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=4)
 
     # forward pass
-    feed_dict = {net.data: im_rgbd_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_rgbd_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_depth_blob
+    feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
                  net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
     labels_pred_2d, labels_pred_3d, state, label_3d = sess.run([net.get_output('labels_pred_2d'), net.get_output('labels_pred_3d'), \
         net.get_output('output_state'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
@@ -255,9 +277,6 @@ def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, vox
 ##################
 def test_net(sess, net, imdb, weights_filename, rig_filename):
 
-    if cfg.TEST.KINECT_FUSION:
-        from kinect_fusion import kfusion
-
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -290,6 +309,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         colors[0, i] = 255 * imdb._class_colors[i][0]
         colors[1, i] = 255 * imdb._class_colors[i][1]
         colors[2, i] = 255 * imdb._class_colors[i][2]
+    colors[:,0] = 255
 
     # perm = np.random.permutation(np.arange(num_images))
 
@@ -333,7 +353,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         # read color image
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         if rgba.shape[2] == 4:
-            im = rgba[:,:,:3]
+            im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
             im[I[0], I[1], :] = 255
@@ -367,7 +387,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         # run kinect fusion
         if cfg.TEST.KINECT_FUSION:
-            KF.feed_data(im_depth, rgba, im.shape[1], im.shape[0])
+            KF.feed_data(im_depth, im, im.shape[1], im.shape[0], float(meta_data['factor_depth']))
             KF.back_project();
             if have_prediction:
                 pose_world2live, pose_live2world = KF.solve_pose()
@@ -458,27 +478,54 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
     for i in xrange(num_images):
     # for i in perm:
 
-        rgba = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
-        im = rgba[:,:,:3]
-        alpha = rgba[:,:,3]
-        I = np.where(alpha == 0)
-        im[I[0], I[1], :] = 255
+        # read color image
+        rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = np.copy(rgba[:,:,:3])
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = 255
+        else:
+            im = rgba
 
-        im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
+        # read depth image
+        im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
         # load meta data
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
+        # read label image
+        labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        if len(labels_gt.shape) == 2:
+            im_label_gt = imdb.labels_to_image(im, labels_gt)
+        else:
+            im_label_gt = np.copy(labels_gt[:,:,:3])
+            im_label_gt[:,:,0] = labels_gt[:,:,2]
+            im_label_gt[:,:,2] = labels_gt[:,:,0]
+
+        # backprojection
+        points = voxelizer.backproject_camera(im_depth, meta_data) 
+        voxelizer.voxelize(points)
+        pose_world2live = np.zeros((3,4), dtype=np.float32)
+        pose_world2live[0, 0] = 1
+        pose_world2live[1, 1] = 1
+        pose_world2live[2, 2] = 1
+        pose_live2world = pose_world2live
+
         _t['im_segment'].tic()
-        labels, points = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer)
+        labels, labels_voxel = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
+        labels = unpad_im(labels, 16)
         seg = {'labels': labels}
         segmentations[i] = seg
+
+        # build the label image
+        im_label = imdb.labels_to_image(im, labels)
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, labels, points)
+        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
