@@ -525,7 +525,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
         im_label = imdb.labels_to_image(im, labels)
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
