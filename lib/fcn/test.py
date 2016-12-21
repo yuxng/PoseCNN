@@ -415,7 +415,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
