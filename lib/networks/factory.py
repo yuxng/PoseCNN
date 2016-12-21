@@ -15,14 +15,14 @@ import tensorflow as tf
 from fcn.config import cfg
 
 if cfg.TRAIN.SINGLE_FRAME:
-    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.TRAIN.GRID_SIZE)
+    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
 else:
-    __sets['vgg16'] = networks.vgg16(cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
+    __sets['vgg16'] = networks.vgg16(cfg.INPUT, cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
 
 def get_network(name):
     """Get a network by name."""
     if not __sets.has_key(name):
-        raise KeyError('Unknown dataset: {}'.format(name))
+        raise KeyError('Unknown network: {}'.format(name))
     return __sets[name]
 
 def list_networks():

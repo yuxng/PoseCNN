@@ -37,43 +37,32 @@ __global__ void ProjectForward(const int nthreads, const Dtype* bottom_data,
 
     // backproject the pixel to 3D
     // format of the meta_data
-    // projection matrix: meta_data[0 ~ 11]
-    // camera center: meta_data[12, 13, 14]
-    // voxel step size: meta_data[15, 16, 17]
-    // voxel min value: meta_data[18, 19, 20]
-    // backprojection matrix: meta_data[21 ~ 32]
+    // intrinsic matrix: meta_data[0 ~ 8]
+    // inverse intrinsic matrix: meta_data[9 ~ 17]
+    // pose_world2live: meta_data[18 ~ 29]
+    // pose_live2world: meta_data[30 ~ 41]
+    // voxel step size: meta_data[42, 43, 44]
+    // voxel min value: meta_data[45, 46, 47]
     const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
-    int offset = 21;
-    Dtype X = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
-    Dtype Y = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
-    Dtype Z = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
-    Dtype W = meta_data[offset + 9] * w + meta_data[offset + 10] * h + meta_data[offset + 11];
-    X /= W;
-    Y /= W;
-    Z /= W;
-
-    // compute the ray
-    Dtype RX = X - meta_data[12];
-    Dtype RY = Y - meta_data[13];
-    Dtype RZ = Z - meta_data[14];
-
-    // compute the norm
-    Dtype N = sqrt(RX*RX + RY*RY + RZ*RZ);
-        
-    // normalization
-    RX /= N;
-    RY /= N;
-    RZ /= N;
+    int offset = 9;
+    Dtype RX = meta_data[offset + 0] * w + meta_data[offset + 1] * h + meta_data[offset + 2];
+    Dtype RY = meta_data[offset + 3] * w + meta_data[offset + 4] * h + meta_data[offset + 5];
+    Dtype RZ = meta_data[offset + 6] * w + meta_data[offset + 7] * h + meta_data[offset + 8];
 
     // compute the 3D points
-    X = meta_data[12] + depth * RX;
-    Y = meta_data[13] + depth * RY;
-    Z = meta_data[14] + depth * RZ;
+    Dtype X = depth * RX;
+    Dtype Y = depth * RY;
+    Dtype Z = depth * RZ;
+
+    // apply pose_live2world
+    Dtype X1 = meta_data[30] * X + meta_data[31] * Y + meta_data[32] * Z + meta_data[33];
+    Dtype Y1 = meta_data[34] * X + meta_data[35] * Y + meta_data[36] * Z + meta_data[37];
+    Dtype Z1 = meta_data[38] * X + meta_data[39] * Y + meta_data[40] * Z + meta_data[41];
 
     // voxel location in 3D
-    int vd = floor((X - meta_data[18]) / meta_data[15]);
-    int vh = floor((Y - meta_data[19]) / meta_data[16]);
-    int vw = floor((Z - meta_data[20]) / meta_data[17]);
+    int vd = round((X1 - meta_data[45]) / meta_data[42]);
+    int vh = round((Y1 - meta_data[46]) / meta_data[43]);
+    int vw = round((Z1 - meta_data[47]) / meta_data[44]);
 
     // get the gradient
     if (vd >= 0 && vd < grid_size && vh >= 0 && vh < grid_size && vw >= 0 && vw < grid_size)
@@ -130,14 +119,19 @@ __global__ void ProjectBackward(const int nthreads, const Dtype* top_diff,
 
     // voxel location in 3D
     const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
-    Dtype X = d * meta_data[15] + meta_data[18];
-    Dtype Y = h * meta_data[16] + meta_data[19];
-    Dtype Z = w * meta_data[17] + meta_data[20];
+    Dtype X = d * meta_data[42] + meta_data[45];
+    Dtype Y = h * meta_data[43] + meta_data[46];
+    Dtype Z = w * meta_data[44] + meta_data[47];
 
-    // project the 3D point to image
-    Dtype x1 = meta_data[0] * X + meta_data[1] * Y + meta_data[2] * Z + meta_data[3];
-    Dtype x2 = meta_data[4] * X + meta_data[5] * Y + meta_data[6] * Z + meta_data[7];
-    Dtype x3 = meta_data[8] * X + meta_data[9] * Y + meta_data[10] * Z + meta_data[11];
+    // apply pose_world2live
+    Dtype X1 = meta_data[18] * X + meta_data[19] * Y + meta_data[20] * Z + meta_data[21];
+    Dtype Y1 = meta_data[22] * X + meta_data[23] * Y + meta_data[24] * Z + meta_data[25];
+    Dtype Z1 = meta_data[26] * X + meta_data[27] * Y + meta_data[28] * Z + meta_data[29];
+
+    // apply the intrinsic matrix
+    Dtype x1 = meta_data[0] * X1 + meta_data[1] * Y1 + meta_data[2] * Z1;
+    Dtype x2 = meta_data[3] * X1 + meta_data[4] * Y1 + meta_data[5] * Z1;
+    Dtype x3 = meta_data[6] * X1 + meta_data[7] * Y1 + meta_data[8] * Z1;
     int px = round(x1 / x3);
     int py = round(x2 / x3);
 
@@ -148,9 +142,7 @@ __global__ void ProjectBackward(const int nthreads, const Dtype* top_diff,
       Dtype depth = bottom_depth[index_pixel];
 
       // distance of this voxel to camera center
-      Dtype dvoxel = sqrt((X - meta_data[12]) * (X - meta_data[12]) 
-                        + (Y - meta_data[13]) * (Y - meta_data[13]) 
-                        + (Z - meta_data[14]) * (Z - meta_data[14]));
+      Dtype dvoxel = Z1;
 
       // check if the voxel is on the surface
       if (fabs(depth - dvoxel) < threshold)

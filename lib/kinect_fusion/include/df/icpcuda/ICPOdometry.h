@@ -29,9 +29,9 @@ class ICPOdometry
 
         virtual ~ICPOdometry();
 
-        void initICP(unsigned short * depth, const float depthCutoff = 20.0f);
+        void initICP(unsigned short * depth, const float depthCutoff = 20.0f, const float depthFactor = 1000.0f);
 
-        void initICPModel(unsigned short * depth, const float depthCutoff = 20.0f);
+        void initICPModel(unsigned short * depth, const float depthCutoff = 20.0f, const float depthFactor = 1000.0f);
 
         void getIncrementalTransformation(Sophus::SE3d & T_prev_curr, int threads, int blocks);
 

@@ -100,6 +100,8 @@ void KinectFusion::create_tensors()
   // depth map
   depth_map_ = new ManagedTensor<2, float>({depth_camera_->width(), depth_camera_->height()});
   depth_map_device_ = new ManagedTensor<2, float, DeviceResident>(depth_map_->dimensions());
+  depth_factor_ = 1000.0;
+  depth_cutoff_ = 20.0;
 
   // 3D points
   vertex_map_ = new ManagedHostTensor2<Vec3>({depth_camera_->width(), depth_camera_->height()});
@@ -186,9 +188,9 @@ void KinectFusion::solve_pose(float* pose_worldToLive, float* pose_liveToWorld)
   for (uint x = 0; x < depth_camera_->width(); x++)
   {
     for (uint y = 0; y < depth_camera_->height(); y++)
-      depth[y * depth_camera_->width() + x] = int((*predicted_verts_)(x, y)(2) * 10000);
+      depth[y * depth_camera_->width() + x] = int((*predicted_verts_)(x, y)(2) * depth_factor_);
   }
-  icpOdom_->initICPModel(depth);
+  icpOdom_->initICPModel(depth, depth_cutoff_, depth_factor_);
   free(depth);
 
   int threads = 224;
@@ -426,17 +428,22 @@ void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin:
 
 
 // feed data
-void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int width, int height)
+void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int width, int height, float factor)
 {
-  // icp cuda
-  icpOdom_->initICP(reinterpret_cast<ushort *>(depth));
-  // convert depth values
-  std::transform(reinterpret_cast<ushort *>(depth),
-                 reinterpret_cast<ushort *>(depth + width * height * sizeof(ushort)),
-                 depth_map()->data(),
-                 [](const ushort val) { return val / 10000.f; });
+  // set the depth factor
+  depth_factor_ = factor;
 
-  color_texture()->Upload(color, GL_RGBA, GL_UNSIGNED_BYTE);
+  // icp cuda
+  icpOdom_->initICP(reinterpret_cast<ushort *>(depth), depth_cutoff_, depth_factor_);
+
+  // convert depth values
+  float* p = depth_map()->data();
+
+  ushort* q = reinterpret_cast<ushort *>(depth);
+  for (int i = 0; i < width * height; i++)
+    p[i] = q[i] / depth_factor_;
+
+  color_texture()->Upload(color, GL_RGB, GL_UNSIGNED_BYTE);
   depth_texture()->Upload(depth_map()->data(), GL_LUMINANCE, GL_FLOAT);
 }
 
@@ -546,7 +553,7 @@ int main(int argc, char * * argv)
 
       bool success = video.GrabNext(videoBuffer.data());
 
-      KF.feed_data(videoBuffer.data() + (uint64_t)depthStreamInfo.Offset(), videoBuffer.data() + (uint64_t)colorStreamInfo.Offset(), depthStreamInfo.Width(), depthStreamInfo.Height());
+      KF.feed_data(videoBuffer.data() + (uint64_t)depthStreamInfo.Offset(), videoBuffer.data() + (uint64_t)colorStreamInfo.Offset(), depthStreamInfo.Width(), depthStreamInfo.Height(), 10000.0);
 
       GlobalTimer::tock("preprocess");
 

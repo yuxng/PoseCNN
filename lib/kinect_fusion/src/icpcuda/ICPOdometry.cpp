@@ -58,7 +58,7 @@ ICPOdometry::~ICPOdometry()
 
 }
 
-void ICPOdometry::initICP(unsigned short * depth, const float depthCutoff)
+void ICPOdometry::initICP(unsigned short * depth, const float depthCutoff, const float depthFactor)
 {
     depth_tmp[0].upload(depth, sizeof(unsigned short) * width, height, width);
 
@@ -69,14 +69,14 @@ void ICPOdometry::initICP(unsigned short * depth, const float depthCutoff)
 
     for(int i = 0; i < NUM_PYRS; ++i)
     {
-        createVMap(intr(i), depth_tmp[i], vmaps_curr[i], depthCutoff);
+        createVMap(intr(i), depth_tmp[i], vmaps_curr[i], depthCutoff, depthFactor);
         createNMap(vmaps_curr[i], nmaps_curr[i]);
     }
 
     cudaDeviceSynchronize();
 }
 
-void ICPOdometry::initICPModel(unsigned short * depth, const float depthCutoff)
+void ICPOdometry::initICPModel(unsigned short * depth, const float depthCutoff, const float depthFactor)
 {
     depth_tmp[0].upload(depth, sizeof(unsigned short) * width, height, width);
 
@@ -87,7 +87,7 @@ void ICPOdometry::initICPModel(unsigned short * depth, const float depthCutoff)
 
     for(int i = 0; i < NUM_PYRS; ++i)
     {
-        createVMap(intr(i), depth_tmp[i], vmaps_prev[i], depthCutoff);
+        createVMap(intr(i), depth_tmp[i], vmaps_prev[i], depthCutoff, depthFactor);
         createNMap(vmaps_prev[i], nmaps_prev[i]);
     }
 

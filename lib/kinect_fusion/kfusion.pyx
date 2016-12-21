@@ -18,7 +18,7 @@ cdef extern from "kfusion.hpp" namespace "df":
         void render()
         void draw()
         void back_project()
-        void feed_data(unsigned char*, unsigned char*, int, int)
+        void feed_data(unsigned char*, unsigned char*, int, int, float)
         void feed_label(unsigned char*, int*, unsigned char*, int, int)
         void reset()
         void set_voxel_grid(float, float, float, float, float, float);
@@ -53,10 +53,10 @@ cdef class PyKinectFusion:
     def back_project(self):
         return self.kfusion.back_project()
 
-    def feed_data(self, np.ndarray[np.uint16_t, ndim=2] depth, np.ndarray[np.uint8_t, ndim=3] color, np.int32_t width, np.int32_t height):
+    def feed_data(self, np.ndarray[np.uint16_t, ndim=2] depth, np.ndarray[np.uint8_t, ndim=3] color, np.int32_t width, np.int32_t height, np.float32_t factor):
         cdef unsigned char* depth_buff = <unsigned char*> depth.data
         cdef unsigned char* color_buff = <unsigned char*> color.data
-        return self.kfusion.feed_data(depth_buff, color_buff, width, height)
+        return self.kfusion.feed_data(depth_buff, color_buff, width, height, factor)
 
     def feed_label(self, np.ndarray[np.uint8_t, ndim=3] im_label, np.ndarray[np.int32_t, ndim=3] labels_voxel, np.ndarray[np.uint8_t, ndim=2] colors):
         cdef unsigned char* im_label_buff = <unsigned char*> im_label.data

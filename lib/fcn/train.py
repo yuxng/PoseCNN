@@ -76,7 +76,8 @@ class SolverWrapper(object):
         """
 
         with tf.name_scope('loss'):
-            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
+            # cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
+            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
             loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
 
         return loss
@@ -90,7 +91,8 @@ class SolverWrapper(object):
             data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes)
             # classification loss
             scores = self.net.get_output('prob')
-            labels = self.net.get_output('backprojection')[1]
+            # labels = self.net.get_output('backprojection')[1]
+            labels = self.net.get_output('gt_label_2d')
             loss = self.loss_cross_entropy_single_frame(scores, labels)
         else:
             # data layer
@@ -126,8 +128,9 @@ class SolverWrapper(object):
 
             # Make one SGD update
             if cfg.TRAIN.SINGLE_FRAME:
-                feed_dict={self.net.data: blobs['data_depth_image'], self.net.label: blobs['data_label'], \
-                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data']}
+                feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
+                           self.net.gt_label_3d: blobs['data_label_3d']}
             else:
                 feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
                            self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \

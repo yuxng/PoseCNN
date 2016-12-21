@@ -12,8 +12,10 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from fcn.config import cfg
-from utils.blob import im_list_to_blob
+from utils.blob import im_list_to_blob, pad_im
+from utils.se3 import *
 import scipy.io
+from normals import gpu_normals
 
 def get_minibatch(roidb, voxelizer):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -21,19 +23,27 @@ def get_minibatch(roidb, voxelizer):
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
+    im_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
+    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=3)
 
     # build the label blob
-    label_blob, depth_blob, meta_data_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, label_3d_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_depth_blob, label_blob)
+    # _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob)
 
-    blobs = {'data_rgb_image': im_blob,
-             'data_depth_image': im_depth_blob,
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_rgbd_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
+
+    blobs = {'data_image': data_blob,
              'data_label': label_blob,
              'data_depth': depth_blob,
-             'data_meta_data': meta_data_blob}
+             'data_meta_data': meta_data_blob,
+             'data_label_3d': label_3d_blob}
 
     return blobs
 
@@ -43,15 +53,18 @@ def _get_image_blob(roidb, scale_ind):
     """
     num_images = len(roidb)
     processed_ims = []
-    processed_ims_depth = []
+    processed_ims_normal = []
     im_scales = []
     for i in xrange(num_images):
         # rgba
-        rgba = cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED)
-        im = rgba[:,:,:3]
-        alpha = rgba[:,:,3]
-        I = np.where(alpha == 0)
-        im[I[0], I[1], :] = 255
+        rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = np.copy(rgba[:,:,:3])
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = 255
+        else:
+            im = rgba
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
@@ -63,23 +76,36 @@ def _get_image_blob(roidb, scale_ind):
         im_scales.append(im_scale)
         processed_ims.append(im)
 
-        # depth
-        im_depth = cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED).astype(np.float32)
-        im_depth = im_depth / im_depth.max() * 255
-        im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
-        if roidb[i]['flipped']:
-            im_depth = im_depth[:, ::-1]
+        # meta data
+        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
+        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+        fx = K[0, 0]
+        fy = K[1, 1]
+        cx = K[0, 2]
+        cy = K[1, 2]
 
-        im_orig = im_depth.astype(np.float32, copy=True)
+        # normals
+        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+        depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+        im_normal = 127.5 * nmap + 127.5
+        im_normal = im_normal.astype(np.uint8)
+        im_normal = im_normal[:, :, (2, 1, 0)]
+        im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
+        if roidb[i]['flipped']:
+            im_normal = im_normal[:, ::-1, :]
+
+        im_orig = im_normal.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
-        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_depth.append(im_depth)
+        im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_normal.append(im_normal)
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
-    blob_depth = im_list_to_blob(processed_ims_depth, 3)
+    blob_normal = im_list_to_blob(processed_ims_normal, 3)
 
-    return blob, blob_depth, im_scales
+    return blob, blob_normal, im_scales
+
 
 def _process_label_image(label_image, class_colors, class_weights):
     """
@@ -90,13 +116,18 @@ def _process_label_image(label_image, class_colors, class_weights):
     num_classes = len(class_colors)
     label_index = np.zeros((height, width, num_classes), dtype=np.float32)
 
-    # label image is in BRG order
-    index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
-    for i in xrange(len(class_colors)):
-        color = class_colors[i]
-        ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
-        I = np.where(index == ind)
-        label_index[I[0], I[1], i] = class_weights[i]
+    if len(label_image.shape) == 3:
+        # label image is in BRG order
+        index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
+        for i in xrange(len(class_colors)):
+            color = class_colors[i]
+            ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
+            I = np.where(index == ind)
+            label_index[I[0], I[1], i] = class_weights[i]
+    else:
+        for i in xrange(len(class_colors)):
+            I = np.where(label_image == i)
+            label_index[I[0], I[1], i] = class_weights[i]
     
     return label_index
 
@@ -105,8 +136,8 @@ def _get_label_blob(roidb, voxelizer):
     """ build the label blob """
 
     num_images = len(roidb)
-    processed_label = []
     processed_depth = []
+    processed_label = []
     processed_meta_data = []
 
     for i in xrange(num_images):
@@ -114,64 +145,79 @@ def _get_label_blob(roidb, voxelizer):
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
 
         # read label image
-        im = cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED)
+        im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
-
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # depth
-        im_depth = cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED)
+        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
-        depth = im_depth.astype(np.float32, copy=True) / meta_data['factor_depth']
+        depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
         processed_depth.append(depth)
 
         # voxelization
-        points = voxelizer.backproject(im_depth, meta_data)
+        points = voxelizer.backproject_camera(im_depth, meta_data)
         voxelizer.voxelized = False
         voxelizer.voxelize(points)
+        RT_world = meta_data['rotation_translation_matrix']
+
+        # compute camera poses
+        RT_live = meta_data['rotation_translation_matrix']
+        pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+        pose_live2world = se3_inverse(pose_world2live)
 
         # construct the meta data
         """
         format of the meta_data
-        projection matrix: meta_data[0 ~ 11]
-        camera center: meta_data[12, 13, 14]
-        voxel step size: meta_data[15, 16, 17]
-        voxel min value: meta_data[18, 19, 20]
-        backprojection matrix: meta_data[21 ~ 32]
+        intrinsic matrix: meta_data[0 ~ 8]
+        inverse intrinsic matrix: meta_data[9 ~ 17]
+        pose_world2live: meta_data[18 ~ 29]
+        pose_live2world: meta_data[30 ~ 41]
+        voxel step size: meta_data[42, 43, 44]
+        voxel min value: meta_data[45, 46, 47]
         """
-        P = np.matrix(meta_data['projection_matrix'])
-        Pinv = np.linalg.pinv(P)
-        mdata = np.zeros(33, dtype=np.float32)
-        mdata[0:12] = P.flatten()
-        mdata[12:15] = meta_data['camera_location']
-        mdata[15] = voxelizer.step_x
-        mdata[16] = voxelizer.step_y
-        mdata[17] = voxelizer.step_z
-        mdata[18] = voxelizer.min_x
-        mdata[19] = voxelizer.min_y
-        mdata[20] = voxelizer.min_z
-        mdata[21:33] = Pinv.flatten()
+        K = np.matrix(meta_data['intrinsic_matrix'])
+        Kinv = np.linalg.pinv(K)
+        mdata = np.zeros(48, dtype=np.float32)
+        mdata[0:9] = K.flatten()
+        mdata[9:18] = Kinv.flatten()
+        mdata[18:30] = pose_world2live.flatten()
+        mdata[30:42] = pose_live2world.flatten()
+        mdata[42] = voxelizer.step_x
+        mdata[43] = voxelizer.step_y
+        mdata[44] = voxelizer.step_z
+        mdata[45] = voxelizer.min_x
+        mdata[46] = voxelizer.min_y
+        mdata[47] = voxelizer.min_z
+        if cfg.FLIP_X:
+            mdata[0] = -1 * mdata[0]
+            mdata[9] = -1 * mdata[9]
+            mdata[11] = -1 * mdata[11]
         processed_meta_data.append(mdata)
 
     # construct the blobs
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
     num_classes = voxelizer.num_classes
-    label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
-    meta_data_blob = np.zeros((num_images, 1, 1, 33), dtype=np.float32)
+    label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
+    meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     for i in xrange(num_images):
-        label_blob[i,:,:,:] = processed_label[i]
         depth_blob[i,:,:,0] = processed_depth[i]
+        label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
-    return label_blob, depth_blob, meta_data_blob,
+    # labels in 3D
+    grid_size = voxelizer.grid_size
+    label_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
+
+    return depth_blob, label_blob, meta_data_blob, label_3d_blob
 
 
-def _vis_minibatch(im_blob, im_depth_blob, label_blob):
+def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -182,16 +228,21 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
         im += cfg.PIXEL_MEANS
         im = im[:, :, (2, 1, 0)]
         im = im.astype(np.uint8)
-        fig.add_subplot(131)
+        fig.add_subplot(221)
         plt.imshow(im)
 
         # show depth image
-        im_depth = im_depth_blob[i, :, :, :].copy()
-        im_depth += cfg.PIXEL_MEANS
-        im_depth = im_depth[:, :, (2, 1, 0)]
-        im_depth = im_depth.astype(np.uint8)
-        fig.add_subplot(132)
-        plt.imshow(im_depth)
+        depth = depth_blob[i, :, :, 0]
+        fig.add_subplot(222)
+        plt.imshow(abs(depth))
+
+        # show normal image
+        im_normal = im_normal_blob[i, :, :, :].copy()
+        im_normal += cfg.PIXEL_MEANS
+        im_normal = im_normal[:, :, (2, 1, 0)]
+        im_normal = im_normal.astype(np.uint8)
+        fig.add_subplot(223)
+        plt.imshow(im_normal)
 
         # show label
         label = label_blob[i, :, :, :]
@@ -202,7 +253,7 @@ def _vis_minibatch(im_blob, im_depth_blob, label_blob):
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
-        fig.add_subplot(133)
+        fig.add_subplot(224)
         plt.imshow(l)
 
         plt.show()
