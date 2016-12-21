@@ -237,7 +237,7 @@ class rgbd_scene(datasets.imdb):
 
             hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
 
-            """
+            '''
             # label image
             rgba = cv2.imread(self.image_path_from_index(index), cv2.IMREAD_UNCHANGED)
             image = rgba[:,:,:3]
@@ -250,13 +250,14 @@ class rgbd_scene(datasets.imdb):
             filename = os.path.join(image_dir, '%04d.png' % im_ind)
             print filename
             cv2.imwrite(filename, label_image)
-            """
-
+            '''
+            '''
             # save matlab result
             labels = {'labels': sg_labels}
             filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
             print filename
             scipy.io.savemat(filename, labels)
+            '''
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()
