@@ -102,7 +102,7 @@ template <typename Dtype>
 __global__ void ProjectBackward(const int nthreads, const Dtype* top_diff,
     const Dtype* bottom_depth, const Dtype* bottom_meta_data, 
     const int height, const int width, const int channels, const int num_meta_data,
-    const int grid_size, const float threshold, Dtype* bottom_diff) 
+    const int grid_size, const int kernel_size, const float threshold, Dtype* bottom_diff) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -135,33 +135,42 @@ __global__ void ProjectBackward(const int nthreads, const Dtype* top_diff,
     int px = round(x1 / x3);
     int py = round(x2 / x3);
 
-    int flag = 0;
-    if (px >= 0 && px < width && py >= 0 && py < height)
+    // initialization
+    bottom_diff[index] = 0;
+
+    // check a neighborhood around (px, py)
+    int count = 0;
+    for (int x = px - kernel_size; x <= px + kernel_size; x++)
     {
-      int index_pixel = n * height * width + py * width + px;
-      Dtype depth = bottom_depth[index_pixel];
-
-      // distance of this voxel to camera center
-      Dtype dvoxel = Z1;
-
-      // check if the voxel is on the surface
-      if (fabs(depth - dvoxel) < threshold)
+      for (int y = py - kernel_size; y <= py + kernel_size; y++)
       {
-        flag = 1;
-        bottom_diff[index] = top_diff[index_pixel * channels + c];
+        if (x >= 0 && x < width && y >= 0 && y < height)
+        {
+          int index_pixel = n * height * width + y * width + x;
+          Dtype depth = bottom_depth[index_pixel];
+
+          // distance of this voxel to camera center
+          Dtype dvoxel = Z1;
+
+          // check if the voxel is on the surface
+          if (fabs(depth - dvoxel) < threshold)
+          {
+            count++;
+            // data
+            bottom_diff[index] += top_diff[index_pixel * channels + c];
+          }
+        }
       }
     }
 
-    if (flag == 0)
-    {
-      bottom_diff[index] = 0; 
-    }
+    if (count > 0)
+      bottom_diff[index] /= count;
   }
 }
 
 
 bool ProjectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
-    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const int kernel_size, const float threshold,
     float* bottom_diff, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -171,7 +180,7 @@ bool ProjectBackwardLaucher(const float* top_diff, const float* bottom_depth, co
   ProjectBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, top_diff, bottom_depth, bottom_meta_data,
-      height, width, channels, num_meta_data, grid_size, threshold, bottom_diff);
+      height, width, channels, num_meta_data, grid_size, kernel_size, threshold, bottom_diff);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)

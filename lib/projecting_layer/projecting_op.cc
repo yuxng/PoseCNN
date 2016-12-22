@@ -29,6 +29,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Project")
     .Attr("T: {float, double}")
+    .Attr("kernel_size: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
@@ -37,6 +38,7 @@ REGISTER_OP("Project")
 
 REGISTER_OP("ProjectGrad")
     .Attr("T: {float, double}")
+    .Attr("kernel_size: int")
     .Attr("threshold: float")
     .Input("bottom_data: T")
     .Input("bottom_depth: T")
@@ -48,6 +50,12 @@ template <typename Device, typename T>
 class ProjectOp : public OpKernel {
  public:
   explicit ProjectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -172,6 +180,7 @@ class ProjectOp : public OpKernel {
     }
   }
  private:
+  int kernel_size_;
   float threshold_;
 };
 
@@ -207,6 +216,12 @@ class ProjectOp<Eigen::GpuDevice, T> : public OpKernel {
   typedef Eigen::GpuDevice Device;
 
   explicit ProjectOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -259,6 +274,7 @@ class ProjectOp<Eigen::GpuDevice, T> : public OpKernel {
       width, num_channels, num_meta_data, grid_size, output_shape);
   }
  private:
+  int kernel_size_;
   float threshold_;
 };
 
@@ -266,12 +282,13 @@ REGISTER_KERNEL_BUILDER(Name("Project").Device(DEVICE_GPU).TypeConstraint<float>
 
 
 bool ProjectBackwardLaucher(const float* top_diff, const float* bottom_depth, const float* bottom_meta_data, const int batch_size,
-    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const int kernel_size, const float threshold,
     float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void ProjectingGradKernel(
     OpKernelContext* context, const Tensor* bottom_depth, const Tensor* bottom_meta_data, const Tensor* out_backprop,
-    const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int grid_size, const float threshold,
+    const int batch_size, const int height, const int width, const int channels, const int num_meta_data, 
+    const int grid_size, const int kernel_size, const float threshold,
     const TensorShape& tensor_output_shape) 
 {
   Tensor* output = nullptr;
@@ -283,7 +300,7 @@ static void ProjectingGradKernel(
 
   ProjectBackwardLaucher(
     out_backprop->flat<float>().data(), bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(),
-    batch_size, height, width, channels, num_meta_data, grid_size, threshold, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+    batch_size, height, width, channels, num_meta_data, grid_size, kernel_size, threshold, output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 
@@ -292,6 +309,12 @@ template <class Device, class T>
 class ProjectGradOp : public OpKernel {
  public:
   explicit ProjectGradOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the kernel size
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("kernel_size", &kernel_size_));
+    // Check that kernel size is positive
+    OP_REQUIRES(context, kernel_size_ >= 0,
+                errors::InvalidArgument("Need kernel_size >= 0, got ", kernel_size_));
     // Get the threshold
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold", &threshold_));
@@ -336,10 +359,11 @@ class ProjectGradOp : public OpKernel {
 
     ProjectingGradKernel(
       context, &bottom_depth, &bottom_meta_data, &out_backprop,
-      batch_size, height, width, num_channels, num_meta_data, grid_size, threshold_, output_shape);
+      batch_size, height, width, num_channels, num_meta_data, grid_size, kernel_size_, threshold_, output_shape);
 
   }
  private:
+  int kernel_size_;
   float threshold_;
 };
 

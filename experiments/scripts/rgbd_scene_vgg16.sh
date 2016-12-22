@@ -18,3 +18,11 @@ time ./tools/train_net.py --gpu 0 \
   --imdb rgbd_scene_train \
   --cfg experiments/cfgs/rgbd_scene.yml \
   --iters 40000
+
+# test FCN for multiple frames
+time ./tools/test_net.py --gpu 0 \
+  --network vgg16 \
+  --model output/rgbd_scene/rgbd_scene_train/vgg16_fcn_rgbd_multi_frame_rgbd_scene_iter_40000.ckpt \
+  --imdb rgbd_scene_val \
+  --cfg experiments/cfgs/rgbd_scene.yml \
+  --rig data/RGBDScene/camera.json

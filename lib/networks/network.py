@@ -177,8 +177,8 @@ class Network(object):
         return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, kernel_size, threshold, name=name)
 
     @layer
-    def project(self, input, threshold, name):
-        return project_op.project(input[0], input[1], input[2], threshold, name=name)
+    def project(self, input, kernel_size, threshold, name):
+        return project_op.project(input[0], input[1], input[2], kernel_size, threshold, name=name)
 
     @layer
     def compute_label(self, input, name):
