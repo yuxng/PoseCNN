@@ -222,7 +222,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     labels_2d = labels_pred_2d[0]
     labels_3d = labels_pred_3d[0]
 
-    return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32), state, label_3d
+    return labels_2d[0,:,:].astype(np.int32), labels_3d[0,:,:,:].astype(np.int32), state, label_3d
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, voxelizer):

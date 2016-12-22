@@ -32,9 +32,10 @@ def _project_grad(op, grad):
   data = op.inputs[0]
   depth = op.inputs[1]
   meta_data = op.inputs[2]
+  kernel_size = op.get_attr('kernel_size')
   threshold = op.get_attr('threshold')
 
   # compute gradient
-  data_grad = projecting_op.project_grad(data, depth, meta_data, grad, threshold)
+  data_grad = projecting_op.project_grad(data, depth, meta_data, grad, kernel_size, threshold)
 
   return [data_grad, None, None]  # List of one Tensor, since we have three input
