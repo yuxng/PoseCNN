@@ -34,7 +34,8 @@ class vgg16(Network):
         input_state = self.state
         input_label_3d = self.gt_label_3d
         outputs = []
-        labels_gt = []
+        labels_gt_2d = []
+        labels_gt_3d = []
         labels_pred_2d = []
         labels_pred_3d = []
         
@@ -85,22 +86,39 @@ class vgg16(Network):
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
                  .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
+                 .argmax_3d(name='label_3d'))
+
+            (self.feed('meanfield_3d', 'depth', 'meta_data')
+                 .project(8, 0.02, name='projection'))
+
+            (self.feed('upscore', 'projection')
+                 .add(name='add2')
+                 .log_softmax_high_dimension(self.num_classes, name='prob')
+                 .argmax_2d(name='label_2d'))
+
+            '''
+            (self.feed('backprojection', 'state')
+                 .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
+                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob')
                  .argmax_3d(name='label_3d'))
 
             (self.feed('prob', 'depth', 'meta_data')
                  .compute_label(name='label_2d'))
+            '''
 
             # collect outputs
             input_state = self.get_output('gru3d')[1]
             input_label_3d = self.get_output('backprojection')[1]
             outputs.append(self.get_output('prob'))
-            labels_gt.append(self.get_output('backprojection')[1])
+            labels_gt_2d.append(self.get_output('gt_label_2d'))
+            labels_gt_3d.append(self.get_output('backprojection')[1])
             labels_pred_2d.append(self.get_output('label_2d'))
             labels_pred_3d.append(self.get_output('label_3d'))
 
         self.layers['outputs'] = outputs
-        self.layers['labels_gt'] = labels_gt
+        self.layers['labels_gt_2d'] = labels_gt_2d
+        self.layers['labels_gt_3d'] = labels_gt_3d
         self.layers['labels_pred_2d'] = labels_pred_2d
         self.layers['labels_pred_3d'] = labels_pred_3d
         self.layers['output_state'] = input_state
