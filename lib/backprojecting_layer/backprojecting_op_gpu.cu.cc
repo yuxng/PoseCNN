@@ -143,6 +143,7 @@ bool BackprojectForwardLaucher(
       output_size, bottom_data, bottom_label, bottom_depth, bottom_meta_data, bottom_label_3d, height, width, channels, num_classes, num_meta_data,
       grid_size, kernel_size, threshold, top_data, top_label, top_flag);
 
+  cudaDeviceSynchronize();
   err = cudaGetLastError();
   if(cudaSuccess != err)
   {
@@ -229,6 +230,7 @@ bool BackprojectBackwardLaucher(const float* top_diff, const float* bottom_depth
       output_size, top_diff, bottom_depth, bottom_meta_data,
       height, width, channels, num_meta_data, grid_size, bottom_diff);
 
+  cudaDeviceSynchronize();
   err = cudaGetLastError();
   if(cudaSuccess != err)
   {

@@ -222,7 +222,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     labels_2d = labels_pred_2d[0]
     labels_3d = labels_pred_3d[0]
 
-    return labels_2d[0,:,:].astype(np.int32), labels_3d[0,:,:,:].astype(np.int32), state, label_3d
+    return labels_2d[0,:,:,0].astype(np.int32), labels_3d[0,:,:,:].astype(np.int32), state, label_3d
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, voxelizer):
@@ -435,7 +435,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
+        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

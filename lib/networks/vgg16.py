@@ -8,7 +8,7 @@ class vgg16(Network):
         self.grid_size = grid_size
         self.num_steps = num_steps
         self.num_units = num_units
-        self.scale = int(1 / scales[0])
+        self.scale = 1 / scales[0]
 
         if input_format == 'RGBD':
             self.data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 6])
@@ -78,25 +78,11 @@ class vgg16(Network):
 
             (self.feed('score_conv4', 'upscore_conv5')
                  .add(name='add1')
-                 .deconv(16*self.scale, 16*self.scale, self.num_classes, 8*self.scale, 8*self.scale, name='upscore', reuse=reuse, trainable=False))
+                 .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
-                 .backproject(self.grid_size, 8, 0.02, name='backprojection'))
+                 .backproject(self.grid_size, 4, 0.02, name='backprojection'))
 
-            (self.feed('backprojection', 'state')
-                 .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
-                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
-                 .argmax_3d(name='label_3d'))
-
-            (self.feed('meanfield_3d', 'depth', 'meta_data')
-                 .project(8, 0.02, name='projection'))
-
-            (self.feed('upscore', 'projection')
-                 .add(name='add2')
-                 .log_softmax_high_dimension(self.num_classes, name='prob')
-                 .argmax_2d(name='label_2d'))
-
-            '''
             (self.feed('backprojection', 'state')
                  .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
                  .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
@@ -105,7 +91,6 @@ class vgg16(Network):
 
             (self.feed('prob', 'depth', 'meta_data')
                  .compute_label(name='label_2d'))
-            '''
 
             # collect outputs
             input_state = self.get_output('gru3d')[1]
