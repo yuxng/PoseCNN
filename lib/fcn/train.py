@@ -64,8 +64,7 @@ class SolverWrapper(object):
             for i in range(cfg.TRAIN.NUM_STEPS):
                 score = scores[i]
                 label = labels[i]
-                # cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
-                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[3])
+                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
                 loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
             loss /= cfg.TRAIN.NUM_STEPS
         return loss
@@ -100,7 +99,7 @@ class SolverWrapper(object):
             data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
             # classification loss
             scores = self.net.get_output('outputs')
-            labels = self.net.get_output('labels_gt_2d')
+            labels = self.net.get_output('labels_gt_3d')
             loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer

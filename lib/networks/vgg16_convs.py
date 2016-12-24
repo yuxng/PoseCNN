@@ -6,7 +6,7 @@ class vgg16_convs(Network):
         self.inputs = []
         self.num_classes = num_units
         self.grid_size = grid_size
-        self.scale = int(1 / scales[0])
+        self.scale = 1 / scales[0]
 
         if input_format == 'RGBD':
             self.data = tf.placeholder(tf.float32, shape=[None, None, None, 6])
@@ -51,7 +51,7 @@ class vgg16_convs(Network):
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')
-             .deconv(16*self.scale, 16*self.scale, self.num_classes, 8*self.scale, 8*self.scale, name='upscore', trainable=False)
+             .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
 
