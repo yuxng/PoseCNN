@@ -1,4 +1,4 @@
-#include <df/depth/backprojection.h>
+#include <df/image/backprojection.h>
 
 #include <assert.h>
 #include <Eigen/Core>

@@ -158,7 +158,7 @@ template <typename Scalar, uint ResidualDim>
 struct JTJInitializer<Scalar,ResidualDim,1> {
 
     static __attribute__((always_inline)) __host__ __device__
-    UpperTriangularMatrix<Scalar,1> upperTriangularJTJ(const Eigen::Matrix<Scalar,ResidualDim,1,Eigen::DontAlign | Eigen::RowMajor> & jacobian) {
+    UpperTriangularMatrix<Scalar,1> upperTriangularJTJ(const Eigen::Matrix<Scalar,ResidualDim,1,Eigen::DontAlign> & jacobian) {
         return { jacobian.transpose()*jacobian };
     }
 
@@ -298,6 +298,19 @@ struct JTJAtomicAdder<Scalar,1> {
 
 };
 
+template <typename Scalar, int D>
+struct LinearSystemAtomicAdder {
+
+    __host__ __device__ inline static
+    void atomicAdd(LinearSystem<Scalar,D> & destination, const LinearSystem<Scalar,D> & source) {
+
+        JTJAtomicAdder<Scalar,D>::atomicAdd(destination.JTJ,source.JTJ);
+
+        VectorAtomicAdder<Scalar,D>::atomicAdd(destination.JTr.data(),source.JTr);
+
+    }
+
+};
 
 } // namespace internal
 

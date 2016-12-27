@@ -5,7 +5,7 @@
 
 namespace df {
 
-template <typename T>
+template <typename Scalar>
 class Poly3CameraModel;
 
 namespace internal {
@@ -19,110 +19,134 @@ struct CameraModelTraits<Poly3CameraModel> {
 
 } // namespace internal
 
-template <typename T>
-class Poly3CameraModel : public CameraModel<Poly3CameraModel, T> {
+template <typename Scalar>
+class Poly3CameraModel : public CameraModel<Poly3CameraModel, Scalar> {
 public:
 
     Poly3CameraModel(const pangolin::json::value & cameraSpec)
-        : CameraModel<Poly3CameraModel,T>(cameraSpec) { }
+        : CameraModel<Poly3CameraModel,Scalar>(cameraSpec) { }
 
     template <typename T2>
     Poly3CameraModel(const CameraModel<Poly3CameraModel,T2> & other)
-        : CameraModel<Poly3CameraModel,T>(other) { }
+        : CameraModel<Poly3CameraModel,Scalar>(other) { }
 
-    inline __host__ __device__ T focalLengthX() const {
+    Poly3CameraModel(const Eigen::Matrix<Scalar,7,1,Eigen::DontAlign> & params)
+        : CameraModel<Poly3CameraModel,Scalar>(params) { }
+
+    inline __host__ __device__ Scalar focalLengthX() const {
         return this->params()[0];
     }
 
-    inline __host__ __device__ T focalLengthY() const {
+    inline __host__ __device__ Scalar focalLengthY() const {
         return this->params()[1];
     }
 
-    inline __host__ __device__ T principalPointX() const {
+    inline __host__ __device__ Scalar principalPointX() const {
         return this->params()[2];
     }
 
-    inline __host__ __device__ T principalPointY() const {
+    inline __host__ __device__ Scalar principalPointY() const {
         return this->params()[3];
     }
 
-    inline __host__ __device__ T k1() const {
+    inline __host__ __device__ Scalar k1() const {
         return this->params()[4];
     }
 
-    inline __host__ __device__ T k2() const {
+    inline __host__ __device__ Scalar k2() const {
         return this->params()[5];
     }
 
-    inline __host__ __device__ T k3() const {
+    inline __host__ __device__ Scalar k3() const {
         return this->params()[6];
     }
 
-    inline __host__ __device__ Eigen::Matrix<T,2,1> focalLength() const {
-        return Eigen::Matrix<T,2,1>(focalLengthX(),focalLengthY());
+    inline __host__ __device__ Eigen::Matrix<Scalar,2,1> focalLength() const {
+        return Eigen::Matrix<Scalar,2,1>(focalLengthX(),focalLengthY());
     }
 
-    inline __host__ __device__ Eigen::Matrix<T,2,1> principalPoint() const {
-        return Eigen::Matrix<T,2,1>(principalPointX(),principalPointY());
+    inline __host__ __device__ Eigen::Matrix<Scalar,2,1> principalPoint() const {
+        return Eigen::Matrix<Scalar,2,1>(principalPointX(),principalPointY());
     }
 
-    inline Eigen::Matrix<T,2,1> __host__ __device__ project(const Eigen::Matrix<T,3,1> point3d) const {
+    inline Eigen::Matrix<Scalar,2,1> __host__ __device__ project(const Eigen::Matrix<Scalar,3,1> point3d) const {
 
-        const Eigen::Matrix<T,2,1> dehomog = this->dehomogenize(point3d);
+        const Eigen::Matrix<Scalar,2,1> dehomog = this->dehomogenize(point3d);
 
-        const T radius2 = dehomog.squaredNorm();
+        const Scalar radius2 = dehomog.squaredNorm();
 
-        const T radius4 = radius2 * radius2;
+        const Scalar radius4 = radius2 * radius2;
 
-        const T radius6 = radius4 * radius2;
+        const Scalar radius6 = radius4 * radius2;
 
-        const T distortionFactor = T(1) + k1()*radius2 + k2()*radius4 + k3()*radius6;
+        const Scalar distortionFactor = Scalar(1) + k1()*radius2 + k2()*radius4 + k3()*radius6;
 
-        const Eigen::Matrix<T,2,1> distorted = distortionFactor * dehomog;
+        const Eigen::Matrix<Scalar,2,1> distorted = distortionFactor * dehomog;
 
         return this->applyFocalLengthAndPrincipalPoint(distorted,focalLength(),principalPoint());
 
     }
 
-    inline Eigen::Matrix<T,3,1> __host__ __device__ unproject(const Eigen::Matrix<T,2,1> point2d, const T depth) const {
+    inline Eigen::Matrix<Scalar,3,1> __host__ __device__ unproject(const Eigen::Matrix<Scalar,2,1> point2d, const Scalar depth) const {
 
-        const Eigen::Matrix<T,2,1> dehomog = this->unapplyFocalLengthAndPrincipalPoint(point2d,focalLength(),principalPoint());
+        const Eigen::Matrix<Scalar,2,1> dehomog = this->unapplyFocalLengthAndPrincipalPoint(point2d,focalLength(),principalPoint());
 
-        const T radiusInit = dehomog.norm();
+        const Scalar radiusInit = dehomog.norm();
 
-        T radius = radiusInit;
-        for (int i = 0; i < maxUnprojectionIters; ++i) {
+        if (radiusInit > Scalar(0)) {
 
-            const T radius2 = radius*radius;
+            Scalar radius = radiusInit;
+            for (int i = 0; i < maxUnprojectionIters; ++i) {
 
-            const T radius4 = radius2*radius2;
+                const Scalar radius2 = radius*radius;
 
-            const T radius6 = radius4*radius2;
+                const Scalar radius4 = radius2*radius2;
 
-            const T distortionFactor = T(1) + k1()*radius2 + k2()*radius4 + k3()*radius6;
+                const Scalar radius6 = radius4*radius2;
 
-            const T distortionFactor2 = 2*radius2*(k1() + 2*k2()*radius2 + 3*k3()*radius4);
+                const Scalar distortionFactor = Scalar(1) + k1()*radius2 + k2()*radius4 + k3()*radius6;
 
-            const T distortionFactor3 = distortionFactor + distortionFactor2;
+                const Scalar distortionFactor2 = 2*radius2*(k1() + 2*k2()*radius2 + 3*k3()*radius4);
 
-            const T derivative = (radius * distortionFactor - radiusInit) * 2 * distortionFactor3;
+                const Scalar distortionFactor3 = distortionFactor + distortionFactor2;
 
-            const T derivative2 = (4 * radius * ( radius * distortionFactor - radiusInit) *
-                                   (3 * k1() + 10*k2()*radius2 + 21*k3()*radius4) +
-                                   2*distortionFactor3*distortionFactor3);
+                const Scalar derivative = (radius * distortionFactor - radiusInit) * 2 * distortionFactor3;
 
-            const T delta = derivative / derivative2;
+                const Scalar derivative2 = (4 * radius * ( radius * distortionFactor - radiusInit) *
+                                            (3 * k1() + 10*k2()*radius2 + 21*k3()*radius4) +
+                                            2*distortionFactor3*distortionFactor3);
 
-            radius -= delta;
+                const Scalar delta = derivative / derivative2;
+
+                radius -= delta;
+            }
+
+            const Scalar undistortionFactor = radius / radiusInit;
+
+            const Eigen::Matrix<Scalar,2,1> undistorted = dehomog*undistortionFactor;
+
+            const Eigen::Matrix<Scalar,2,1> scaled = undistorted * depth;
+
+            return Eigen::Matrix<Scalar,3,1>(scaled(0),scaled(1),depth);
+
+        } else {
+
+            return Eigen::Matrix<Scalar,3,1>(dehomog(0)*depth,dehomog(1)*depth,depth);
+
         }
 
-        const T undistortionFactor = radius / radiusInit;
+    }
 
-        const Eigen::Matrix<T,2,1> undistorted = dehomog*undistortionFactor;
+    inline Poly3CameraModel<Scalar> downsampleBy2() {
 
-        const Eigen::Matrix<T,2,1> scaled = undistorted * depth;
+        Eigen::Matrix<Scalar,7,1,Eigen::DontAlign> downsampledParams = this->params_;
 
-        return Eigen::Matrix<T,3,1>(scaled(0),scaled(1),depth);
+        downsampledParams.template head<2>() /= Scalar(2);
+
+        downsampledParams.template segment<2>(2) /= Scalar(2);
+        downsampledParams.template segment<2>(2) -= Eigen::Matrix<Scalar,2,1>(1 / Scalar(4), 1 / Scalar(4));
+
+        return Poly3CameraModel<Scalar>(downsampledParams);
 
     }
 

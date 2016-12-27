@@ -2,9 +2,9 @@
 
 namespace df {
 
-template <int __I__>
+template <int _I_>
 struct IntToType {
-    static constexpr int I = __I__;
+    static constexpr int I = _I_;
 };
 
 struct NullType {

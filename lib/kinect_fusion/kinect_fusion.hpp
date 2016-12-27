@@ -6,10 +6,9 @@
 #include <df/camera/cameraFactory.h>
 #include <df/camera/poly3.h>
 #include <df/camera/rig.h>
-#include <df/depth/backprojection.h>
+#include <df/image/backprojection.h>
 #include <df/fusion/fusion.h>
 #include <df/optimization/icp.h>
-#include <df/icpcuda/ICPOdometry.h>
 #include <df/prediction/glRender.h>
 #include <df/prediction/glRenderTypes.h>
 #include <df/prediction/raycast.h>
@@ -25,6 +24,7 @@
 #include <df/util/tensor.h>
 #include <df/voxel/tsdf.h>
 #include <df/voxel/voxelGrid.h>
+#include <df/voxel/compositeVoxel.h>
 
 namespace df {
 
@@ -90,16 +90,15 @@ class KinectFusion
   ManagedTensor<2, float, DeviceResident>* dVertices_;
   ManagedTensor<2, float, DeviceResident>* dWeldedVertices_;
   ManagedTensor<1, int, DeviceResident>* dIndices_;
-  ManagedTensor<2, float, DeviceResident>* dNormals_;
+  ManagedDeviceTensor1<Eigen::UnalignedVec3<float> >* dNormals_;
   ManagedTensor<2, unsigned char, DeviceResident>* dColors_;
   uint numUniqueVertices_;
 
   // voxels
-  ManagedTensor<3, TsdfVoxel, DeviceResident>* voxel_data_;
-  DeviceVoxelGrid<float, TsdfVoxel>* voxel_grid_;
+  ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>* voxel_data_;
+  DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >* voxel_grid_;
 
   // ICP
-  ICPOdometry* icpOdom_;
   RigidTransformer<float>* transformer_;
 
   // rendering

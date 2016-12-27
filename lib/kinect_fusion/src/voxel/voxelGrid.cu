@@ -1,6 +1,8 @@
+#include <df/voxel/color.h>
+#include <df/voxel/compositeVoxel.h>
 #include <df/voxel/voxelGrid.h>
-
 #include <df/voxel/tsdf.h>
+
 #include <df/util/cudaHelpers.h>
 
 #include <iostream>
@@ -38,7 +40,9 @@ void VoxelGridFiller<DeviceResident>::fill(Tensor<3,VoxelT,DeviceResident> & gri
 
 }
 
-template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,TsdfVoxel,DeviceResident> &, const TsdfVoxel &);
+template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,CompositeVoxel<float,TsdfVoxel>,DeviceResident> &, const CompositeVoxel<float,TsdfVoxel> &);
+
+template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &, const CompositeVoxel<float,TsdfVoxel,ColorVoxel> &);
 
 template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,Eigen::Matrix<int,4,1,Eigen::DontAlign>,DeviceResident> &, const Eigen::Matrix<int,4,1,Eigen::DontAlign> &);
 

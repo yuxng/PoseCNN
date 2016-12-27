@@ -10,19 +10,17 @@
 """Test a FCN on an image database."""
 
 import _init_paths
+from kinect_fusion import kfusion
 from datasets.factory import get_imdb
 import argparse
 import pprint
 import time, os, sys
-from utils.voxelizer import Voxelizer, set_axes_equal
-from kinect_fusion import kfusion
+#from utils.voxelizer import Voxelizer, set_axes_equal
 import time
 from utils.se3 import *
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import numpy as np
-import scipy.io
+# import scipy.io
 
 def parse_args():
     """
@@ -69,16 +67,24 @@ if __name__ == '__main__':
     num_images = len(imdb.image_index)
 
     # voxelizer
-    voxelizer = Voxelizer(128, 7)
+    #voxelizer = Voxelizer(128, imdb.num_classes)
+    labels_voxel = np.zeros((128, 128, 128), dtype=np.int32) 
 
     # kinect fusion
     KF = kfusion.PyKinectFusion(args.rig_name)
 
+    # construct colors
+    colors = np.zeros((3, imdb.num_classes), dtype=np.uint8)
+    for i in range(imdb.num_classes):
+        colors[0, i] = 255 * imdb._class_colors[i][0]
+        colors[1, i] = 255 * imdb._class_colors[i][1]
+        colors[2, i] = 255 * imdb._class_colors[i][2]
+    colors[:,0] = 255
+
     video_index = ''
-    transformations = []
-    cameras = []
-    RTs = []
     have_prediction = False
+    restart = False
+    RTs = []
     for i in xrange(num_images):
         print i
         # parse image name
@@ -86,78 +92,42 @@ if __name__ == '__main__':
         pos = image_index.find('/')
         if video_index == '':
             video_index = image_index[:pos]
-            voxelizer.reset()
+            #voxelizer.reset()
             have_prediction = False
+            restart = False
         else:
             if video_index != image_index[:pos]:
-                # show the voxel space
-                voxelizer.draw()
-
-                # show the 3D points
-                fig = plt.figure()
-                ax = fig.add_subplot(111, projection='3d')
-                ax.scatter(temp_points[:,0], temp_points[:,1], temp_points[:,2], c='r', marker='o')
-                print 'X:', voxelizer.min_x, voxelizer.max_x
-                print 'Y:', voxelizer.min_y, voxelizer.max_y
-                print 'Z:', voxelizer.min_z, voxelizer.max_z
-
-                # show the camera positions
-                ax.scatter(0, 0, 0, c='g', marker='o')
-                for j in range(len(transformations)):
-                    t = transformations[j]
-                    ax.scatter(t[0, 3], t[1, 3], t[2, 3], c='g', marker='o')
-                    RT = RTs[0]
-                    C = cameras[j]
-                    C1 = np.dot(RT[0:3, 0:3], np.transpose(C)) + RT[0:3, 3].reshape((3,1))
-                    ax.scatter(C1[0, 0], C1[1, 0], C1[2, 0], c='b', marker='o')
-
-                ax.set_xlabel('X')
-                ax.set_ylabel('Y')
-                ax.set_zlabel('Z')
-                set_axes_equal(ax)
-                plt.show()
-
                 video_index = image_index[:pos]
                 print 'start video {}'.format(video_index)
-                voxelizer.reset()
+                #voxelizer.reset()
                 have_prediction = False
+                restart = False
                 KF.reset()
-                transformations = []
-                cameras = []
                 RTs = []
 
         # RGB image
         im = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
+        tmp = im.copy()
+        tmp[:,:,0] = im[:,:,2]
+        tmp[:,:,2] = im[:,:,0]
+        im = tmp
 
         # depth image
         im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
 
         # load meta data
-        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-        RTs.append(meta_data['rotation_translation_matrix'])
-        cameras.append(meta_data['camera_location'])
+        # meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+        # RTs.append(meta_data['rotation_translation_matrix'])
 
         # backprojection for the first frame
-        if not have_prediction:
-            points = voxelizer.backproject_camera(im_depth, meta_data)
-            voxelizer.voxelize(points)
-            KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
-
-            # sample template points
-            X = points[0,:]
-            Y = points[1,:]
-            Z = points[2,:]
-            index = np.where(np.isfinite(X))[0]
-            perm = np.random.permutation(np.arange(len(index)))
-            num_temp = min(10000, len(index))
-            index = index[perm[:num_temp]]
-            temp_points = np.zeros((num_temp, 3), dtype=np.float64)
-            temp_points[:,0] = X[index]
-            temp_points[:,1] = Y[index]
-            temp_points[:,2] = Z[index]
+        # points = voxelizer.backproject_camera(im_depth, meta_data)
+        if not have_prediction:    
+            # voxelizer.voxelize(points)
+            # KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
+            KF.set_voxel_grid(-1.032, -1.713, -0.2234, 2.5, 2.5, 2.5)
 
         # run kinect fusion
-        KF.feed_data(im_depth, im, im.shape[1], im.shape[0])
+        KF.feed_data(im_depth, im, im.shape[1], im.shape[0], 10000.0) #float(meta_data['factor_depth']))
         KF.back_project();
         if have_prediction:
             pose_world2live, pose_live2world = KF.solve_pose()
@@ -167,9 +137,15 @@ if __name__ == '__main__':
             pose_world2live[1, 1] = 1
             pose_world2live[2, 2] = 1
             pose_live2world = pose_world2live
-        transformations.append(pose_live2world)
 
-        # compute pose from GT from comparison
+        # check if points outside voxel space
+        #flag = voxelizer.check_points(points, pose_live2world)
+        #if not flag:
+        #    print 'points outside voxel space, restart from next frame'
+        #    restart = True
+
+        '''
+        # compute pose from GT for comparison
         RT_world = RTs[0]
         RT_live = RTs[-1]
         RT_world2live = se3_mul(RT_live, se3_inverse(RT_world))
@@ -180,22 +156,18 @@ if __name__ == '__main__':
         print "pose_live2world:"
         print pose_live2world
         print RT_live2world
-        time.sleep(3)
+        # time.sleep(3)
+        '''
 
         KF.fuse_depth()
+        print 'finish fuse depth'
         KF.extract_surface()
+        print 'finish extract surface'
         KF.render()
+        print 'finish render'
+        KF.feed_label(im, labels_voxel, colors)
+        print 'finish feed label'
         KF.draw()
-
-        #"""
-        # update the voxels
-        points = voxelizer.backproject_camera(im_depth, meta_data)
-        RT = pose_live2world
-        points = np.dot(RT[0:3, 0:3], points) + np.dot(RT[0:3, 3].reshape((3,1)), np.ones((1, points.shape[1]), dtype=np.float32))
-        # time.sleep(3)
-        indexes = voxelizer.voxelize(points)
-        voxelizer.update(im_depth, indexes)
-        # voxelizer.draw()
-        #"""
+        print 'finish draw'
 
         have_prediction = True

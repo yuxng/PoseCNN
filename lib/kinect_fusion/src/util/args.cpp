@@ -7,6 +7,8 @@
 #include <set>
 #include <stdexcept>
 
+#include <iostream>
+
 namespace df {
 
 void OptParse::registerOptionGeneric(const std::string flag, void * valuePtr, const unsigned char shorthand, const bool required, const ArgType type) {
@@ -34,7 +36,7 @@ void OptParse::registerOption(const std::string flag, bool & value, const unsign
 }
 
 
-void OptParse::parseOptions(int & argc, char * * & argv) {
+int OptParse::parseOptions(int & argc, char * * & argv) {
 
     const std::size_t nArgs = flags_.size();
     if (nArgs >= std::numeric_limits<unsigned char>::max()) {
@@ -54,6 +56,7 @@ void OptParse::parseOptions(int & argc, char * * & argv) {
             if (usedShorthands.find(shorthands_[i]) != usedShorthands.end()) {
                 throw std::runtime_error("the shorthand " + std::to_string(shorthand) + " was used more than once");
             }
+
             shorthandString.append( { shorthand } );
             if (types_[i] != Boolean) {
                 shorthandString.append({':'});
@@ -64,7 +67,6 @@ void OptParse::parseOptions(int & argc, char * * & argv) {
         options[i].has_arg = types_[i] == Boolean ? no_argument : required_argument;
         options[i].flag = nullptr;
         options[i].val = shorthand;
-
     }
 
     std::memset(&options.back(),0,sizeof(struct option));
@@ -77,6 +79,7 @@ void OptParse::parseOptions(int & argc, char * * & argv) {
                 nextShorthand++;
             }
             shorthands_[i] = nextShorthand;
+            options[i].val = shorthands_[i];
             ++nextShorthand;
         }
     }
@@ -127,6 +130,8 @@ void OptParse::parseOptions(int & argc, char * * & argv) {
             throw std::runtime_error("did not find required argument '" + flags_[i] + "'");
         }
     }
+
+    return optind;
 
 }
 
