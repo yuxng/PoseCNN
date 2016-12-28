@@ -15,12 +15,10 @@ from datasets.factory import get_imdb
 import argparse
 import pprint
 import time, os, sys
-#from utils.voxelizer import Voxelizer, set_axes_equal
 import time
 from utils.se3 import *
 import cv2
 import numpy as np
-# import scipy.io
 
 def parse_args():
     """
@@ -66,8 +64,7 @@ if __name__ == '__main__':
     """Test a FCN on an image database."""
     num_images = len(imdb.image_index)
 
-    # voxelizer
-    #voxelizer = Voxelizer(128, imdb.num_classes)
+    # voxel labels
     labels_voxel = np.zeros((128, 128, 128), dtype=np.int32) 
 
     # kinect fusion
@@ -83,8 +80,6 @@ if __name__ == '__main__':
 
     video_index = ''
     have_prediction = False
-    restart = False
-    RTs = []
     for i in xrange(num_images):
         print i
         # parse image name
@@ -92,18 +87,28 @@ if __name__ == '__main__':
         pos = image_index.find('/')
         if video_index == '':
             video_index = image_index[:pos]
-            #voxelizer.reset()
             have_prediction = False
-            restart = False
+            # open file to save camera poses
+            filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
+            file = open(filename, 'w')
+            frame_index = 0
         else:
             if video_index != image_index[:pos]:
+                # save the model
+                filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.ply'
+                KF.save_model(filename)
+                print 'save model to file: {}'.format(filename)
+
                 video_index = image_index[:pos]
                 print 'start video {}'.format(video_index)
-                #voxelizer.reset()
                 have_prediction = False
-                restart = False
                 KF.reset()
-                RTs = []
+
+                # open new pose file
+                file.close()
+                filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
+                file = open(filename, 'w')
+                frame_index = 0
 
         # RGB image
         im = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
@@ -115,19 +120,12 @@ if __name__ == '__main__':
         # depth image
         im_depth = cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED)
 
-        # load meta data
-        # meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-        # RTs.append(meta_data['rotation_translation_matrix'])
-
         # backprojection for the first frame
-        # points = voxelizer.backproject_camera(im_depth, meta_data)
         if not have_prediction:    
-            # voxelizer.voxelize(points)
-            # KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
-            KF.set_voxel_grid(-1.032, -1.713, -0.2234, 2.5, 2.5, 2.5)
+            KF.set_voxel_grid(-3, -3, -3, 6, 6, 7)
 
         # run kinect fusion
-        KF.feed_data(im_depth, im, im.shape[1], im.shape[0], 10000.0) #float(meta_data['factor_depth']))
+        KF.feed_data(im_depth, im, im.shape[1], im.shape[0], 10000.0)
         KF.back_project();
         if have_prediction:
             pose_world2live, pose_live2world = KF.solve_pose()
@@ -138,26 +136,11 @@ if __name__ == '__main__':
             pose_world2live[2, 2] = 1
             pose_live2world = pose_world2live
 
-        # check if points outside voxel space
-        #flag = voxelizer.check_points(points, pose_live2world)
-        #if not flag:
-        #    print 'points outside voxel space, restart from next frame'
-        #    restart = True
-
-        '''
-        # compute pose from GT for comparison
-        RT_world = RTs[0]
-        RT_live = RTs[-1]
-        RT_world2live = se3_mul(RT_live, se3_inverse(RT_world))
-        RT_live2world = se3_inverse(RT_world2live)
-        print "pose_world2live:"
-        print pose_world2live
-        print RT_world2live
-        print "pose_live2world:"
-        print pose_live2world
-        print RT_live2world
-        # time.sleep(3)
-        '''
+        # save pose_world2live to file
+        file.write('{:05d}\n'.format(frame_index))
+        for j in range(3):
+            file.write('{} {} {} {}\n'.format(pose_world2live[j, 0], pose_world2live[j, 1], pose_world2live[j, 2], pose_world2live[j, 3]))
+        frame_index += 1
 
         KF.fuse_depth()
         print 'finish fuse depth'
@@ -171,3 +154,9 @@ if __name__ == '__main__':
         print 'finish draw'
 
         have_prediction = True
+
+        if i == num_images - 1:
+            # save the model
+            filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.ply'
+            KF.save_model(filename)
+            file.close()

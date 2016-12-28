@@ -29,6 +29,7 @@
 namespace df {
 
 typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
+typedef Eigen::Matrix<int,3,1,Eigen::DontAlign> Vec3i;
 
 class KinectFusion
 {
@@ -50,6 +51,7 @@ class KinectFusion
   void feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
+  void save_model(std::string filename);
 
   ManagedTensor<2, float>* depth_map() { return depth_map_; };
   pangolin::GlTexture* color_texture() { return colorTex_; };

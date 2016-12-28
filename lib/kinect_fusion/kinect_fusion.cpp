@@ -129,7 +129,7 @@ void KinectFusion::create_tensors()
   colorBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_UNSIGNED_BYTE, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
 
   // voxels
-  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>({256, 256, 256});
+  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>({512, 512, 512});
   float voxelGridOffsetX = -1;
   float voxelGridOffsetY = -1;
   float voxelGridOffsetZ = 0;
@@ -485,6 +485,43 @@ void KinectFusion::reset()
   voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel>::zero());
   delete transformer_;
   transformer_ = new RigidTransformer<float>;
+}
+
+
+// save reconstructed model
+void KinectFusion::save_model(std::string filename)
+{
+  ManagedHostTensor1<Vec3> hWeldedVertices(numUniqueVertices_);
+  hWeldedVertices.copyFrom(DeviceTensor1<Vec3>(numUniqueVertices_, reinterpret_cast<Vec3*>(dWeldedVertices_->data())));
+
+  const int nFaces = dIndices_->length() / 3;
+  ManagedHostTensor1<Vec3i> hIndices(nFaces);
+  hIndices.copyFrom(DeviceTensor1<Vec3i>(nFaces, reinterpret_cast<Vec3i *>(dIndices_->data())));
+
+  std::ofstream meshStream(filename);
+  meshStream << "ply" << std::endl;
+  meshStream << "format ascii 1.0" << std::endl;
+
+  meshStream << "element vertex " << numUniqueVertices_ << std::endl;
+  meshStream << "property float32 x" << std::endl;
+  meshStream << "property float32 y" << std::endl;
+  meshStream << "property float32 z" << std::endl;
+  meshStream << "element face " << nFaces << std::endl;
+  meshStream << "property list uint8 int32 vertex_index" << std::endl;
+  meshStream << "end_header" << std::endl;
+
+  for (int i = 0; i < numUniqueVertices_; i++)
+  {
+    const Vec3 & vGrid = hWeldedVertices(i);
+    const Vec3 vWorld = voxel_grid_->gridToWorld(vGrid);
+    meshStream << vWorld(0) << " " << vWorld(1) << " " << vWorld(2) << std::endl;
+  }
+
+  for (int i = 0; i < nFaces; ++i)
+  {
+    const Vec3i & face = hIndices(i);
+    meshStream << "3 " << face(2) << " " << face(1) << " " << face(0) << std::endl;
+  }
 }
 
 int main(int argc, char * * argv) 
