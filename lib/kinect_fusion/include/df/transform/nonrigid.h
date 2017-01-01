@@ -129,6 +129,22 @@ public:
         return *nearestNeighborGrid_;
     }
 
+    inline DeviceTensor1<Vec3> deviceBaseLevelVertices() {
+
+        updateDeviceVertices();
+
+        return deviceBaseLevelVertices_;
+
+    }
+
+    inline DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > deviceBaseLevelDualQuaternionTransforms() {
+
+        updateDeviceTransforms();
+
+        return deviceBaseLevelDualQuaternionTransforms_;
+
+    }
+
     class DeviceModule {
     public:
 
@@ -138,7 +154,7 @@ public:
                             const DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > & deviceBaseLevelTransforms,
                             const Scalar blendingSigma);
 
-        inline __host__ __device__ Vec3 transformWorldToLive(const Vec3 & vertexInWorldCoords);
+        inline __host__ __device__ Vec3 transformWorldToLive(const Vec3 & vertexInWorldCoords) const;
 
     private:
 
@@ -154,7 +170,7 @@ public:
 
     };
 
-    inline DeviceModule deviceModule() {
+    inline DeviceModule deviceModule() const {
 
         updateDeviceVerticesAndTransforms();
 
@@ -166,7 +182,7 @@ public:
 
 private:
 
-    inline void updateDeviceVertices() {
+    inline void updateDeviceVertices() const {
 
         if (!deviceVerticesCurrent_) {
 
@@ -186,9 +202,7 @@ private:
 
     }
 
-    inline void updateDeviceVerticesAndTransforms() {
-
-        updateDeviceVertices();
+    inline void updateDeviceTransforms() const {
 
         if (!deviceTransformsCurrent_) {
 
@@ -209,12 +223,20 @@ private:
 
     }
 
+    inline void updateDeviceVerticesAndTransforms() const {
+
+        updateDeviceVertices();
+
+        updateDeviceTransforms();
+
+    }
+
     template <int K>
     void computeDeformationGraphNearestNeighbors(const Scalar nearestNeighborSigma);
 
     void toDeviceRecenteredDualQuaternions(DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > & dualQuaternions,
                                            const ConstHostTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & transformationOrigins,
-                                           const ConstHostTensor1<TransformT<Scalar> > & transforms);
+                                           const ConstHostTensor1<TransformT<Scalar> > & transforms) const;
 
     std::vector<std::vector<Vec3> > deformationGraphVertices_;
 
@@ -233,13 +255,13 @@ private:
     Scalar levelToLevelScale_;
     int numRegularizationNeighbors_;
 
-    ManagedDeviceTensor1<Vec3> deviceBaseLevelVertices_;
-
-    ManagedDeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > deviceBaseLevelDualQuaternionTransforms_;
-
     uint serialNumber_;
 
-    bool deviceVerticesCurrent_, deviceTransformsCurrent_;
+    mutable ManagedDeviceTensor1<Vec3> deviceBaseLevelVertices_;
+
+    mutable ManagedDeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > deviceBaseLevelDualQuaternionTransforms_;
+
+    mutable bool deviceVerticesCurrent_, deviceTransformsCurrent_;
 };
 
 

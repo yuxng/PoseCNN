@@ -37,7 +37,7 @@ public:
 
     typedef RigidTransformer<Scalar> DeviceModule;
 
-    inline DeviceModule deviceModule() {
+    inline DeviceModule deviceModule() const {
 
         return *this;
 

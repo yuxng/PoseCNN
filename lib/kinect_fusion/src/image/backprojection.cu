@@ -1,4 +1,4 @@
-#include <df/depth/backprojection.h>
+#include <df/image/backprojection.h>
 
 #include <df/util/cudaHelpers.h>
 #include <df/util/macros.h>

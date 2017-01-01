@@ -15,4 +15,8 @@ void computeSignedDistanceGradientNormals(const Tensor<2,Scalar,DeviceResident> 
                                           Tensor<2,Scalar,DeviceResident> & normals,
                                           VoxelGrid<Scalar,VoxelT,DeviceResident> & voxelGrid);
 
+template <typename Scalar, int D>
+void computeVertMapNormals(const DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > & vertMap,
+                           DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > & normMap);
+
 } // namespace df

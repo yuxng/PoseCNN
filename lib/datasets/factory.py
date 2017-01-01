@@ -29,7 +29,7 @@ for split in ['train', 'val']:
             datasets.gmu_scene(split))
 
 # rgbd scene dataset
-for split in ['train', 'val']:
+for split in ['train', 'val', 'trainval']:
     name = 'rgbd_scene_{}'.format(split)
     print name
     __sets[name] = (lambda split=split:

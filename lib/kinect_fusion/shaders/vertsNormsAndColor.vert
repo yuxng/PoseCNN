@@ -5,9 +5,11 @@ uniform mat4 modelViewMatrix;
 
 layout (location = 0) in vec3 vertexPosition;
 layout (location = 1) in vec3 vertexNormal;
+layout (location = 2) in vec3 vertexColor;
 
 out vec3 fragPosition;
 out vec3 fragNormal;
+out vec3 fragColor;
 
 void main()
 {
@@ -23,7 +25,8 @@ void main()
     vec4 vertexPositionCam = modelViewMatrix*vec4(vertexPosition,1.0);
     fragPosition = vec3(vertexPositionCam);
 
-    gl_Position = projectionMatrix*vertexPositionCam;
+    fragColor = vertexColor;
 
+    gl_Position = projectionMatrix*vertexPositionCam;
 
 }
