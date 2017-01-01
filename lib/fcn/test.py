@@ -48,6 +48,16 @@ def _get_image_blob(im, im_depth, meta_data):
     im_scale_factors.append(im_scale)
     processed_ims.append(im)
 
+    # depth
+    im_orig = im_depth.astype(np.float32, copy=True)
+    im_orig = im_orig / im_orig.max() * 255
+    im_orig = np.tile(im_orig[:,:,np.newaxis], (1,1,3))
+    im_orig -= cfg.PIXEL_MEANS
+
+    processed_ims_depth = []
+    im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+    processed_ims_depth.append(im)
+
     # meta data
     K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
     fx = K[0, 0]
@@ -66,15 +76,16 @@ def _get_image_blob(im, im_depth, meta_data):
     im_orig = im_normal.astype(np.float32, copy=True)
     im_orig -= cfg.PIXEL_MEANS
 
-    processed_ims_depth = []
+    processed_ims_normal = []
     im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-    processed_ims_depth.append(im)
+    processed_ims_normal.append(im)
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
+    blob_normal = im_list_to_blob(processed_ims_normal, 3)
 
-    return blob, blob_depth, np.array(im_scale_factors)
+    return blob, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
 def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -82,8 +93,8 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_
     """
 
     # compute image blob
-    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
-    im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=3)
+    im_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
+    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=3)
 
     # depth
     depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
@@ -132,8 +143,10 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_
         data_blob = im_rgbd_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
-    elif cfg.INPUT == 'NORMAL':
+    elif cfg.INPUT == 'DEPTH':
         data_blob = im_depth_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
     feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.depth: depth_blob, \
                  net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
 
@@ -151,7 +164,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     """
 
     # compute image blob
-    im_blob, im_depth_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
+    im_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
 
     # depth
     depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
@@ -201,6 +214,7 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     width_blob = im_blob.shape[2]
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height_blob, width_blob, -1))
     im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height_blob, width_blob, -1))
+    im_normal_blob = im_normal_blob.reshape((num_steps, ims_per_batch, height_blob, width_blob, -1))
 
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
@@ -212,8 +226,10 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
         data_blob = im_rgbd_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
-    elif cfg.INPUT == 'NORMAL':
+    elif cfg.INPUT == 'DEPTH':
         data_blob = im_depth_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
     feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
                  net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
     labels_pred_2d, labels_pred_3d, state, label_3d = sess.run([net.get_output('labels_pred_2d'), net.get_output('labels_pred_3d'), \
