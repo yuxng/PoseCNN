@@ -64,7 +64,7 @@ class SolverWrapper(object):
             for i in range(cfg.TRAIN.NUM_STEPS):
                 score = scores[i]
                 label = labels[i]
-                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
+                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[3])
                 loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
             loss /= cfg.TRAIN.NUM_STEPS
         return loss
@@ -76,7 +76,6 @@ class SolverWrapper(object):
         """
 
         with tf.name_scope('loss'):
-            # cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
             cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
             loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
 
@@ -99,7 +98,7 @@ class SolverWrapper(object):
             data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
             # classification loss
             scores = self.net.get_output('outputs')
-            labels = self.net.get_output('labels_gt_3d')
+            labels = self.net.get_output('labels_gt_2d')
             loss = self.loss_cross_entropy(scores, labels)
 
         # optimizer
@@ -134,7 +133,7 @@ class SolverWrapper(object):
             else:
                 feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
                            self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
-                           self.net.state: blobs['data_state'], self.net.gt_label_3d: blobs['data_label_3d']}
+                           self.net.state: blobs['data_state'], self.net.points: blobs['data_points']}
             
             timer.tic()
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)

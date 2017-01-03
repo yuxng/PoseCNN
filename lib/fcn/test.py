@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-from kinect_fusion import kfusion
+# from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -159,7 +159,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_
     return labels_2d[0,:,:], labels_3d
 
 
-def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world):
+def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world):
     """segment image
     """
 
@@ -231,17 +231,16 @@ def im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, p
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
     feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
-                 net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
-    labels_pred_2d, labels_pred_3d, state, label_3d = sess.run([net.get_output('labels_pred_2d'), net.get_output('labels_pred_3d'), \
-        net.get_output('output_state'),  net.get_output('output_label_3d')], feed_dict=feed_dict)
+                 net.meta_data: meta_data_blob, net.points: points}
+    labels_pred_2d, state, points = sess.run([net.get_output('labels_pred_2d'), \
+        net.get_output('output_state'),  net.get_output('output_points')], feed_dict=feed_dict)
 
     labels_2d = labels_pred_2d[0]
-    labels_3d = labels_pred_3d[0]
 
-    return labels_2d[0,:,:,0].astype(np.int32), labels_3d[0,:,:,:].astype(np.int32), state, label_3d
+    return labels_2d[0,:,:].astype(np.int32), state, points
 
 
-def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, voxelizer):
+def vis_segmentations(im, im_depth, labels, labels_gt, colors, voxelizer):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -254,10 +253,9 @@ def vis_segmentations(im, im_depth, labels, labels_gt, labels_voxel, colors, vox
     ax.set_title('input image')
 
     # show depth
-    ax = fig.add_subplot(222, projection='3d')
-    voxelizer.draw(labels_voxel, colors, ax)
-    # plt.imshow(im_depth)
-    # ax.set_title('input depth')
+    ax = fig.add_subplot(222)
+    plt.imshow(im_depth)
+    ax.set_title('input depth')
 
     # show class label
     ax = fig.add_subplot(223)
@@ -332,9 +330,12 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
     video_index = ''
     video_count = 0
     have_prediction = False
-    restart = False
     for i in xrange(num_images):
     # for i in perm:
+        rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        height = rgba.shape[0]
+        width = rgba.shape[1]
+
         # parse image name
         image_index = imdb.image_index[i]
         pos = image_index.find('/')
@@ -343,31 +344,21 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             video_count = 0
             voxelizer.reset()
             have_prediction = False
-            restart = False
-            state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
-            label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
+            state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+            points = np.zeros((1, height, width, 3), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 voxelizer.reset()
                 have_prediction = False
-                restart = False
                 video_count = 0
                 video_index = image_index[:pos]
-                state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
-                label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
+                state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+                points = np.zeros((1, height, width, 3), dtype=np.float32)
                 print 'start video {}'.format(video_index)
-            else:
-                if restart:
-                    voxelizer.reset()
-                    have_prediction = False
-                    restart = False
-                    state = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
-                    label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, imdb.num_classes), dtype=np.float32)
-                    print 'restart video {}'.format(video_index)
+
         video_count += 1
 
         # read color image
-        rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         if rgba.shape[2] == 4:
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
@@ -392,9 +383,9 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         # backprojection for the first frame
-        points = voxelizer.backproject_camera(im_depth, meta_data)
+        points_voxel = voxelizer.backproject_camera(im_depth, meta_data)
         if not have_prediction:    
-            voxelizer.voxelize(points)
+            voxelizer.voxelize(points_voxel)
             if cfg.TEST.KINECT_FUSION:
                 KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
             else:
@@ -420,13 +411,13 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_live2world = se3_inverse(pose_world2live)
 
         # check if points outside voxel space
-        flag = voxelizer.check_points(points, pose_live2world)
-        if not flag:
-            print 'points outside voxel space, restart from next frame'
-            restart = True
+        # flag = voxelizer.check_points(points, pose_live2world)
+        # if not flag:
+        #    print 'points outside voxel space, restart from next frame'
+        #    restart = True
 
         _t['im_segment'].tic()
-        labels, labels_voxel, state, label_3d = im_segment(sess, net, im, im_depth, state, label_3d, meta_data, voxelizer, pose_world2live, pose_live2world)
+        labels, state, points = im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
         # time.sleep(3)
 
@@ -451,7 +442,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
@@ -541,7 +532,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
         im_label = imdb.labels_to_image(im, labels)
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, labels_voxel, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors, voxelizer)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
