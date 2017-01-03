@@ -3,6 +3,16 @@ echo $TF_INC
 
 CUDA_PATH=/usr/local/cuda
 
+cd computing_flow_layer
+
+nvcc -std=c++11 -c -o computing_flow_op.cu.o computing_flow_op_gpu.cu.cc \
+	-I $TF_INC -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -arch=sm_50
+
+g++ -std=c++11 -shared -o computing_flow.so computing_flow_op.cc \
+	computing_flow_op.cu.o -I $TF_INC -fPIC -lcudart -L $CUDA_PATH/lib64 -D_GLIBCXX_USE_CXX11_ABI=0
+cd ..
+echo 'build computing flow layer'
+
 cd backprojecting_layer
 
 nvcc -std=c++11 -c -o backprojecting_op.cu.o backprojecting_op_gpu.cu.cc \

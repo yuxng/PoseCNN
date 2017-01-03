@@ -2,12 +2,10 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16(Network):
-    def __init__(self, input_format, grid_size, num_steps, num_units, scales, trainable=True):
+    def __init__(self, input_format, num_steps, num_classes, scales, trainable=True):
         self.inputs = []
-        self.num_classes = num_units
-        self.grid_size = grid_size
         self.num_steps = num_steps
-        self.num_units = num_units
+        self.num_classes = num_classes
         self.scale = 1 / scales[0]
 
         if input_format == 'RGBD':
@@ -20,9 +18,9 @@ class vgg16(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
-        self.state = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_units])
-        self.gt_label_3d = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
-        self.layers = dict({'data': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'gt_label_3d': []})
+        self.state = tf.placeholder(tf.float32, [None, None, None, self.num_classes])
+        self.points = tf.placeholder(tf.float32, [None, None, None, 3])
+        self.layers = dict({'data': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'points': []})
         self.trainable = trainable
         self.setup()
 
@@ -32,12 +30,10 @@ class vgg16(Network):
         input_depth = tf.unpack(self.depth)
         input_meta_data = tf.unpack(self.meta_data)
         input_state = self.state
-        input_label_3d = self.gt_label_3d
+        input_points = self.points
         outputs = []
         labels_gt_2d = []
-        labels_gt_3d = []
         labels_pred_2d = []
-        labels_pred_3d = []
         
         for i in range(self.num_steps):
             # set inputs
@@ -46,7 +42,7 @@ class vgg16(Network):
             self.layers['depth'] = input_depth[i]
             self.layers['meta_data'] = input_meta_data[i]
             self.layers['state'] = input_state
-            self.layers['gt_label_3d'] = input_label_3d
+            self.layers['points'] = input_points
             if i == 0:
                 reuse = None
             else:
@@ -80,31 +76,23 @@ class vgg16(Network):
                  .add(name='add1')
                  .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
 
-            (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
-                 .backproject(self.grid_size, 4, 0.02, name='backprojection'))
+            (self.feed('state', 'points', 'depth', 'meta_data')
+                 .compute_flow(5, 0.02, name='flow'))
 
-            (self.feed('backprojection', 'state')
-                 .rnn_gru3d(self.num_units, self.num_classes, name='gru3d', reuse=reuse)
-                 .meanfield_3d(self.num_classes, name='meanfield_3d', reuse=reuse)
+            (self.feed('upscore', 'flow')
+                 .rnn_gru2d(self.num_classes, self.num_classes, name='gru2d', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob')
-                 .argmax_3d(name='label_3d'))
-
-            (self.feed('prob', 'depth', 'meta_data')
-                 .compute_label(name='label_2d'))
+                 .argmax_2d(name='label_2d'))
 
             # collect outputs
-            input_state = self.get_output('gru3d')[1]
-            input_label_3d = self.get_output('backprojection')[1]
+            input_state = self.get_output('gru2d')[1]
+            input_points = self.get_output('flow')[1]
             outputs.append(self.get_output('prob'))
             labels_gt_2d.append(self.get_output('gt_label_2d'))
-            labels_gt_3d.append(self.get_output('backprojection')[1])
             labels_pred_2d.append(self.get_output('label_2d'))
-            labels_pred_3d.append(self.get_output('label_3d'))
 
         self.layers['outputs'] = outputs
         self.layers['labels_gt_2d'] = labels_gt_2d
-        self.layers['labels_gt_3d'] = labels_gt_3d
         self.layers['labels_pred_2d'] = labels_pred_2d
-        self.layers['labels_pred_3d'] = labels_pred_3d
         self.layers['output_state'] = input_state
-        self.layers['output_label_3d'] = input_label_3d
+        self.layers['output_points'] = input_points
