@@ -2,10 +2,11 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16(Network):
-    def __init__(self, input_format, num_steps, num_classes, scales, trainable=True):
+    def __init__(self, input_format, num_steps, num_classes, num_units, scales, trainable=True):
         self.inputs = []
         self.num_steps = num_steps
         self.num_classes = num_classes
+        self.num_units = num_units
         self.scale = 1 / scales[0]
 
         if input_format == 'RGBD':
@@ -18,7 +19,7 @@ class vgg16(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
-        self.state = tf.placeholder(tf.float32, [None, None, None, self.num_classes])
+        self.state = tf.placeholder(tf.float32, [None, None, None, self.num_units])
         self.points = tf.placeholder(tf.float32, [None, None, None, 3])
         self.layers = dict({'data': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'points': []})
         self.trainable = trainable
@@ -66,21 +67,22 @@ class vgg16(Network):
                  .conv(3, 3, 512, 1, 1, name='conv5_1', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_2', reuse=reuse)
                  .conv(3, 3, 512, 1, 1, name='conv5_3', reuse=reuse)
-                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv5', reuse=reuse)
-                 .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', reuse=reuse, trainable=False))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv5', reuse=reuse)
+                 .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', reuse=reuse, trainable=False))
 
             (self.feed('conv4_3')
-                 .conv(1, 1, self.num_classes, 1, 1, name='score_conv4', reuse=reuse))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv4', reuse=reuse))
 
             (self.feed('score_conv4', 'upscore_conv5')
                  .add(name='add1')
-                 .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
+                 .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('state', 'points', 'depth', 'meta_data')
                  .compute_flow(5, 0.02, name='flow'))
 
             (self.feed('upscore', 'flow')
-                 .rnn_gru2d(self.num_classes, self.num_classes, name='gru2d', reuse=reuse)
+                 .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
+                 .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse)
                  .log_softmax_high_dimension(self.num_classes, name='prob')
                  .argmax_2d(name='label_2d'))
 

@@ -115,6 +115,7 @@ class SolverWrapper(object):
 
         last_snapshot_iter = -1
         timer = Timer()
+        timer_1 = Timer()
         for iter in range(max_iters):
             # learning rate
             if iter >= cfg.TRAIN.STEPSIZE:
@@ -123,13 +124,14 @@ class SolverWrapper(object):
                 sess.run(tf.assign(lr, cfg.TRAIN.LEARNING_RATE))
 
             # get one batch
+            timer_1.tic()
             blobs = data_layer.forward()
+            timer_1.toc()
 
             # Make one SGD update
             if cfg.TRAIN.SINGLE_FRAME:
                 feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
-                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
-                           self.net.gt_label_3d: blobs['data_label_3d']}
+                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data']}
             else:
                 feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
                            self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
@@ -139,11 +141,11 @@ class SolverWrapper(object):
             loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
             timer.toc()
 
-            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time: %.2f' %\
-                    (iter+1, max_iters, loss_cls_value, lr.eval(), timer.diff)
+            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time run: %.2f, time data: %.2f' %\
+                    (iter+1, max_iters, loss_cls_value, lr.eval(), timer.diff, timer_1.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
-                print 'speed: {:.3f}s / iter'.format(timer.average_time)
+                print 'speed: {:.3f}s / iter'.format(timer.average_time + timer_1.average_time)
 
             if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
                 last_snapshot_iter = iter

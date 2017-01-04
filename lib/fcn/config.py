@@ -55,6 +55,7 @@ __C.TRAIN.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 __C.TRAIN.IMS_PER_BATCH = 2
 __C.TRAIN.NUM_STEPS = 5
 __C.TRAIN.NUM_UNITS = 64
+__C.TRAIN.NUM_CLASSES = 10
 
 # Use horizontally-flipped images during training?
 __C.TRAIN.USE_FLIPPED = True

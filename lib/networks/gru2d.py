@@ -37,7 +37,7 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
 
                 # 2D convolution
                 conv = tf.nn.conv2d(inputs_state, kernel, [1, 1, 1, 1], padding='SAME')
-                u = tf.nn.bias_add(conv, biases)
+                u = tf.nn.sigmoid(tf.nn.bias_add(conv, biases))
 
                 # ru = tf.nn.sigmoid(ru)
                 # r, u = tf.split(3, 2, ru)

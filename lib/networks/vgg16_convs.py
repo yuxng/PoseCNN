@@ -2,10 +2,9 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, grid_size, num_units, scales, trainable=True):
+    def __init__(self, input_format, num_classes, scales, trainable=True):
         self.inputs = []
-        self.num_classes = num_units
-        self.grid_size = grid_size
+        self.num_classes = num_classes
         self.scale = 1 / scales[0]
 
         if input_format == 'RGBD':
@@ -18,9 +17,8 @@ class vgg16_convs(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[None, None, None, 48])
-        self.gt_label_3d = tf.placeholder(tf.float32, [None, self.grid_size, self.grid_size, self.grid_size, self.num_classes])
 
-        self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d, 'depth': self.depth, 'meta_data': self.meta_data, 'gt_label_3d': self.gt_label_3d})
+        self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d, 'depth': self.depth, 'meta_data': self.meta_data})
         self.trainable = trainable
         self.setup()
 
@@ -55,13 +53,3 @@ class vgg16_convs(Network):
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
-
-        '''
-        (self.feed('upscore', 'gt_label_2d', 'depth', 'meta_data', 'gt_label_3d')
-             .backproject(self.grid_size, 8, 0.02, name='backprojection')
-             .log_softmax_high_dimension(self.num_classes, name='prob')
-             .argmax_3d(name='label_3d'))
-
-        (self.feed('prob', 'depth', 'meta_data')
-             .compute_label(name='label_2d'))
-        '''
