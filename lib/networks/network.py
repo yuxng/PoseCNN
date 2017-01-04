@@ -115,11 +115,12 @@ class Network(object):
         return var
 
     @layer
-    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
+    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, c_i=-1):
         self.validate_padding(padding)
         if isinstance(input, tuple):
             input = input[0]
-        c_i = input.get_shape()[-1]
+        if c_i == -1:
+            c_i = input.get_shape()[-1]
         assert c_i%group==0
         assert c_o%group==0
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)

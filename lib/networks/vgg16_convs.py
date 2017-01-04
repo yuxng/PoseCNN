@@ -43,15 +43,16 @@ class vgg16_convs(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_1')
              .conv(3, 3, 512, 1, 1, name='conv5_2')
              .conv(3, 3, 512, 1, 1, name='conv5_3')
-             .conv(1, 1, self.num_classes, 1, 1, name='score_conv5')
-             .deconv(4, 4, self.num_classes, 2, 2, name='upscore_conv5', trainable=False))
+             .conv(1, 1, 64, 1, 1, name='score_conv5')
+             .deconv(4, 4, 64, 2, 2, name='upscore_conv5', trainable=False))
 
         (self.feed('conv4_3')
-             .conv(1, 1, self.num_classes, 1, 1, name='score_conv4'))
+             .conv(1, 1, 64, 1, 1, name='score_conv4'))
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')
-             .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+             .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+             .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
 

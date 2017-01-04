@@ -110,7 +110,7 @@ def _get_image_blob(roidb, scale_ind):
         im_orig -= cfg.PIXEL_MEANS
         im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         processed_ims_depth.append(im_depth)
-
+        
         # meta data
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
         K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
