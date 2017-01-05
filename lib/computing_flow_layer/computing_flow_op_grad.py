@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.framework import ops
 import computing_flow_op
-
+'''
 @tf.RegisterShape("Computeflow")
 def _computeflow_shape(op):
   """Shape function for the Computeflow op.
@@ -16,7 +16,7 @@ def _computeflow_shape(op):
   output_shape = tf.TensorShape([batch_size, height, width, channels])
   output_shape_points = tf.TensorShape([batch_size, height, width, 3])
   return [output_shape, output_shape_points]
-
+'''
 @ops.RegisterGradient("Computeflow")
 def _computeflow_grad(op, grad, _):
   """The gradients for `computeflow`.

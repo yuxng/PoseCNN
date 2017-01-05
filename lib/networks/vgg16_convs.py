@@ -10,42 +10,49 @@ class vgg16_convs(Network):
         if input_format == 'RGBD':
             self.data = tf.placeholder(tf.float32, shape=[None, None, None, 6])
             self.conv1_name = 'conv1_1_new'
+            self.input_dim = 6
         else:
             self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
             self.conv1_name = 'conv1_1'
+            self.input_dim = 3
 
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.depth = tf.placeholder(tf.float32, shape=[None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[None, None, None, 48])
 
-        self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d, 'depth': self.depth, 'meta_data': self.meta_data})
+        # define a queue
+        q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
+        self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.depth, self.meta_data])
+        data, gt_label_2d, depth, meta_data = q.dequeue()
+
+        self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'depth': depth, 'meta_data': meta_data})
         self.trainable = trainable
         self.setup()
 
     def setup(self):
         (self.feed('data')
-             .conv(3, 3, 64, 1, 1, name=self.conv1_name)
-             .conv(3, 3, 64, 1, 1, name='conv1_2')
+             .conv(3, 3, 64, 1, 1, name=self.conv1_name, c_i=self.input_dim)
+             .conv(3, 3, 64, 1, 1, name='conv1_2', c_i=64)
              .max_pool(2, 2, 2, 2, name='pool1')
-             .conv(3, 3, 128, 1, 1, name='conv2_1')
-             .conv(3, 3, 128, 1, 1, name='conv2_2')
+             .conv(3, 3, 128, 1, 1, name='conv2_1', c_i=64)
+             .conv(3, 3, 128, 1, 1, name='conv2_2', c_i=128)
              .max_pool(2, 2, 2, 2, name='pool2')
-             .conv(3, 3, 256, 1, 1, name='conv3_1')
-             .conv(3, 3, 256, 1, 1, name='conv3_2')
-             .conv(3, 3, 256, 1, 1, name='conv3_3')
+             .conv(3, 3, 256, 1, 1, name='conv3_1', c_i=128)
+             .conv(3, 3, 256, 1, 1, name='conv3_2', c_i=256)
+             .conv(3, 3, 256, 1, 1, name='conv3_3', c_i=256)
              .max_pool(2, 2, 2, 2, name='pool3')
-             .conv(3, 3, 512, 1, 1, name='conv4_1')
-             .conv(3, 3, 512, 1, 1, name='conv4_2')
-             .conv(3, 3, 512, 1, 1, name='conv4_3')
+             .conv(3, 3, 512, 1, 1, name='conv4_1', c_i=256)
+             .conv(3, 3, 512, 1, 1, name='conv4_2', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv4_3', c_i=512)
              .max_pool(2, 2, 2, 2, name='pool4')
-             .conv(3, 3, 512, 1, 1, name='conv5_1')
-             .conv(3, 3, 512, 1, 1, name='conv5_2')
-             .conv(3, 3, 512, 1, 1, name='conv5_3')
-             .conv(1, 1, 64, 1, 1, name='score_conv5')
+             .conv(3, 3, 512, 1, 1, name='conv5_1', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv5_2', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv5_3', c_i=512)
+             .conv(1, 1, 64, 1, 1, name='score_conv5', c_i=512)
              .deconv(4, 4, 64, 2, 2, name='upscore_conv5', trainable=False))
 
         (self.feed('conv4_3')
-             .conv(1, 1, 64, 1, 1, name='score_conv4'))
+             .conv(1, 1, 64, 1, 1, name='score_conv4', c_i=512))
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')

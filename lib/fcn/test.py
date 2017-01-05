@@ -136,7 +136,6 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_
     meta_data_blob[0,0,0,:] = mdata
     # use a fake label blob of ones
     label_blob = np.ones((1, height, width, voxelizer.num_classes), dtype=np.float32)
-    label_3d = np.zeros((1, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, voxelizer.num_classes), dtype=np.float32)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
@@ -148,11 +147,12 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
     feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.depth: depth_blob, \
-                 net.meta_data: meta_data_blob, net.gt_label_3d: label_3d}
+                 net.meta_data: meta_data_blob}
 
     # labels_2d, labels_3d = sess.run([net.get_output('label_2d'), net.get_output('label_3d')], feed_dict=feed_dict)
     # return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32)
 
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
     output = sess.run([net.get_output('label_2d')], feed_dict=feed_dict)
     labels_2d = output[0]
     labels_3d = np.zeros((cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE), dtype=np.int32)
