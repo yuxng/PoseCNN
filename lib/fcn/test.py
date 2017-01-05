@@ -232,6 +232,8 @@ def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pos
         data_blob = im_normal_blob
     feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
                  net.meta_data: meta_data_blob, net.points: points}
+
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
     labels_pred_2d, state, points = sess.run([net.get_output('labels_pred_2d'), \
         net.get_output('output_state'),  net.get_output('output_points')], feed_dict=feed_dict)
 
