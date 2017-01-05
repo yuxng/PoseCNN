@@ -58,5 +58,6 @@ class vgg16_convs(Network):
              .add(name='add1')
              .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
+             .meanfield_2d(3, self.num_classes, name='meanfield')
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
