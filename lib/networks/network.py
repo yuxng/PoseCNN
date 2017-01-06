@@ -423,16 +423,15 @@ class Network(object):
             if i > 0:
                 reuse = True
             with tf.variable_scope(name, reuse=reuse) as scope:
-                '''
                 # softmax
                 m = tf.reduce_max(unary, reduction_indices=[ndims-1], keep_dims=True)
                 e = tf.exp(tf.sub(unary, tf.tile(m, multiples)))
                 s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
                 Q = tf.div(e, tf.tile(s, multiples))
-                '''
+
                 # message passing
                 weights_message = self.make_2d_spatial_filter('weights_message', 3, num_classes, 0.8)
-                message = tf.nn.conv2d(unary, weights_message, [1, 1, 1, 1], padding=DEFAULT_PADDING)
+                message = tf.nn.conv2d(Q, weights_message, [1, 1, 1, 1], padding=DEFAULT_PADDING)
 
                 # compatibility transform
                 kernel = np.zeros([1, 1, num_classes, num_classes])

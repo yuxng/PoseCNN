@@ -56,14 +56,7 @@ class vgg16_convs(Network):
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')
-             .deconv(4, 4, 64, 2, 2, name='upscore_conv4', trainable=False))
-
-        (self.feed('conv3_3')
-             .conv(1, 1, 64, 1, 1, name='score_conv3', c_i=256))
-
-        (self.feed('score_conv3', 'upscore_conv4')
-             .add(name='add2')
-             .deconv(int(8*self.scale), int(8*self.scale), 64, int(4*self.scale), int(4*self.scale), name='upscore', trainable=False)
+             .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
