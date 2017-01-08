@@ -8,6 +8,8 @@ import projecting_layer.projecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
 import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
+import triplet_loss.triplet_loss_op as triplet_loss_op
+import triplet_loss.triplet_loss_op_grad
 from gru2d import GRU2DCell
 from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
@@ -184,6 +186,10 @@ class Network(object):
         return compute_flow_op.compute_flow(input[0], input[1], input[2], input[3], kernel_size, threshold, name=name)
 
     @layer
+    def triplet_loss(self, input, margin, name):
+        return triplet_loss_op.triplet_loss(input[0], input[1], margin, name=name)
+
+    @layer
     def project(self, input, kernel_size, threshold, name):
         return project_op.project(input[0], input[1], input[2], kernel_size, threshold, name=name)
 
@@ -253,6 +259,10 @@ class Network(object):
     @layer
     def add(self, inputs, name):
         return tf.add(inputs[0], inputs[1])
+
+    @layer
+    def l2_normalize(self, input, dim, name):
+        return tf.nn.l2_normalize(input, dim, name=name)
 
     @layer
     def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):

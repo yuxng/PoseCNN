@@ -57,6 +57,10 @@ class vgg16_convs(Network):
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')
              .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+             .l2_normalize(3, name='l2_norm')
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
+
+        (self.feed('l2_norm', 'gt_label_2d')       
+             .triplet_loss(1.0, name='triplet'))

@@ -54,7 +54,7 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
-    def train_model(self, sess, train_op, loss, learning_rate, max_iters):
+    def train_model(self, sess, train_op, loss_cls, loss_metric, learning_rate, max_iters):
         """Network training loop."""
 
         # intialize variables
@@ -70,11 +70,11 @@ class SolverWrapper(object):
         timer = Timer()
         for iter in range(max_iters):
             timer.tic()
-            loss_cls_value, lr, _ = sess.run([loss, learning_rate, train_op])
+            loss_cls_value, loss_metric_value, lr, _ = sess.run([loss_cls, loss_metric, learning_rate, train_op])
             timer.toc()
 
-            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time: %.2f' %\
-                    (iter+1, max_iters, loss_cls_value, lr, timer.diff)
+            print 'iter: %d / %d, loss_cls: %.4f, loss_metric: %f, lr: %f, time: %.2f' %\
+                    (iter+1, max_iters, loss_cls_value, loss_metric_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -154,7 +154,9 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
         # classification loss
         scores = network.get_output('prob')
         labels = network.get_output('gt_label_2d')
-        loss = loss_cross_entropy_single_frame(scores, labels)
+        loss_metric = network.get_output('triplet')[0]
+        loss_cls = loss_cross_entropy_single_frame(scores, labels)
+        loss = loss_cls + loss_metric
     else:
         # classification loss
         scores = network.get_output('outputs')
@@ -168,7 +170,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
                                            cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
-
+    
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
@@ -179,7 +181,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
         t.start()
 
         print 'Solving...'
-        sw.train_model(sess, train_op, loss, learning_rate, max_iters)
+        sw.train_model(sess, train_op, loss_cls, loss_metric, learning_rate, max_iters)
         print 'done solving'
 
         coord.request_stop()
