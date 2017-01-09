@@ -3,6 +3,8 @@
 #include <df/util/cudaHelpers.h>
 #include <df/util/macros.h>
 
+#include <df/voxel/color.h>
+#include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h> // TODO
 
 #include <Eigen/Geometry>
@@ -98,17 +100,42 @@ __global__ void computeSignedDistanceGradientNormalsKernel(const Tensor<2,Scalar
         if (voxelGrid.inBounds(vertices(0,i),vertices(1,i),vertices(2,i),1.f)) {
 
             if (vertices(0,i) != floor(vertices(0,i))) {
-                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
-                                                                          vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+                normalMap = normalize(voxelGrid.transformBackwardGradientValidOnly(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                                   SignedDistanceValidExtractor<Scalar,VoxelT>(),
+                                                                                   vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),vertices(0,i),(int)vertices(1,i),(int)vertices(2,i))) {
+                    printf("whoops!\n");
+                }
+//                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),vertices(0,i)-1,(int)vertices(1,i),(int)vertices(2,i))) {
+//                    printf("whoops!\n");
+//                }
+//                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),vertices(0,i),(int)vertices(1,i)-1,(int)vertices(2,i))) {
+//                    printf("whoops!\n");
+//                }
+//                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)-1)) {
+//                    printf("whoops!\n");
+//                }
             } else if (vertices(1,i) != floor(vertices(1,i))) {
-                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
-                                                                          (int)vertices(0,i),vertices(1,i),(int)vertices(2,i)), normalizer...);
+                normalMap = normalize(voxelGrid.transformBackwardGradientValidOnly(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                                   SignedDistanceValidExtractor<Scalar,VoxelT>(),
+                                                                                   (int)vertices(0,i),vertices(1,i),(int)vertices(2,i)), normalizer...);
+                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),(int)vertices(0,i),vertices(1,i),(int)vertices(2,i))) {
+                    printf("whoops!\n");
+                }
             } else if (vertices(2,i) != floor(vertices(2,i))) {
-                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
-                                                                          (int)vertices(0,i),vertices(1,i),vertices(2,i)), normalizer...);
+                normalMap = normalize(voxelGrid.transformBackwardGradientValidOnly(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                                   SignedDistanceValidExtractor<Scalar,VoxelT>(),
+                                                                                   (int)vertices(0,i),(int)vertices(1,i),vertices(2,i)), normalizer...);
+                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),(int)vertices(0,i),(int)vertices(1,i),vertices(2,i))) {
+                    printf("whoops!\n");
+                }
             } else {
-                normalMap = normalize(voxelGrid.transformBackwardGradient(SignedDistanceValueExtractor<Scalar,VoxelT>(),
-                                                                          (int)vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+                normalMap = normalize(voxelGrid.transformBackwardGradientValidOnly(SignedDistanceValueExtractor<Scalar,VoxelT>(),
+                                                                                   SignedDistanceValidExtractor<Scalar,VoxelT>(),
+                                                                                   (int)vertices(0,i),(int)vertices(1,i),(int)vertices(2,i)), normalizer...);
+                if (!voxelGrid.validForInterpolation(SignedDistanceValidExtractor<Scalar,VoxelT>(),(int)vertices(0,i),(int)vertices(1,i),(int)vertices(2,i))) {
+                    printf("whoops!\n");
+                }
             }
         } else {
 
@@ -134,8 +161,13 @@ void computeSignedDistanceGradientNormals(const Tensor<2,Scalar,DeviceResident> 
     const int numVertices = vertices.dimensionSize(1);
     assert(normals.dimensionSize(1) == numVertices);
 
-    const dim3 block(1024,1,1);
-    const dim3 grid(intDivideAndCeil(numVertices,1024),1,1);
+    if (!numVertices) {
+        // there are no points
+        return;
+    }
+
+    const dim3 block(1024);
+    const dim3 grid(intDivideAndCeil((uint)numVertices,block.x));
 
 
 //    std::cout << normalizer.transpose() << std::endl;
@@ -155,23 +187,134 @@ void computeSignedDistanceGradientNormals(const Tensor<2,Scalar,DeviceResident> 
     if ( (std::abs(voxelSize(0) - voxelSize(1)) < std::numeric_limits<Scalar>::epsilon()) &&
          (std::abs(voxelSize(0) - voxelSize(2)) < std::numeric_limits<Scalar>::epsilon())) {
 
-        // std::cout << "computing isotropic normals" << std::endl;
+        std::cout << "computing isotropic normals" << std::endl;
 
         computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid());
 
     } else {
 
-        // std::cout << "computing anisotropic normals" << std::endl;
+        std::cout << "computing anisotropic normals" << std::endl;
 
         computeSignedDistanceGradientNormalsKernel<<<grid,block>>>(vertices,normals,voxelGrid.grid(), normalizer);
 
     }
 
-
 }
+
+// TODO: do these really need separate explicit instantiations? can we condense these somehow?
+template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceResident> &,
+                                                   Tensor<2,float,DeviceResident> &,
+                                                   VoxelGrid<float,CompositeVoxel<float,TsdfVoxel>,DeviceResident> &);
 
 template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceResident> &,
                                                    Tensor<2,float,DeviceResident> &,
-                                                   VoxelGrid<float,TsdfVoxel,DeviceResident> &);
+                                                   VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &);
+
+
+template <typename Scalar, int D>
+__global__ void computeVertMapNormalsKernel(const DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > vertMap,
+                                            DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > normMap) {
+
+    typedef Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> VecD;
+
+    const int x = threadIdx.x + blockDim.x * blockIdx.x;
+    const int y = threadIdx.y + blockDim.y * blockIdx.y;
+
+    if ( x < vertMap.dimensionSize(0) && y < vertMap.dimensionSize(1)) {
+
+        const VecD & center = vertMap(x,y);
+
+        if ( (x == 0) || (vertMap(x-1,y)(2) <= Scalar(0)) ) {
+
+            const VecD & right = vertMap(x+1,y);
+
+            if (right(2) <= Scalar(0)) {
+
+                normMap(x,y) = VecD::Zero();
+
+            } else if ( (y == 0) || (vertMap(x,y-1)(2) <= Scalar(0)) ) {
+
+                const VecD & up = vertMap(x,y+1);
+
+                if (up(2) <= Scalar(0)) {
+
+                    normMap(x,y) = VecD::Zero();
+
+                } else {
+
+                    normMap(x,y).template head<3>() =
+                            (right.template head<3>() - center.template head<3>()).cross
+                            (up.template head<3>() - center.template head<3>()).normalized();
+
+                }
+
+            } else {
+
+                const VecD & down = vertMap(x,y-1);
+
+                normMap(x,y).template head<3>() =
+                        (right.template head<3>() - center.template head<3>()).cross
+                        (center.template head<3>() - down.template head<3>()).normalized();
+
+            }
+
+        } else {
+
+            const VecD & left = vertMap(x-1,y);
+
+            if ( (y == 0) || (vertMap(x,y-1)(2) <= Scalar(0)) ) {
+
+                const VecD & up = vertMap(x,y+1);
+
+                if (up(2) <= Scalar(0)) {
+
+                    normMap(x,y) = VecD::Zero();
+
+                } else {
+
+                    normMap(x,y).template head<3>() =
+                            (center.template head<3>() - left.template head<3>()).cross
+                            (up.template head<3>() - center.template head<3>()).normalized();
+
+                }
+
+            } else {
+
+                const VecD & down = vertMap(x,y-1);
+
+                normMap(x,y).template head<3>() =
+                        (center.template head<3>() - left.template head<3>()).cross
+                        (center.template head<3>() - down.template head<3>()).normalized();
+
+            }
+
+        }
+
+        normMap(x,y) *= Scalar(-1);
+
+    }
+
+}
+
+template <typename Scalar, int D>
+void computeVertMapNormals(const DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > & vertMap,
+                           DeviceTensor2<Eigen::Matrix<Scalar,D,1,Eigen::DontAlign> > & normMap) {
+
+    const dim3 block(16,8);
+    const dim3 grid(intDivideAndCeil(vertMap.dimensionSize(0),block.x),
+                    intDivideAndCeil(vertMap.dimensionSize(1),block.y));
+
+    computeVertMapNormalsKernel<<<grid,block>>>(vertMap,normMap);
+
+    cudaDeviceSynchronize();
+    CheckCudaDieOnError();
+
+}
+
+template void computeVertMapNormals(const DeviceTensor2<Eigen::Matrix<float,3,1,Eigen::DontAlign> > & vertMap,
+                                    DeviceTensor2<Eigen::Matrix<float,3,1,Eigen::DontAlign> > & normaMap);
+
+template void computeVertMapNormals(const DeviceTensor2<Eigen::Matrix<float,4,1,Eigen::DontAlign> > & vertMap,
+                                    DeviceTensor2<Eigen::Matrix<float,4,1,Eigen::DontAlign> > & normaMap);
 
 } // namespace df

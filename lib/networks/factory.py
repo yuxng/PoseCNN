@@ -15,9 +15,9 @@ import tensorflow as tf
 from fcn.config import cfg
 
 if cfg.TRAIN.SINGLE_FRAME:
-    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
+    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
 else:
-    __sets['vgg16'] = networks.vgg16(cfg.INPUT, cfg.TRAIN.GRID_SIZE, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
+    __sets['vgg16'] = networks.vgg16(cfg.INPUT, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
 
 def get_network(name):
     """Get a network by name."""

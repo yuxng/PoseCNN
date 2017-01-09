@@ -6,6 +6,10 @@ import backprojecting_layer.backprojecting_op_grad
 import projecting_layer.projecting_op as project_op
 import projecting_layer.projecting_op_grad
 import computing_label_layer.computing_label_op as compute_label_op
+import computing_flow_layer.computing_flow_op as compute_flow_op
+import computing_flow_layer.computing_flow_op_grad
+import triplet_loss.triplet_loss_op as triplet_loss_op
+import triplet_loss.triplet_loss_op_grad
 from gru2d import GRU2DCell
 from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
@@ -113,11 +117,12 @@ class Network(object):
         return var
 
     @layer
-    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True):
+    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, c_i=-1):
         self.validate_padding(padding)
         if isinstance(input, tuple):
             input = input[0]
-        c_i = input.get_shape()[-1]
+        if c_i == -1:
+            c_i = input.get_shape()[-1]
         assert c_i%group==0
         assert c_o%group==0
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
@@ -177,6 +182,14 @@ class Network(object):
         return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, kernel_size, threshold, name=name)
 
     @layer
+    def compute_flow(self, input, kernel_size, threshold, name):
+        return compute_flow_op.compute_flow(input[0], input[1], input[2], input[3], kernel_size, threshold, name=name)
+
+    @layer
+    def triplet_loss(self, input, margin, name):
+        return triplet_loss_op.triplet_loss(input[0], input[1], margin, name=name)
+
+    @layer
     def project(self, input, kernel_size, threshold, name):
         return project_op.project(input[0], input[1], input[2], kernel_size, threshold, name=name)
 
@@ -188,7 +201,7 @@ class Network(object):
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse) as scope:
             gru2d = GRU2DCell(num_units, channels)
-            return gru2d(input[0], input[1], scope)
+            return gru2d(input[0], input[1][0], scope)
 
     @layer
     def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
@@ -246,6 +259,10 @@ class Network(object):
     @layer
     def add(self, inputs, name):
         return tf.add(inputs[0], inputs[1])
+
+    @layer
+    def l2_normalize(self, input, dim, name):
+        return tf.nn.l2_normalize(input, dim, name=name)
 
     @layer
     def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):

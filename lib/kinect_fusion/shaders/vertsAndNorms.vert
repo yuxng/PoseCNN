@@ -12,7 +12,13 @@ out vec3 fragNormal;
 void main()
 {
 
-    fragNormal = normalize(vec3(modelViewMatrix*vec4(vertexNormal,0.0)));
+    vec3 rawNormal = vec3(modelViewMatrix*vec4(vertexNormal,0.0));
+    float rawLength = length(rawNormal);
+    if (rawLength > 0) {
+        fragNormal = rawNormal / rawLength;
+    } else {
+        fragNormal = rawNormal;
+    }
 
     vec4 vertexPositionCam = modelViewMatrix*vec4(vertexPosition,1.0);
     fragPosition = vec3(vertexPositionCam);

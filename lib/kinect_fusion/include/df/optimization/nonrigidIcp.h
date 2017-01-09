@@ -34,6 +34,16 @@ void nonrigidICP(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertic
                  const Scalar regularizationWeight,
                  DebugArgTs ... debugArgs);
 
+template <typename Scalar, typename ScalarOpt, template <typename,int...> class TransformT>
+Eigen::Matrix<ScalarOpt,Eigen::Dynamic,1> solveSparseLinearSystem(const NonrigidTransformer<Scalar,TransformT> & transformer,
+                                                                  const Eigen::SparseMatrix<ScalarOpt> & JTJ,
+                                                                  const Eigen::Matrix<ScalarOpt,Eigen::Dynamic,1> & JTr,
+                                                                  const Scalar diagonalRegularization);
+
+template <typename Scalar, typename ScalarOpt, template <typename,int...> class TransformT, internal::TransformUpdateMethod U = internal::TransformUpdateLeftMultiply>
+void updateDeformationGraphTransforms(NonrigidTransformer<Scalar,TransformT> & transformer,
+                                      const Eigen::Matrix<ScalarOpt,Eigen::Dynamic,1> & vectorizedUpdate);
+
 namespace internal {
 
 template <typename Scalar, typename ScalarOpt, typename CameraModelT,

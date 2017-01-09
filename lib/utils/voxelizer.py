@@ -211,6 +211,9 @@ class Voxelizer(object):
         if Xmin >= self.min_x and Xmax <= self.max_x and Ymin >= self.min_y and Ymax <= self.max_y and Zmin >= self.min_z and Zmax <= self.max_z:
             return True
         else:
+            print 'points x limit: {} {}'.format(Xmin, Xmax)
+            print 'points y limit: {} {}'.format(Ymin, Ymax)
+            print 'points z limit: {} {}'.format(Zmin, Zmax)
             return False
 
 def set_axes_equal(ax):

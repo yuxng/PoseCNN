@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include <device_functions.h>
 
-#define CheckCudaDieOnError() _CheckCudaDieOnError( __FILE__, __LINE__ );
+#define CheckCudaDieOnError() df::_CheckCudaDieOnError( __FILE__, __LINE__ );
 namespace df {
 
 inline void _CheckCudaDieOnError( const char * sFile, const int nLine ) {

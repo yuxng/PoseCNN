@@ -8,6 +8,7 @@
 
 #include <cuda_runtime.h>
 
+#include <df/util/tupleHelpers.h>
 //#include <df/util/typeList.h>
 
 namespace df {
@@ -40,7 +41,7 @@ struct ConstQualifier<T *,false> {
 
 template <typename T>
 struct ConstQualifier<T *,true> {
-    typedef const T * const type;
+    typedef const T * type;
 };
 
 // -=-=-=- copying -=-=-=-
@@ -248,12 +249,18 @@ inline __host__ __device__ std::size_t offsetXD(const IndexList<IdxT,1> dimIndic
 
 }
 
+
+
 //template <typename IdxT, typename DimT>
 //inline __host__ __device__ std::size_t offsetXD(const IndexList<IdxT,2> dimIndices, const IndexList<DimT,1> dimSizes) {
 
 //    return dimIndices.head + dimSizes.head*dimIndices.tail.head;
 
 //}
+
+
+
+
 
 // -=-=-=- interpolation -=-=-=-
 
@@ -317,48 +324,93 @@ inline __host__ __device__ std::size_t offsetXD(const IndexList<IdxT,1> dimIndic
 
 //};
 
+//template <typename Scalar>
+//__host__ __device__
+//inline Scalar interpolate(const Scalar * data,
+//                          const Eigen::Matrix<uint,0,1> dimensions) {
+
+//    return *data;
+
+//}
+
+//template <typename Scalar, typename ... IdxTs>
+//__host__ __device__
+//inline Scalar interpolate(const Scalar * data,
+//                          const Eigen::Matrix<uint,sizeof...(IdxTs)+1,1> dimensions,
+//                          float firstIndex, IdxTs ... remainingIndices) {
+
+//    static constexpr uint Length = sizeof...(IdxTs) + 1;
+
+//    const uint i = firstIndex;
+//    const float t = firstIndex - i;
+
+//    return (1-t)*interpolate(data + i*dimensions.template head<Length-1>().prod(),
+//                             dimensions.template head<Length-1>(),
+//                             remainingIndices...)
+//           + t * interpolate(data + (i+1)*dimensions.template head<Length-1>().prod(),
+//                             dimensions.template head<Length-1>(),
+//                             remainingIndices...);
+
+//}
+
+//template <typename Scalar, typename ... IdxTs>
+//__host__ __device__
+//inline Scalar interpolate(const Scalar * data,
+//                          const Eigen::Matrix<uint,sizeof...(IdxTs) + 1,1> dimensions,
+//                          int firstIndex, IdxTs ... remainingIndices) {
+
+//    static constexpr uint Length = sizeof...(IdxTs) + 1;
+
+//    return interpolate(data + firstIndex*dimensions.template head<Length-1>().prod(),
+//                       dimensions.template head<Length-1>(),
+//                       remainingIndices...);
+
+//}
+
+
 template <typename Scalar>
 __host__ __device__
 inline Scalar interpolate(const Scalar * data,
-                          const Eigen::Matrix<uint,0,1> dimensions) {
+                          const IndexList<uint,0> /*dimensions*/,
+                          const std::tuple<> /*remainingIndices*/) {
 
     return *data;
 
 }
 
-template <typename Scalar, typename ... IdxTs>
+template <typename Scalar,typename ... IdxTs>
 __host__ __device__
 inline Scalar interpolate(const Scalar * data,
-                          const Eigen::Matrix<uint,sizeof...(IdxTs)+1,1> dimensions,
-                          float firstIndex, IdxTs ... remainingIndices) {
+                          const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                          const std::tuple<float, IdxTs...> remainingIndices) {
 
-    static constexpr uint Length = sizeof...(IdxTs) + 1;
-
+    const float firstIndex = std::get<0>(remainingIndices);
     const uint i = firstIndex;
     const float t = firstIndex - i;
 
-    return (1-t)*interpolate(data + i*dimensions.template head<Length-1>().prod(),
-                             dimensions.template head<Length-1>(),
-                             remainingIndices...)
-           + t * interpolate(data + (i+1)*dimensions.template head<Length-1>().prod(),
-                             dimensions.template head<Length-1>(),
-                             remainingIndices...);
+    return (1-t)*interpolate(data + i*dimensions.tail.product(),
+                             dimensions.tail,
+                             tail(remainingIndices))
+           + t * interpolate(data + (i+1)*dimensions.tail.product(),
+                             dimensions.tail,
+                             tail(remainingIndices));
 
 }
 
 template <typename Scalar, typename ... IdxTs>
 __host__ __device__
 inline Scalar interpolate(const Scalar * data,
-                          const Eigen::Matrix<uint,sizeof...(IdxTs) + 1,1> dimensions,
-                          int firstIndex, IdxTs ... remainingIndices) {
+                          const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                          const std::tuple<int, IdxTs...> remainingIndices) {
 
-    static constexpr uint Length = sizeof...(IdxTs) + 1;
+    const int firstIndex = std::get<0>(remainingIndices);
 
-    return interpolate(data + firstIndex*dimensions.template head<Length-1>().prod(),
-                       dimensions.template head<Length-1>(),
-                       remainingIndices...);
+    return interpolate(data + firstIndex*dimensions.tail.product(),
+                       dimensions.tail,
+                       tail(remainingIndices));
 
 }
+
 
 // TODO: can this be subsumed into the original interpolate call by just having Transformer
 // be the first type in the variadic parameter pack??
@@ -415,8 +467,9 @@ inline Scalar interpolate(const Scalar * data,
 template <typename Scalar, typename Transformer>
 __host__ __device__
 inline typename Transformer::ReturnType transformInterpolate(const Scalar * data,
-                                                             const IndexList<uint,0> dimensions,
-                                                             Transformer transformer) {
+                                                             const IndexList<uint,0> /*dimensions*/,
+                                                             Transformer transformer,
+                                                             const std::tuple<> /*remainingIndices*/) {
 
     return transformer(*data);
 
@@ -427,21 +480,22 @@ __host__ __device__
 inline typename Transformer::ReturnType transformInterpolate(const Scalar * data,
                                                              const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
                                                              Transformer transformer,
-                                                             float firstIndex, IdxTs ... remainingIndices) {
+                                                             const std::tuple<float, IdxTs...> remainingIndices) {
 
 //    static constexpr uint Length = sizeof...(IdxTs) + 1;
 
+    const float firstIndex = std::get<0>(remainingIndices);
     const uint i = firstIndex;
-    const float t = firstIndex - i;
+    const typename Transformer::ScalarType t = firstIndex - i;
 
     return (1-t)*transformInterpolate(data + i*dimensions.tail.product(),
                                       dimensions.tail,
                                       transformer,
-                                      remainingIndices...)
+                                      tail(remainingIndices))
            + t * transformInterpolate(data + (i+1)*dimensions.tail.product(),
                                       dimensions.tail,
                                       transformer,
-                                      remainingIndices...);
+                                      tail(remainingIndices));
 
 }
 
@@ -450,16 +504,147 @@ __host__ __device__
 inline typename Transformer::ReturnType transformInterpolate(const Scalar * data,
                                                              const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
                                                              Transformer transformer,
-                                                             int firstIndex, IdxTs ... remainingIndices) {
+                                                             const std::tuple<int, IdxTs...> remainingIndices) {
 
 //    static constexpr uint Length = sizeof...(IdxTs) + 1;
+
+    const int firstIndex = std::get<0>(remainingIndices);
 
     return transformInterpolate(data + firstIndex*dimensions.tail.product(),
                                 dimensions.tail,
                                 transformer,
-                                remainingIndices...);
+                                tail(remainingIndices));
 
 }
+
+
+template <typename Scalar, typename Transformer, typename ValidityCheck>
+__host__ __device__
+inline typename Transformer::ReturnType transformInterpolateValidOnly(const Scalar * data,
+                                                                      const IndexList<uint,0> dimensions,
+                                                                      typename Transformer::ScalarType & totalWeight,
+                                                                      const typename Transformer::ScalarType thisWeight,
+                                                                      Transformer transformer,
+                                                                      ValidityCheck check,
+                                                                      const std::tuple<>) {
+
+    if (check(*data)) {
+
+        totalWeight += thisWeight;
+        return thisWeight * transformer(*data);
+
+    } else {
+
+        return 0;
+
+    }
+
+}
+
+
+template <typename Scalar, typename Transformer, typename ValidityCheck, typename ... IdxTs>
+__host__ __device__
+inline typename Transformer::ReturnType transformInterpolateValidOnly(const Scalar * data,
+                                                                      const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                                                                      typename Transformer::ScalarType & totalWeight,
+                                                                      const typename Transformer::ScalarType thisWeight,
+                                                                      Transformer transformer,
+                                                                      ValidityCheck check,
+                                                                      const std::tuple<float,IdxTs...> remainingIndices) {
+
+//    static constexpr uint Length = sizeof...(IdxTs) + 1;
+
+    const float firstIndex = std::get<0>(remainingIndices);
+    const uint i = firstIndex;
+    const typename Transformer::ScalarType t = firstIndex - i;
+
+    return transformInterpolateValidOnly(data + i*dimensions.tail.product(),
+                                         dimensions.tail,
+                                         totalWeight,
+                                         thisWeight * (1-t),
+                                         transformer,
+                                         check,
+                                         tail(remainingIndices)) +
+           transformInterpolateValidOnly(data + (i+1)*dimensions.tail.product(),
+                                         dimensions.tail,
+                                         totalWeight,
+                                         thisWeight * t,
+                                         transformer,
+                                         check,
+                                         tail(remainingIndices));
+
+}
+
+template <typename Scalar, typename Transformer, typename ValidityCheck, typename ... IdxTs>
+__host__ __device__
+inline typename Transformer::ReturnType transformInterpolateValidOnly(const Scalar * data,
+                                                                      const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                                                                      typename Transformer::ScalarType & totalWeight,
+                                                                      const typename Transformer::ScalarType thisWeight,
+                                                                      Transformer transformer,
+                                                                      ValidityCheck check,
+                                                                      const std::tuple<int, IdxTs...> remainingIndices) {
+
+    const int firstIndex = std::get<0>(remainingIndices);
+
+    return transformInterpolateValidOnly(data + firstIndex*dimensions.tail.product(),
+                                         dimensions.tail,
+                                         totalWeight,
+                                         thisWeight,
+                                         transformer,
+                                         check,
+                                         tail(remainingIndices));
+
+}
+
+
+template <typename Scalar, typename ValidityCheck>
+__host__ __device__
+inline bool validForInterpolation(const Scalar * data,
+                                   const IndexList<uint,0> dimensions,
+                                   ValidityCheck check,
+                                   const std::tuple<> ) {
+
+    return check(*data);
+
+}
+
+template <typename Scalar, typename ValidityCheck, typename ... IdxTs>
+__host__ __device__
+inline bool validForInterpolation(const Scalar * data,
+                                  const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                                  ValidityCheck check,
+                                  const std::tuple<float,IdxTs ...> remainingIndices) {
+
+    const int i = std::get<0>(remainingIndices);
+
+    return validForInterpolation(data + i*dimensions.tail.product(),
+                                 dimensions.tail,
+                                 check,
+                                 tail(remainingIndices)) &&
+           validForInterpolation(data + (i+1)*dimensions.tail.product(),
+                                 dimensions.tail,
+                                 check,
+                                 tail(remainingIndices));
+
+}
+
+template <typename Scalar, typename Transformer, typename ... IdxTs>
+__host__ __device__
+inline bool validForInterpolation(const Scalar * data,
+                                 const IndexList<uint,sizeof...(IdxTs)+1> dimensions,
+                                 Transformer check,
+                                 const std::tuple<int, IdxTs ...> remainingIndices) {
+
+    const int firstIndex = std::get<0>(remainingIndices);
+
+    return validForInterpolation(data + firstIndex*dimensions.tail.product(),
+                                 dimensions.tail,
+                                 check,
+                                 tail(remainingIndices));
+
+}
+
 
 //template <typename Scalar,
 //          typename Head,
@@ -586,7 +771,7 @@ public:
     }
 
     template <bool _Const>
-    __host__ __device__ inline Tensor<D,T,R,Const> & operator=(Tensor<D,T,R,_Const> & other) {
+    __host__ __device__ inline Tensor<D,T,R,Const> & operator=(const Tensor<D,T,R,_Const> & other) {
         static_assert(Const || !_Const,
                       "Cannot assign a non-const Tensor from a Const tensor");
         dimensions_ = other.dimensions();
@@ -622,9 +807,23 @@ public:
         return dimensions_(0);
     }
 
+    template <int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
+    inline __host__ __device__ DimT width() const {
+        return dimensions_(0);
+    }
+
+    template <int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
+    inline __host__ __device__ DimT height() const {
+        return dimensions_(1);
+    }
+
     inline __host__ __device__ std::size_t count() const {
 //        return internal::count<DimT,D>(dimensions_);
         return dimensions_.prod();
+    }
+
+    inline __host__ __device__ std::size_t sizeBytes() const {
+        return count() * sizeof(T);
     }
 
     // -=-=-=-=-=-=- indexing functions -=-=-=-=-=-=-
@@ -633,7 +832,7 @@ public:
         return data_[d0];
     }
 
-    template <int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
+    template <int D2 = D, typename std::enable_if<D2 == 1 && !Const, int>::type = 0>
     inline __host__ __device__ T & operator()(const IdxT d0) {
         return data_[d0];
     }
@@ -721,54 +920,74 @@ public:
     }
 
     // -=-=-=-=-=-=- interpolation functions -=-=-=-=-=-=-
-    template <typename IdxT1,
-              int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
-    inline __host__ __device__ T interpolate(const IdxT1 v0) {
-        return internal::interpolate(data_, dimensions_, v0);
-    }
-
-    template <typename IdxT1, typename IdxT2,
-              int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
-    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1) {
-        return internal::interpolate(data_, dimensions_, v1, v0);
-    }
-
-    template <typename IdxT1, typename IdxT2, typename IdxT3,
-              int D2 = D, typename std::enable_if<D2 == 3, int>::type = 0>
-    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) {
-        return internal::interpolate(data_, dimensions_, v2, v1, v0);
-    }
-
-    template <typename IdxT1, typename IdxT2, typename IdxT3, typename IdxT4,
-              int D2 = D, typename std::enable_if<D2 == 4, int>::type = 0>
-    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) {
-        return internal::interpolate(data_, dimensions_, v3, v2, v1, v0);
-    }
-
-
-//    template <typename Transformer, typename IdxT1,
+//    template <typename IdxT1,
 //              int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
-//    inline __host__ __device__ typename Transformer::ReturnType transformInterpolate(Transformer transformer, const IdxT1 v0) {
-//        return internal::transformInterpolate(data_, dimensions_, transformer, v0);
+//    inline __host__ __device__ T interpolate(const IdxT1 v0) const {
+//        return internal::interpolate(data_, dimensions_, v0);
 //    }
 
-//    template <typename Transformer, typename IdxT1, typename IdxT2,
+//    template <typename IdxT1, typename IdxT2,
 //              int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
-//    inline __host__ __device__ typename Transformer::ReturnType transformInterpolate(Transformer transformer, const IdxT1 v0, const IdxT2 v1) {
-//        return internal::transformInterpolate(data_, dimensions_, transformer, v1, v0);
+//    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1) const {
+//        return internal::interpolate(data_, dimensions_, v1, v0);
 //    }
 
-    template <typename Transformer, typename IdxT1, typename IdxT2, typename IdxT3,
-              int D2 = D, typename std::enable_if<D2 == 3, int>::type = 0>
-    inline __host__ __device__ typename Transformer::ReturnType transformInterpolate(Transformer transformer, const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) {
-        return internal::transformInterpolate(data_, internal::IndexList<DimT,D>(Eigen::Matrix<DimT,3,1>(dimensions_(2),dimensions_(1),dimensions_(0))), transformer, v2, v1, v0);
+//    template <typename IdxT1, typename IdxT2, typename IdxT3,
+//              int D2 = D, typename std::enable_if<D2 == 3, int>::type = 0>
+//    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) const {
+//        return internal::interpolate(data_, dimensions_, v2, v1, v0);
+//    }
+
+//    template <typename IdxT1, typename IdxT2, typename IdxT3, typename IdxT4,
+//              int D2 = D, typename std::enable_if<D2 == 4, int>::type = 0>
+//    inline __host__ __device__ T interpolate(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) const {
+//        return internal::interpolate(data_, dimensions_, v3, v2, v1, v0);
+//    }
+
+    template <typename ... IdxTs,
+              typename std::enable_if<sizeof...(IdxTs) == D, int>::type = 0>
+    inline __host__ __device__ T interpolate(const IdxTs ... vs) const {
+        return internal::interpolate(data_, internal::IndexList<DimT,D>(dimensions_.reverse()),
+                                     internal::TupleReverser<std::tuple<IdxTs...> >::reverse(std::tuple<IdxTs...>(vs...)));
     }
 
-//    template <typename Transformer, typename IdxT1, typename IdxT2, typename IdxT3, typename IdxT4,
-//              int D2 = D, typename std::enable_if<D2 == 4, int>::type = 0>
-//    inline __host__ __device__ typename Transformer::ReturnType transformInterpolate(Transformer transformer, const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) {
-//        return internal::transformInterpolate(data_, dimensions_, transformer, v3, v2, v1, v0);
-//    }
+    template <typename Derived,
+              typename std::enable_if<Eigen::internal::traits<Derived>::RowsAtCompileTime == D &&
+                                      Eigen::internal::traits<Derived>::ColsAtCompileTime == 1, int>::type = 0>
+    inline __host__ __device__ T interpolate(const Eigen::MatrixBase<Derived> & v) const {
+        return internal::interpolate(data_, internal::IndexList<DimT,D>(dimensions_.reverse()),
+                                     vectorToTuple(v.reverse()));
+    }
+
+    template <typename Transformer, typename ... IdxTs,
+              typename std::enable_if<sizeof...(IdxTs) == D, int>::type = 0>
+    inline __host__ __device__ typename Transformer::ReturnType transformInterpolate(Transformer transformer, const IdxTs ... vs) const {
+        return internal::transformInterpolate(data_, internal::IndexList<DimT,D>(dimensions_.reverse()), transformer,
+                                              internal::TupleReverser<std::tuple<IdxTs...> >::reverse(std::tuple<IdxTs...>(vs...)));
+    }
+
+    template <typename Transformer, typename ValidityCheck, typename ... IdxTs,
+              typename std::enable_if<sizeof...(IdxTs) == D, int>::type = 0>
+    inline __host__ __device__ typename Transformer::ReturnType transformInterpolateValidOnly(Transformer transformer, ValidityCheck check, IdxTs ... vs) const {
+        typename Transformer::ScalarType totalWeight(0);
+        const typename Transformer::ScalarType totalValue = internal::transformInterpolateValidOnly(data_,internal::IndexList<DimT,D>(dimensions_.reverse()),
+                                                                                                    totalWeight, typename Transformer::ScalarType(1), transformer, check,
+                                                                                                    internal::TupleReverser<std::tuple<IdxTs...> >::reverse(std::tuple<IdxTs...>(vs...)));
+
+        if (totalWeight) {
+            return totalValue / totalWeight;
+        }
+
+        return 0;
+
+    }
+
+    template <typename ValidityCheck, typename ... IdxTs,
+              typename std::enable_if<sizeof...(IdxTs) == D, int>::type = 0>
+    inline __host__ __device__ bool validForInterpolation(ValidityCheck check, const IdxTs ... vs) {
+        return internal::validForInterpolation(data_, internal::IndexList<DimT,D>(dimensions_.reverse()), check,
+                                               internal::TupleReverser<std::tuple<IdxTs...> >::reverse(std::tuple<IdxTs...>(vs...)));
+    }
 
     // -=-=-=-=-=-=- bounds-checking functions -=-=-=-=-=-=-
     template <typename PosT, int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
@@ -824,14 +1043,14 @@ public:
     // -=-=-=-=-=-=- gradient functions -=-=-=-=-=-=-
     template <typename IdxT1,
               int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
-    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0) {
+    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0) const {
         const T center = interpolate(v0);
         return Eigen::Matrix<T,D,1>(center - interpolate(v0-1));
     }
 
     template <typename IdxT1, typename IdxT2,
               int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
-    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1) {
+    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1) const {
         const T center = interpolate(v0,v1);
         return Eigen::Matrix<T,D,1>(center - interpolate(v0-1,v1),
                                     center - interpolate(v0,v1-1));
@@ -839,16 +1058,23 @@ public:
 
     template <typename IdxT1, typename IdxT2, typename IdxT3,
               int D2 = D, typename std::enable_if<D2 == 3, int>::type = 0>
-    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) {
+    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) const {
         const T center = interpolate(v0,v1,v2);
         return Eigen::Matrix<T,D,1>(center - interpolate(v0-1,v1,v2),
                                     center - interpolate(v0,v1-1,v2),
                                     center - interpolate(v0,v1,v2-1));
     }
 
+    template <typename Derived,
+              typename std::enable_if<Eigen::internal::traits<Derived>::RowsAtCompileTime == D &&
+                                      Eigen::internal::traits<Derived>::ColsAtCompileTime == 1, int>::type = 0>
+    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const Eigen::MatrixBase<Derived> & v) const {
+        return backwardGradient(v(0),v(1),v(2));
+    }
+
     template <typename IdxT1, typename IdxT2, typename IdxT3, typename IdxT4,
               int D2 = D, typename std::enable_if<D2 == 4, int>::type = 0>
-    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) {
+    inline __host__ __device__ Eigen::Matrix<T,D,1> backwardGradient(const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) const {
         const T center = interpolate(v0,v1,v2,v3);
         return Eigen::Matrix<T,D,1>(center - interpolate(v0-1,v1,v2,v3),
                                     center - interpolate(v0,v1-1,v2,v3),
@@ -897,6 +1123,45 @@ public:
     }
 
 
+    template <typename Transformer, typename ValidityCheck, typename IdxT1,
+              int D2 = D, typename std::enable_if<D2 == 1, int>::type = 0>
+    inline __host__ __device__ Eigen::Matrix<typename Transformer::ReturnType,D,1> transformBackwardGradientValidOnly(Transformer transformer, ValidityCheck check, const IdxT1 v0) {
+        typedef typename Transformer::ReturnType Transformed;
+        const Transformed center = transformInterpolateValidOnly(transformer,check,v0);
+        return Eigen::Matrix<Transformed,D,1>(center - transformInterpolateValidOnly(transformer,check,v0-1));
+    }
+
+    template <typename Transformer, typename ValidityCheck, typename IdxT1, typename IdxT2,
+              int D2 = D, typename std::enable_if<D2 == 2, int>::type = 0>
+    inline __host__ __device__ Eigen::Matrix<typename Transformer::ReturnType,D,1> transformBackwardGradientValidOnly(Transformer transformer, ValidityCheck check, const IdxT1 v0, const IdxT2 v1) {
+        typedef typename Transformer::ReturnType Transformed;
+        const Transformed center = transformInterpolateValidOnly(transformer,check,v0,v1);
+        return Eigen::Matrix<Transformed,D,1>(center - transformInterpolateValidOnly(transformer,check,v0-1,v1),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1-1));
+    }
+
+    template <typename Transformer, typename ValidityCheck, typename IdxT1, typename IdxT2, typename IdxT3,
+              int D2 = D, typename std::enable_if<D2 == 3, int>::type = 0>
+    inline __host__ __device__ Eigen::Matrix<typename Transformer::ReturnType,D,1> transformBackwardGradientValidOnly(Transformer transformer, ValidityCheck check, const IdxT1 v0, const IdxT2 v1, const IdxT3 v2) {
+        typedef typename Transformer::ReturnType Transformed;
+        const Transformed center = transformInterpolateValidOnly(transformer,check,v0,v1,v2);
+        return Eigen::Matrix<Transformed,D,1>(center - transformInterpolateValidOnly(transformer,check,v0-1,v1,v2),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1-1,v2),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1,v2-1));
+    }
+
+    template <typename Transformer, typename ValidityCheck, typename IdxT1, typename IdxT2, typename IdxT3, typename IdxT4,
+              int D2 = D, typename std::enable_if<D2 == 4, int>::type = 0>
+    inline __host__ __device__ Eigen::Matrix<typename Transformer::ReturnType,D,1> transformBackwardGradientValidOnly(Transformer transformer, ValidityCheck check, const IdxT1 v0, const IdxT2 v1, const IdxT3 v2, const IdxT4 v3) {
+        typedef typename Transformer::ReturnType Transformed;
+        const Transformed center = transformInterpolateValidOnly(transformer,check,v0,v1,v2,v3);
+        return Eigen::Matrix<Transformed,D,1>(center - transformInterpolateValidOnly(transformer,check,v0-1,v1,v2,v3),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1-1,v2,v3),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1,v2-1,v3),
+                                              center - transformInterpolateValidOnly(transformer,check,v0,v1,v2,v3-1));
+    }
+
+
     // -=-=-=-=-=-=- pointer manipulation functions -=-=-=-=-=-=-
     template <typename U = T,
               typename std::enable_if<!Const && sizeof(U), int>::type = 0>
@@ -925,7 +1190,7 @@ public:
     typedef typename Tensor<D,T,R,false>::DimT DimT;
 
     ManagedTensor() :
-        Tensor<D,T,R,false>::Tensor(0, nullptr) { }
+        Tensor<D,T,R,false>::Tensor(Eigen::Matrix<uint,D,1>::Zero(), nullptr) { }
 
     template <int D2 = D, typename std::enable_if<D2 == 1,int>::type = 0>
     ManagedTensor(const DimT length) :
@@ -949,6 +1214,11 @@ public:
         this->data_ = internal::AutomaticAllocator<T,R>::allocate(dimensions.prod());
         this->dimensions_ = dimensions;
     }
+
+private:
+
+    ManagedTensor(const ManagedTensor &) = delete;
+    ManagedTensor & operator=(const ManagedTensor &) = delete;
 
 };
 

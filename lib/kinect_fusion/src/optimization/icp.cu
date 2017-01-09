@@ -1,25 +1,26 @@
-#include <df/optimization/icp.h>
+#include <df/camera/poly3.h> // TODO
 
+#include <df/optimization/icp.h>
 #include <df/optimization/linearSystems.h>
 
 #include <df/util/cudaHelpers.h>
+#include <df/util/debugHelpers.h>
 #include <df/util/eigenHelpers.h>
-
-#include <df/camera/poly3.h> // TODO
+#include <df/util/globalTimer.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
-#include <df/util/globalTimer.h>
-
 #include <Eigen/Core>
 
 namespace df {
 
+
 template <typename Scalar,
           typename CameraModelT,
-          int DPred>
+          int DPred,
+          typename ... DebugArgsT>
 __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansAndResiduals,
                           const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > liveVertices,
                           const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > predictedVertices,
@@ -27,7 +28,8 @@ __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansA
                           const CameraModelT cameraModel,
                           const Sophus::SE3Group<Scalar> updatedPose,
                           const Eigen::Matrix<Scalar,2,1> depthRange,
-                          const Scalar maxError) {
+                          const Scalar maxError,
+                          DebugArgsT ... debugArgs) {
 
     typedef Eigen::Matrix<Scalar,DPred,1,Eigen::DontAlign> VecD;
     typedef Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> Vec3;
@@ -53,96 +55,81 @@ __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansA
 
         const Scalar predictedDepth = predictedVertex(2);
 
-//        if ( x > 200 && x < 220 && y > 200 && y < 220) {
-//            printf("(%d,%d) -> %f\n",x,y,predDepth);
-//        }
+        if ((predictedDepth < depthRange(0)) || predictedDepth > depthRange(1)) {
 
-//        if (x == 0 && y == 0) {
-//            internal::LinearSystemCreationFunctor<Scalar,1,6> theCreator;
-//            for (int i=0 ; i< 6; ++i) {
-//                jacobiansAndResiduals[0].J(i) = i+1;
-//            }
-//            jacobiansAndResiduals[0].r = 0.5;
-//            internal::LinearSystem<Scalar,6> system = theCreator(jacobiansAndResiduals[0]);
-//            printf("^$ %f %f %f %f %f %f\n",system.JTr(0),system.JTr(1),system.JTr(2),
-//                                            system.JTr(3),system.JTr(4),system.JTr(5));
+            PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(255,255,0,255),debugArgs...);
 
-//            printf("\n %f %f %f %f %f %f\n",system.JTJ.head(0),system.JTJ.head(1),system.JTJ.head(2),system.JTJ.head(3),system.JTJ.head(4),system.JTJ.head(5));
-//            printf("\n       %f %f %f %f %f\n",system.JTJ.tail.head(0),system.JTJ.tail.head(1),system.JTJ.tail.head(2),system.JTJ.tail.head(3),system.JTJ.tail.head(4));
-//            printf("\n             %f %f %f %f\n",system.JTJ.tail.tail.head(0),system.JTJ.tail.tail.head(1),system.JTJ.tail.tail.head(2),system.JTJ.tail.tail.head(3));
-//            printf("\n                   %f %f %f\n",system.JTJ.tail.tail.tail.head(0),system.JTJ.tail.tail.tail.head(1),system.JTJ.tail.tail.tail.head(2));
-//            printf("\n                         %f %f\n",system.JTJ.tail.tail.tail.tail.head(0),system.JTJ.tail.tail.tail.tail.head(1));
-//            printf("\n                               %f\n",system.JTJ.tail.tail.tail.tail.tail.head(0));
+            return;
+        }
 
-//            internal::LinearSystemSumFunctor<Scalar,6> theSummer;
-//            system = theSummer(system,system);
+        const Vec3 updatedPredVertex = updatedPose * predictedVertex.template head<3>();
 
-//            printf("^$ %f %f %f %f %f %f\n",system.JTr(0),system.JTr(1),system.JTr(2),
-//                                            system.JTr(3),system.JTr(4),system.JTr(5));
+        const Vec2 projectedPredVertex = cameraModel.project(updatedPredVertex);
 
-//            printf("\n %f %f %f %f %f %f\n",system.JTJ.head(0),system.JTJ.head(1),system.JTJ.head(2),system.JTJ.head(3),system.JTJ.head(4),system.JTJ.head(5));
-//            printf("\n       %f %f %f %f %f\n",system.JTJ.tail.head(0),system.JTJ.tail.head(1),system.JTJ.tail.head(2),system.JTJ.tail.head(3),system.JTJ.tail.head(4));
-//            printf("\n             %f %f %f %f\n",system.JTJ.tail.tail.head(0),system.JTJ.tail.tail.head(1),system.JTJ.tail.tail.head(2),system.JTJ.tail.tail.head(3));
-//            printf("\n                   %f %f %f\n",system.JTJ.tail.tail.tail.head(0),system.JTJ.tail.tail.tail.head(1),system.JTJ.tail.tail.tail.head(2));
-//            printf("\n                         %f %f\n",system.JTJ.tail.tail.tail.tail.head(0),system.JTJ.tail.tail.tail.tail.head(1));
-//            printf("\n                               %f\n",system.JTJ.tail.tail.tail.tail.tail.head(0));
+        //            const Vec2 projectedPredVertex  (updatedPredVertex(0)/updatedPredVertex(2)*cameraModel.params()[0] + cameraModel.params()[2],
+        //                                             updatedPredVertex(1)/updatedPredVertex(2)*cameraModel.params()[1] + cameraModel.params()[3]);
+        //            if ( x > 200 && x < 220 && y > 200 && y < 220) {
+        //                printf("(%d,%d) -> (%f,%f)\n",x,y,projectedPredVertex(0),projectedPredVertex(1));
+        //            }
 
-//        }
+        // TODO: interpolate?
+        const int u = projectedPredVertex(0) + Scalar(0.5);
+        const int v = projectedPredVertex(1) + Scalar(0.5);
 
-        if ((predictedDepth > depthRange(0)) && predictedDepth < depthRange(1)) {
+        if ( (u <= border) || (u >= (width-1-border)) || (v <= border) || (v >= (height-1-border)) ) {
 
-            const Vec3 updatedPredVertex = updatedPose * predictedVertex.template head<3>();
-
-            const Vec2 projectedPredVertex = cameraModel.project(updatedPredVertex);
-
-//            const Vec2 projectedPredVertex  (updatedPredVertex(0)/updatedPredVertex(2)*cameraModel.params()[0] + cameraModel.params()[2],
-//                                             updatedPredVertex(1)/updatedPredVertex(2)*cameraModel.params()[1] + cameraModel.params()[3]);
-//            if ( x > 200 && x < 220 && y > 200 && y < 220) {
-//                printf("(%d,%d) -> (%f,%f)\n",x,y,projectedPredVertex(0),projectedPredVertex(1));
-//            }
-
-            // TODO: interpolate?
-            const int u = projectedPredVertex(0) + Scalar(0.5);
-            const int v = projectedPredVertex(1) + Scalar(0.5);
-
-            if ( (u > border) && (u < (width-1-border)) && (v > border) && (v < (height-1-border)) ) {
-
-                const Vec3 & liveVertex = liveVertices(u,v);
-
-                const Scalar liveDepth = liveVertex(2);
-
-                if ((liveDepth > depthRange(0)) && (liveDepth < depthRange(1))) {
-
-                    // TODO: double-check validity of this method of getting the ray
-                    const Vec3 ray = updatedPredVertex.normalized();
-
-                    const VecD & predictedNormal = predictedNormals(x,y);
-
-                    if (-ray.dot(predictedNormal.template head<3>()) > rayNormDotThreshold) {
-
-                        const Scalar error = predictedNormal.template head<3>().dot(liveVertex - updatedPredVertex);
-
-                        if (error < maxError) {
-
-                            const Scalar weightSqrt = Scalar(1) / (liveDepth);
-
-                            const Eigen::Matrix<Scalar,1,3> dError_dUpdatedPredictedPoint = predictedNormal.template head<3>().transpose();
-                            Eigen::Matrix<Scalar,3,6> dUpdatedPredictedPoint_dUpdate;
-                            dUpdatedPredictedPoint_dUpdate << 1, 0, 0,                     0,  updatedPredVertex(2), -updatedPredVertex(1),
-                                                              0, 1, 0, -updatedPredVertex(2),                     0,  updatedPredVertex(0),
-                                                              0, 0, 1,  updatedPredVertex(1), -updatedPredVertex(0),                     0;
-
-                            jacobiansAndResiduals[x + width*y].J = weightSqrt*dError_dUpdatedPredictedPoint*dUpdatedPredictedPoint_dUpdate;
-                            jacobiansAndResiduals[x + width*y].r = weightSqrt*error;
-
-                        }
-
-                    }
-
-                }
-            }
+            PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(0,0,255,255),debugArgs...);
+            return;
 
         }
+
+        const Vec3 & liveVertex = liveVertices(u,v);
+
+        const Scalar liveDepth = liveVertex(2);
+
+        if ((liveDepth < depthRange(0)) || (liveDepth > depthRange(1))) {
+
+            PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(255,0,255,255),debugArgs...);
+            return;
+
+        }
+
+        // TODO: double-check validity of this method of getting the ray
+        const Vec3 ray = updatedPredVertex.normalized();
+
+        const VecD & predictedNormal = predictedNormals(x,y);
+
+        if (-ray.dot(predictedNormal.template head<3>()) < rayNormDotThreshold) {
+
+            PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(255,0,0,255),debugArgs...);
+            return;
+
+        }
+
+        const Scalar error = predictedNormal.template head<3>().dot(liveVertex - updatedPredVertex);
+
+        const Scalar absError = fabs(error);
+
+        if (absError > maxError) {
+
+            PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(0,255,0,255),debugArgs...);
+            return;
+
+        }
+
+        const Scalar weightSqrt = Scalar(1) / (liveDepth);
+
+        const Eigen::Matrix<Scalar,1,3> dError_dUpdatedPredictedPoint = predictedNormal.template head<3>().transpose();
+        Eigen::Matrix<Scalar,3,6> dUpdatedPredictedPoint_dUpdate;
+        dUpdatedPredictedPoint_dUpdate << 1, 0, 0,                     0,  updatedPredVertex(2), -updatedPredVertex(1),
+                                          0, 1, 0, -updatedPredVertex(2),                     0,  updatedPredVertex(0),
+                                          0, 0, 1,  updatedPredVertex(1), -updatedPredVertex(0),                     0;
+
+        jacobiansAndResiduals[x + width*y].J = weightSqrt*dError_dUpdatedPredictedPoint*dUpdatedPredictedPoint_dUpdate;
+        jacobiansAndResiduals[x + width*y].r = weightSqrt*error;
+
+        const uchar gray = min(Scalar(255),255 * absError / maxError );
+        PixelDebugger<DebugArgsT...>::debugPixel(Eigen::Vector2i(x,y),Eigen::UnalignedVec4<uchar>(gray,gray,gray,255),debugArgs...);
 
     }
 
@@ -152,7 +139,8 @@ namespace internal {
 
 template <typename Scalar,
           typename CameraModelT,
-          int DPred>
+          int DPred,
+          typename ... DebugArgsT>
 LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
@@ -161,7 +149,8 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                     const Eigen::Matrix<Scalar,2,1> & depthRange,
                                     const Scalar maxError,
                                     const dim3 grid,
-                                    const dim3 block) {
+                                    const dim3 block,
+                                    DebugArgsT ... debugArgs) {
 
     // TODO: make efficient
     static thrust::device_vector<JacobianAndResidual<Scalar,1,6> > jacobiansAndResiduals(liveVertices.count());
@@ -173,7 +162,8 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                       cameraModel,
                                       predictionPose,
                                       depthRange,
-                                      maxError);
+                                      maxError,
+                                      debugArgs ...);
 
     cudaDeviceSynchronize();
     CheckCudaDieOnError();
@@ -246,6 +236,16 @@ template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::Unaligned
                                             const dim3, const dim3);
 
 template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                                            const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                                            const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                                            const Poly3CameraModel<float> &,
+                                            const Sophus::SE3f &,
+                                            const Eigen::Vector2f &,
+                                            const float,
+                                            const dim3, const dim3,                                                                                         \
+                                            DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
+
+template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const Poly3CameraModel<float> &,
@@ -253,6 +253,16 @@ template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::Unaligned
                                             const Eigen::Vector2f &,
                                             const float,
                                             const dim3, const dim3);
+
+template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                                            const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
+                                            const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
+                                            const Poly3CameraModel<float> &,
+                                            const Sophus::SE3f &,
+                                            const Eigen::Vector2f &,
+                                            const float,
+                                            const dim3, const dim3,                                                                                         \
+                                            DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
 
 } // namespace internal
 

@@ -16,6 +16,7 @@ class KinectFusion
   void feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
+  void save_model(std::string filename);
 };
 
 }

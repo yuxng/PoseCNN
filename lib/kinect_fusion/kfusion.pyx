@@ -22,6 +22,7 @@ cdef extern from "kfusion.hpp" namespace "df":
         void feed_label(unsigned char*, int*, unsigned char*, int, int)
         void reset()
         void set_voxel_grid(float, float, float, float, float, float);
+        void save_model(string)
 
 cdef class PyKinectFusion:
     cdef KinectFusion *kfusion     # hold a C++ instance which we're wrapping
@@ -73,3 +74,6 @@ cdef class PyKinectFusion:
 
     def set_voxel_grid(self, float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ):
         return self.kfusion.set_voxel_grid(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ, voxelGridDimX, voxelGridDimY, voxelGridDimZ)
+
+    def save_model(self, string filename):
+        return self.kfusion.save_model(filename)

@@ -20,6 +20,10 @@ public:
     void render(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers,
                 pangolin::GlBuffer & indexBuffer, const GLenum mode = GL_TRIANGLES);
 
+    void render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                const std::vector<pangolin::GlBuffer> & indexBuffers,
+                const GLenum mode = GL_TRIANGLES);
+
     inline const pangolin::GlTextureCudaArray & texture(const int i) const {
         assert(i < RenderType::numTextures);
         return textures_[i];
@@ -32,7 +36,9 @@ public:
 
 private:
 
-    void renderSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers);
+    void renderSetup();
+
+    void vertexAttributeSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers);
 
     void renderTeardown(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers);
 
@@ -83,7 +89,7 @@ GLRenderer<RenderType>::GLRenderer(const int renderWidth, const int renderHeight
 }
 
 template <typename RenderType>
-void GLRenderer<RenderType>::renderSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers) {
+void GLRenderer<RenderType>::renderSetup() {
 
     frameBuffer_.Bind();
 
@@ -96,6 +102,11 @@ void GLRenderer<RenderType>::renderSetup(const std::vector<pangolin::GlBuffer *>
 
     glUniformMatrix4fv(projectionMatrixHandle_, 1, GL_FALSE, projectionMatrix_.data());
     glUniformMatrix4fv(modelViewMatrixHandle_, 1, GL_FALSE, modelViewMatrix_.data());
+
+}
+
+template <typename RenderType>
+void GLRenderer<RenderType>::vertexAttributeSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers) {
 
     static constexpr int numAttributes = RenderType::numVertexAttributes;
     assert(vertexAttributeBuffers.size() == numAttributes);
@@ -135,7 +146,9 @@ void GLRenderer<RenderType>::renderTeardown(const std::vector<pangolin::GlBuffer
 template <typename RenderType>
 void GLRenderer<RenderType>::render(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers, const GLenum mode) {
 
-    renderSetup(vertexAttributeBuffers);
+    renderSetup();
+
+    vertexAttributeSetup(vertexAttributeBuffers);
 
     const int N = vertexAttributeBuffers[0]->num_elements;
     glDrawArrays(mode, 0, N);
@@ -149,7 +162,9 @@ void GLRenderer<RenderType>::render(const std::vector<pangolin::GlBuffer *> & ve
                                     pangolin::GlBuffer & indexBuffer,
                                     const GLenum mode) {
 
-    renderSetup(vertexAttributeBuffers);
+    renderSetup();
+
+    vertexAttributeSetup(vertexAttributeBuffers);
 
     indexBuffer.Bind();
     glDrawElements(mode, indexBuffer.num_elements, GL_UNSIGNED_INT, 0);
@@ -157,6 +172,31 @@ void GLRenderer<RenderType>::render(const std::vector<pangolin::GlBuffer *> & ve
     indexBuffer.Unbind();
 
     renderTeardown(vertexAttributeBuffers);
+
+}
+
+template <typename RenderType>
+void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                                    const std::vector<pangolin::GlBuffer> & indexBuffers,
+                                    const GLenum mode) {
+
+    assert(indexBuffers.size() == vertexAttributeBuffers.size());
+
+    renderSetup();
+
+    for (int m = 0; m < vertexAttributeBuffers.size(); ++m) {
+
+        vertexAttributeSetup(vertexAttributeBuffers[m]);
+
+        indexBuffers[m].Bind();
+
+        glDrawElements(mode, indexBuffers[m].num_elements, GL_UNSIGNED_INT, 0);
+
+        indexBuffers[m].Unbind();
+
+    }
+
+    renderTeardown(vertexAttributeBuffers.back());
 
 }
 

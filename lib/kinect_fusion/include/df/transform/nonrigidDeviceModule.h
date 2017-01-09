@@ -110,7 +110,7 @@ NonrigidTransformer<Scalar,TransformT>::DeviceModule::DeviceModule(const Sophus:
 
 template <typename Scalar, template <typename,int...> class TransformT>
 inline __host__ __device__ typename NonrigidTransformer<Scalar,TransformT>::Vec3
-NonrigidTransformer<Scalar,TransformT>::DeviceModule::transformWorldToLive(const Vec3 & vertexInWorldCoords) {
+NonrigidTransformer<Scalar,TransformT>::DeviceModule::transformWorldToLive(const Vec3 & vertexInWorldCoords) const {
 
     const Vec3 vertexInGridCoords = nearestNeighborGrid_.worldToGrid(vertexInWorldCoords);
 

@@ -30,17 +30,19 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
                 inputs_state = tf.concat(3, [inputs, state])
 
                 # define the variables
-                init_biases = tf.constant_initializer(1.0)
-                kernel = self.make_var('weights', [3, 3, self._num_units + self._channels, 2 * self._num_units])
-                biases = self.make_var('biases', [2 * self._num_units], init_biases)
+                init_kernel = tf.constant_initializer(0.0)
+                init_biases = tf.constant_initializer(0.0)
+                kernel = self.make_var('weights', [1, 1, self._num_units + self._channels, self._num_units], init_kernel)
+                biases = self.make_var('biases', [self._num_units], init_biases)
 
                 # 2D convolution
                 conv = tf.nn.conv2d(inputs_state, kernel, [1, 1, 1, 1], padding='SAME')
-                ru = tf.nn.bias_add(conv, biases)
+                u = tf.nn.sigmoid(tf.nn.bias_add(conv, biases))
 
-                ru = tf.nn.sigmoid(ru)
-                r, u = tf.split(3, 2, ru)
+                # ru = tf.nn.sigmoid(ru)
+                # r, u = tf.split(3, 2, ru)
 
+            '''
             with tf.variable_scope("Candidate"):
                 inputs_rstate = tf.concat(3, [inputs, tf.mul(r, state)])
 
@@ -52,6 +54,7 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
                 # 2D convolution
                 conv_1 = tf.nn.conv2d(inputs_rstate, kernel_1, [1, 1, 1, 1], padding='SAME')
                 c = tf.nn.tanh(tf.nn.bias_add(conv_1, biases_1))
+            '''
 
-            new_h = u * state + (1 - u) * c
+            new_h = tf.nn.relu(u * state + (1 - u) * inputs)
         return new_h, new_h

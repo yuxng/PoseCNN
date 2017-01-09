@@ -8,15 +8,15 @@ namespace df {
 class OptParse {
 public:
 
-    void registerOption(const std::string flag, std::string & value, const unsigned char shorthand = 0, const bool required = false);
+    void registerOption(const std::string flag, std::string & value, const unsigned char shorthand = -1, const bool required = false);
 
-    void registerOption(const std::string flag, int & value, const unsigned char shorthand = 0, const bool required = false);
+    void registerOption(const std::string flag, int & value, const unsigned char shorthand = -1, const bool required = false);
 
-    void registerOption(const std::string flag, float & value, const unsigned char shorthand = 0, const bool required = false);
+    void registerOption(const std::string flag, float & value, const unsigned char shorthand = -1, const bool required = false);
 
-    void registerOption(const std::string flag, bool & value, const unsigned char shorthand = 0, const bool required = false);
+    void registerOption(const std::string flag, bool & value, const unsigned char shorthand = -1, const bool required = false);
 
-    void parseOptions(int & argc, char * * & argv);
+    int parseOptions(int & argc, char * * & argv);
 
 private:
 

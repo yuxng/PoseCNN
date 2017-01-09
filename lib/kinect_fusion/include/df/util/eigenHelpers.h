@@ -41,6 +41,59 @@ round(const Eigen::MatrixBase<Derived> & v) {
 
 }
 
+// -=-=-=- vector manipulation -=-=-=-
+//template <typename Scalar, typename Derived,
+//          typename std::enable_if<std::is_same<Eigen::internal::traits<Derived>::Scalar,Scalar>::value &&
+//                                  Eigen::internal::traits<Derived>::ColsAtCompileTime == 1,int>::type = 0>
+//__host__ __device__
+//inline Eigen::Matrix<Eigen::internal::traits<Derived>::Scalar,Eigen::internal::traits<Derived>::RowsAtCompileTime,1> compose(Scalar head, Eigen::Matrix<Eigen::internal)
+
+//template <typename Scalar>
+//__host__ __device__
+//inline Eigen::Matrix<Scalar,1,1> reverse(const Eigen::Matrix<Scalar,1,1> & vec) {
+
+//    return vec;
+
+//}
+
+//template <typename Scalar, int D>
+//__host__ __device__
+//inline Eigen::Matrix<Scalar,D,1> reverse(const Eigen::Matrix<Scalar,D,1> & vec) {
+
+//    Eigen::Matrix<Scalar,D,1> rev;
+//    rev.template head<1>() = vec.template tail<1>();
+//    rev.template tail<D-1>() = reverse(vec.template head<D-1>());
+//    return rev;
+
+//}
+
+//template <typename Derived,
+//          typename std::enable_if<Eigen::internal::traits<Derived>::ColsAtCompileTime == 1 &&
+//                                  Eigen::internal::traits<Derived>::RowsAtCompileTime == 1,int>::type = 0>
+//__host__ __device__
+//inline Eigen::Matrix<typename Eigen::internal::traits<Derived>::Scalar,Eigen::internal::traits<Derived>::RowsAtCompileTime,1> reverse(const Eigen::MatrixBase<Derived> & vec) {
+
+//    return vec;
+
+//}
+
+//template <typename Derived,
+//          typename std::enable_if<Eigen::internal::traits<Derived>::ColsAtCompileTime == 1,int>::type = 0>
+//__host__ __device__
+//inline Eigen::Matrix<typename Eigen::internal::traits<Derived>::Scalar,Eigen::internal::traits<Derived>::RowsAtCompileTime,1> reverse(const Eigen::MatrixBase<Derived> & vec) {
+
+//    typedef typename Eigen::internal::traits<Derived>::Scalar Scalar;
+//    static constexpr int D = Eigen::internal::traits<Derived>::RowsAtCompileTime;
+
+//    Eigen::Matrix<Scalar,D,1> rev;
+//    rev.template head<1>() = vec.template tail<1>();
+//    if ( D > 0) {
+//        rev.template tail<D-1>() = reverse(vec.template head<D-1>());
+//    }
+//    return rev;
+
+//}
+
 // -=-=-=- generic comparisons -=-=-=-
 template <typename Scalar, int D>
 struct VecCompare {

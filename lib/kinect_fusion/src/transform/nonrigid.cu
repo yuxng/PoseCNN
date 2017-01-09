@@ -225,9 +225,9 @@ struct TransformRecenter<DualQuaternion> {
                        recenteredDualQuaternions.data(),[](const DualQuaternion<Scalar> & transform, const Vec3 & center) {
 
             // TODO: is there a more efficent way?
-            const Quaternion centerer(0,center(0)/2,center(1)/2,center(2)/2);
+            const Quaternion decenterer(0,center(0)/2,center(1)/2,center(2)/2);
 
-            return DualQuaternion<Scalar>(Quaternion(1,0,0,0),centerer) * transform * DualQuaternion<Scalar>(Quaternion(1,0,0,0),Scalar(-1)*centerer);
+            return DualQuaternion<Scalar>(Quaternion(1,0,0,0),decenterer) * transform * DualQuaternion<Scalar>(Quaternion(1,0,0,0),Scalar(-1)*decenterer);
 
         });
 
@@ -330,7 +330,7 @@ template <typename Scalar, template <typename, int...> class TransformT>
 void NonrigidTransformer<Scalar,TransformT>::toDeviceRecenteredDualQuaternions(
         DeviceTensor1<DualQuaternion<Scalar, Eigen::DontAlign> > & dualQuaternions,
         const ConstHostTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & transformationOrigins,
-        const ConstHostTensor1<TransformT<Scalar> > & transforms) {
+        const ConstHostTensor1<TransformT<Scalar> > & transforms) const {
 
     TransformRecenter<TransformT>::recenter(dualQuaternions,transformationOrigins,transforms);
 
@@ -853,7 +853,13 @@ void NonrigidTransformer<Scalar,TransformT>::update(const DeviceTensor1<Eigen::M
 
             for (uint index = numExistingBaseLevelVertices; index < numBaseLevelVertices; ++index) {
 
-                vertexTransforms_[0][index] = newBaseLevelTransforms(index - numExistingBaseLevelVertices);
+                const Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> & vertex = deformationGraphVertices_[0][index];
+                const DualQuaternion<Scalar,Eigen::DontAlign> decenterer(Eigen::Quaternion<Scalar,Eigen::DontAlign>(1,0,0,0),
+                                                                         Eigen::Quaternion<Scalar,Eigen::DontAlign>(0,vertex(0)/2,vertex(1)/2,vertex(2)/2));
+                const DualQuaternion<Scalar,Eigen::DontAlign> centerer(Eigen::Quaternion<Scalar,Eigen::DontAlign>(1,0,0,0),
+                                                                       Scalar(-1)*Eigen::Quaternion<Scalar,Eigen::DontAlign>(0,vertex(0)/2,vertex(1)/2,vertex(2)/2));
+
+                vertexTransforms_[0][index] = centerer*newBaseLevelTransforms(index - numExistingBaseLevelVertices)*decenterer;
 
             }
 

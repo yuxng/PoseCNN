@@ -3,7 +3,10 @@
 #include <df/surface/marchingCubesTables.h>
 #include <df/util/cudaHelpers.h>
 #include <df/util/eigenHelpers.h>
+#include <df/voxel/color.h>
+#include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h>
+
 
 #include <thrust/device_ptr.h>
 #include <thrust/binary_search.h>
@@ -70,8 +73,8 @@ inline __device__ Scalar sampleVoxelGrid(const Tensor<3,VoxelT,DeviceResident> v
                                          const Scalar weightThreshold,
                                          bool & missingData) {
     const VoxelT & voxel = voxelGrid(x,y,z);
-    if (voxel.weight() >= weightThreshold) {
-        return voxel.signedDistanceValue();
+    if (voxel.template weight<TsdfVoxel>() >= weightThreshold) {
+        return voxel.template value<TsdfVoxel>();
     }
     else {
         missingData = true;
@@ -82,10 +85,10 @@ inline __device__ Scalar sampleVoxelGrid(const Tensor<3,VoxelT,DeviceResident> v
 
 template <typename VoxelT>
 inline __device__ auto sampleVoxelGrid(const Tensor<3,VoxelT,DeviceResident> voxelGrid,
-                                       const int x, const int y, const int z) -> decltype(voxelGrid(0,0,0).signedDistanceValue()) {
+                                       const int x, const int y, const int z) -> decltype(voxelGrid(0,0,0).template value<TsdfVoxel>()) {
 
     const VoxelT & voxel = voxelGrid(x,y,z);
-    return voxel.signedDistanceValue();
+    return voxel.template value<TsdfVoxel>();
 
 }
 
@@ -123,7 +126,6 @@ __global__ void classifyVoxelsKernel(const Tensor<3,VoxelT,DeviceResident> voxel
             centerVals[5] = sampleVoxelGrid(voxelGrid, x + 1, y,     z + 1, weightThreshold, missingData);
             centerVals[6] = sampleVoxelGrid(voxelGrid, x + 1, y + 1, z + 1, weightThreshold, missingData);
             centerVals[7] = sampleVoxelGrid(voxelGrid, x,     y + 1, z + 1, weightThreshold, missingData);
-
 
             if (missingData) {
 
@@ -338,6 +340,8 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
                     const VoxelGrid<Scalar,VoxelT,DeviceResident> & voxelGrid,
                     const Scalar weightThreshold) {
 
+    std::cout << "threshold: " << weightThreshold << std::endl;
+
     // TODO: ideas to make this faster
     //
     // 1. the extra storage for whether or not each voxel contains geometry is probably wasteful
@@ -347,12 +351,20 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
     // 2. Richard's code claims that recalculating the voxel code is faster than storing it in
     // global memory. this should also be investigated
 
+//    ManagedTensor<3,uint,DeviceResident> voxelCodes(voxelGrid.dimensions());
     static ManagedTensor<3,uint,DeviceResident> dVertexCounts(voxelGrid.dimensions());
+
+//    int * dValidVoxelCount;
+//    cudaMalloc(&dValidVoxelCount,sizeof(int));
+//    cudaMemset(dValidVoxelCount,0,sizeof(int));
 
     {
         dim3 block(16,16,4);
         dim3 grid(voxelGrid.size(0)/block.x,voxelGrid.size(1)/block.y,voxelGrid.size(2)/block.z);
-        classifyVoxelsKernel<<<grid,block>>>(voxelGrid.grid(), weightThreshold, dVertexCounts);
+
+        classifyVoxelsKernel<<<grid,block>>>(voxelGrid.grid(),weightThreshold,
+//                                             voxelCodes,
+                                             dVertexCounts);
     }
 
     cudaDeviceSynchronize();
@@ -369,6 +381,7 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
     uint lastNumVertices;
     cudaMemcpy(&lastNumVertices,dVertexCounts.data() + dVertexCounts.count()-1,sizeof(uint),cudaMemcpyDeviceToHost);
     numVertices += lastNumVertices;
+    printf("%d vertices\n",numVertices);
 
     static ManagedTensor<3,uint,DeviceResident> validVoxelScanResult(voxelGrid.dimensions());
     thrust::transform(thrust::device_ptr<uint>(dVertexCounts.data()),
@@ -425,6 +438,7 @@ void extractSurface(ManagedTensor<2, Scalar, DeviceResident> & vertices,
         computeTrianglesKernel<<<intDivideAndCeil(numValidVoxels,nThreads),nThreads>>>(validVoxelIndices,
                                                                                        vertexCountScanResult,
                                                                                        voxelGrid.grid(),
+//                                                                                       voxelCodes,
                                                                                        vertices);
     }
 
@@ -506,9 +520,9 @@ __global__ void computeColorsKernel(const Tensor<2, Scalar, DeviceResident> vert
     }
     else
     {
-      colors(0, i) = 0;
-      colors(1, i) = 0;
-      colors(2, i) = 0;
+      colors(0, i) = 255;
+      colors(1, i) = 255;
+      colors(2, i) = 255;
     }
   }
 
@@ -529,7 +543,11 @@ void computeColors(const Tensor<2, Scalar, DeviceResident> & vertices, int* labe
 
 
 template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
-                             const VoxelGrid<float,TsdfVoxel,DeviceResident> &,
+                             const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel>,DeviceResident> &,
+                             const float);
+
+template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
+                             const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &,
                              const float);
 
 template uint weldVertices(const Tensor<2,float,DeviceResident> &,
@@ -537,7 +555,7 @@ template uint weldVertices(const Tensor<2,float,DeviceResident> &,
                            ManagedTensor<1,int,DeviceResident> &);
 
 template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
-                   unsigned char*, const VoxelGrid<float, TsdfVoxel, DeviceResident> &,
+                   unsigned char*, const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel>, DeviceResident> &,
                    Tensor<2, unsigned char, DeviceResident> &, int, int);
 
 } // namespace df

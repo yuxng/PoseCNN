@@ -7,6 +7,7 @@
 #include <sophus/se3.hpp>
 
 #include <df/util/cudaHelpers.h>
+#include <df/util/debugHelpers.h>
 
 namespace df {
 
@@ -36,31 +37,6 @@ __host__ __device__ Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> rotate(const Dual
     return transform.rotate(vector);
 
 }
-
-template <typename ... DebugArgTs>
-struct PixelDebugger {
-
-    inline __device__ static void debugPixel(const Eigen::Vector2i & pixel,
-                                             const Eigen::UnalignedVec4<uchar> & color,
-                                             DebugArgTs ... /*debugArgs*/) { }
-
-};
-
-template <>
-struct PixelDebugger<DeviceTensor2<Eigen::UnalignedVec4<unsigned char> > > {
-
-    inline __device__ static void debugPixel(const Eigen::Vector2i & pixel,
-                                             const Eigen::UnalignedVec4<uchar> & color,
-                                             DeviceTensor2<Eigen::UnalignedVec4<unsigned char> > debugArg) {
-
-//        if ((pixel(0) % 32 == 0) && (pixel(1) % 32 == 0)) {
-//            printf("debugging %d, %d\n",pixel(0),pixel(1));
-//        }
-        debugArg(pixel) = color;
-
-    }
-
-};
 
 template <typename Scalar, typename CameraModelT, int K, template <typename, int...> class TransformT, typename ... DebugArgTs>
 __global__ void computeDataNormalEquationsKernel(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > liveVertices,

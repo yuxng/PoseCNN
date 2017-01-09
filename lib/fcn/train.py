@@ -15,6 +15,7 @@ import numpy as np
 import os
 import tensorflow as tf
 import sys
+import threading
 
 class SolverWrapper(object):
     """A simple wrapper around Caffe's solver.
@@ -53,59 +54,8 @@ class SolverWrapper(object):
         print 'Wrote snapshot to: {:s}'.format(filename)
 
 
-    def loss_cross_entropy(self, scores, labels):
-        """
-        scores: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
-        labels: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
-        """
-
-        with tf.name_scope('loss'):
-            loss = 0
-            for i in range(cfg.TRAIN.NUM_STEPS):
-                score = scores[i]
-                label = labels[i]
-                cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[4])
-                loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
-            loss /= cfg.TRAIN.NUM_STEPS
-        return loss
-
-    def loss_cross_entropy_single_frame(self, scores, labels):
-        """
-        scores: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
-        labels: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
-        """
-
-        with tf.name_scope('loss'):
-            # cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[4])
-            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
-            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
-
-        return loss
-
-
-    def train_model(self, sess, max_iters):
+    def train_model(self, sess, train_op, loss_cls, loss_metric, learning_rate, max_iters):
         """Network training loop."""
-
-        if cfg.TRAIN.SINGLE_FRAME:
-            # data layer
-            data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes)
-            # classification loss
-            scores = self.net.get_output('prob')
-            # labels = self.net.get_output('backprojection')[1]
-            labels = self.net.get_output('gt_label_2d')
-            loss = self.loss_cross_entropy_single_frame(scores, labels)
-        else:
-            # data layer
-            data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
-            # classification loss
-            scores = self.net.get_output('outputs')
-            labels = self.net.get_output('labels_gt_3d')
-            loss = self.loss_cross_entropy(scores, labels)
-
-        # optimizer
-        lr = tf.Variable(cfg.TRAIN.LEARNING_RATE, trainable=False)
-        momentum = cfg.TRAIN.MOMENTUM
-        train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss)
 
         # intialize variables
         sess.run(tf.global_variables_initializer())
@@ -114,34 +64,17 @@ class SolverWrapper(object):
                    'weights from {:s}').format(self.pretrained_model)
             self.net.load(self.pretrained_model, sess, True)
 
+        tf.get_default_graph().finalize()
+
         last_snapshot_iter = -1
         timer = Timer()
         for iter in range(max_iters):
-            # learning rate
-            if iter >= cfg.TRAIN.STEPSIZE:
-                sess.run(tf.assign(lr, cfg.TRAIN.LEARNING_RATE * cfg.TRAIN.GAMMA))
-            else:
-                sess.run(tf.assign(lr, cfg.TRAIN.LEARNING_RATE))
-
-            # get one batch
-            blobs = data_layer.forward()
-
-            # Make one SGD update
-            if cfg.TRAIN.SINGLE_FRAME:
-                feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
-                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
-                           self.net.gt_label_3d: blobs['data_label_3d']}
-            else:
-                feed_dict={self.net.data: blobs['data_image'], self.net.gt_label_2d: blobs['data_label'], \
-                           self.net.depth: blobs['data_depth'], self.net.meta_data: blobs['data_meta_data'], \
-                           self.net.state: blobs['data_state'], self.net.gt_label_3d: blobs['data_label_3d']}
-            
             timer.tic()
-            loss_cls_value, _ = sess.run([loss, train_op], feed_dict=feed_dict)
+            loss_cls_value, loss_metric_value, lr, _ = sess.run([loss_cls, loss_metric, learning_rate, train_op])
             timer.toc()
-
-            print 'iter: %d / %d, loss_cls: %.4f, lr: %f, time: %.2f' %\
-                    (iter+1, max_iters, loss_cls_value, lr.eval(), timer.diff)
+            
+            print 'iter: %d / %d, loss_cls: %.4f, loss_metric: %.4f, lr: %f, time: %.2f' %\
+                    (iter+1, max_iters, loss_cls_value, loss_metric_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -164,12 +97,94 @@ def get_training_roidb(imdb):
     return imdb.roidb
 
 
+def load_and_enqueue(sess, net, roidb, num_classes, coord):
+    if cfg.TRAIN.SINGLE_FRAME:
+        # data layer
+        data_layer = GtSingleDataLayer(roidb, num_classes)
+    else:
+        # data layer
+        data_layer = GtDataLayer(roidb, num_classes)
+
+    while not coord.should_stop():
+        blobs = data_layer.forward()
+
+        if cfg.TRAIN.SINGLE_FRAME:
+            feed_dict={net.data: blobs['data_image'], net.gt_label_2d: blobs['data_label'], \
+                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data']}
+        else:
+            feed_dict={net.data: blobs['data_image'], net.gt_label_2d: blobs['data_label'], \
+                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
+                       net.state: blobs['data_state'], net.points: blobs['data_points']}
+
+        sess.run(net.enqueue_op, feed_dict=feed_dict)
+
+def loss_cross_entropy(scores, labels):
+    """
+    scores: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
+    labels: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
+    """
+
+    with tf.name_scope('loss'):
+        loss = 0
+        for i in range(cfg.TRAIN.NUM_STEPS):
+            score = scores[i]
+            label = labels[i]
+            cross_entropy = -tf.reduce_sum(label * score, reduction_indices=[3])
+            loss += tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(label))
+        loss /= cfg.TRAIN.NUM_STEPS
+    return loss
+
+def loss_cross_entropy_single_frame(scores, labels):
+    """
+    scores: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+    labels: a tensor [batch_size, grid_size, grid_size, grid_size, num_classes]
+    """
+
+    with tf.name_scope('loss'):
+        cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
+        loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
+
+    return loss
+
+
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+    if cfg.TRAIN.SINGLE_FRAME:
+        # classification loss
+        scores = network.get_output('prob')
+        labels = network.get_output('gt_label_2d')
+        loss_metric = network.get_output('triplet')[0]
+        loss_cls = loss_cross_entropy_single_frame(scores, labels)
+        loss = 10 * loss_cls + loss_metric
+    else:
+        # classification loss
+        scores = network.get_output('outputs')
+        labels = network.get_output('labels_gt_2d')
+        loss = loss_cross_entropy(scores, labels)
 
-        print 'Solving...'
-        sw.train_model(sess, max_iters)
-        print 'done solving'
+    # optimizer
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = cfg.TRAIN.LEARNING_RATE
+    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+                                           cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+    momentum = cfg.TRAIN.MOMENTUM
+    train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
+    
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+
+    sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+
+    # thread to load data
+    coord = tf.train.Coordinator()
+    t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
+    t.start()
+
+    print 'Solving...'
+    sw.train_model(sess, train_op, loss_cls, loss_metric, learning_rate, max_iters)
+    print 'done solving'
+
+    coord.request_stop()
+    coord.join([t])
+
+    sess.close()

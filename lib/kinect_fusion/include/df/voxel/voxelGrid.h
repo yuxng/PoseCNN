@@ -4,6 +4,8 @@
 #include <Eigen/Geometry>
 
 #include <df/util/tensor.h>
+#include <df/voxel/color.h>
+#include <df/voxel/tsdf.h>
 
 namespace df {
 
@@ -36,10 +38,34 @@ template <typename Scalar, typename VoxelT>
 struct SignedDistanceValueExtractor {
 
     typedef Scalar ReturnType;
+    typedef Scalar ScalarType;
 
     __host__ __device__
     inline Scalar operator()(const VoxelT & voxel) const {
-        return voxel.signedDistanceValue();
+        return voxel.template value<TsdfVoxel>();
+    }
+
+};
+
+template <typename Scalar, typename VoxelT>
+struct SignedDistanceValidExtractor {
+
+    __host__ __device__
+    inline bool operator()(const VoxelT & voxel) const {
+        return voxel.template weight<TsdfVoxel>() > Scalar(0);
+    }
+
+};
+
+template <typename Scalar, typename VoxelT>
+struct ColorValueExtractor {
+
+    typedef Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> ReturnType;
+    typedef Scalar ScalarType;
+
+    __host__ __device__
+    inline ReturnType operator()(const VoxelT & voxel) const {
+        return voxel.template value<ColorVoxel>();
     }
 
 };

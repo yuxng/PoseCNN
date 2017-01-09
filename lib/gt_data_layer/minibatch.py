@@ -26,10 +26,10 @@ def get_minibatch(roidb, voxelizer):
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
+    im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, state_blob, label_3d_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, state_blob, points_blob = _get_label_blob(roidb, voxelizer)
 
     # reshape the blobs
     num_steps = cfg.TRAIN.NUM_STEPS
@@ -38,22 +38,25 @@ def get_minibatch(roidb, voxelizer):
     height = im_blob.shape[1]
     width = im_blob.shape[2]
     im_blob = im_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    im_depth_blob = im_depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     im_normal_blob = im_normal_blob.reshape((num_steps, ims_per_batch, height, width, -1))
+    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=4)
 
     height = label_blob.shape[1]
     width = label_blob.shape[2]
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
-    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=4)
 
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob)
+    # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob)
 
     if cfg.INPUT == 'RGBD':
         data_blob = im_rgbd_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
+    elif cfg.INPUT == 'DEPTH':
+        data_blob = im_depth_blob
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
 
@@ -62,7 +65,7 @@ def get_minibatch(roidb, voxelizer):
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
              'data_state': state_blob,
-             'data_label_3d': label_3d_blob}
+             'data_points': points_blob}
 
     return blobs
 
@@ -72,6 +75,7 @@ def _get_image_blob(roidb, scale_ind):
     """
     num_images = len(roidb)
     processed_ims = []
+    processed_ims_depth = []
     processed_ims_normal = []
     im_scales = []
     for i in xrange(num_images):
@@ -95,6 +99,18 @@ def _get_image_blob(roidb, scale_ind):
         im_scales.append(im_scale)
         processed_ims.append(im)
 
+        # depth
+        im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+        im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
+        im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
+        if roidb[i]['flipped']:
+            im_depth = im_depth[:, ::-1]
+
+        im_orig = im_depth.astype(np.float32, copy=True)
+        im_orig -= cfg.PIXEL_MEANS
+        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_depth.append(im_depth)
+        
         # meta data
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
         K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
@@ -104,8 +120,7 @@ def _get_image_blob(roidb, scale_ind):
         cy = K[1, 2]
 
         # normals
-        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
-        depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        depth = im_depth_raw.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
         nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
         im_normal = 127.5 * nmap + 127.5
         im_normal = im_normal.astype(np.uint8)
@@ -121,9 +136,10 @@ def _get_image_blob(roidb, scale_ind):
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
+    blob_depth = im_list_to_blob(processed_ims_depth, 3)
     blob_normal = im_list_to_blob(processed_ims_normal, 3)
 
-    return blob, blob_normal, im_scales
+    return blob, blob_depth, blob_normal, im_scales
 
 def _process_label_image(label_image, class_colors, class_weights):
     """
@@ -230,13 +246,10 @@ def _get_label_blob(roidb, voxelizer):
         label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
-    grid_size = voxelizer.grid_size
-    state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+    state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+    points_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, height, width, 3), dtype=np.float32)
 
-    # labels in 3D
-    label_3d_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
-
-    return depth_blob, label_blob, meta_data_blob, state_blob, label_3d_blob
+    return depth_blob, label_blob, meta_data_blob, state_blob, points_blob
 
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):

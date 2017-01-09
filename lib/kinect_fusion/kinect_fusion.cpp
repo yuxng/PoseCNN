@@ -118,29 +118,29 @@ void KinectFusion::create_tensors()
   dVertices_ = new ManagedTensor<2, float, DeviceResident>({3,1});
   dWeldedVertices_ = new ManagedTensor<2, float, DeviceResident>({3,1});
   dIndices_ = new ManagedTensor<1, int, DeviceResident>(Eigen::Matrix<uint,1,1>(1));
-  dNormals_ = new ManagedTensor<2, float, DeviceResident>({3,1});
+  dNormals_ = new ManagedDeviceTensor1<Eigen::UnalignedVec3<float> >(1);
   dColors_ = new ManagedTensor<2, unsigned char, DeviceResident>({3,1});
   numUniqueVertices_ = 0;
 
   // for rendering
   vertBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_FLOAT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
-  normBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dNormals_->dimensionSize(1), GL_FLOAT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
+  normBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dNormals_->length(), GL_FLOAT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
   indexBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlElementArrayBuffer, dIndices_->dimensionSize(0), GL_INT, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
   colorBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_UNSIGNED_BYTE, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
 
   // voxels
-  voxel_data_ = new ManagedTensor<3, TsdfVoxel, DeviceResident>({256, 256, 256});
+  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>({512, 512, 512});
   float voxelGridOffsetX = -1;
   float voxelGridOffsetY = -1;
   float voxelGridOffsetZ = 0;
   float voxelGridDimX = 2;
   float voxelGridDimY = 2;
   float voxelGridDimZ = 2;
-  voxel_grid_ = new DeviceVoxelGrid<float, TsdfVoxel>(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
-  voxel_grid_->fill(TsdfVoxel::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel>::zero());
   initMarchingCubesTables();
 
   // renderer
@@ -161,9 +161,6 @@ void KinectFusion::create_tensors()
   }
 
   // ICP
-  icpOdom_ = new ICPOdometry(depth_camera_->width(), depth_camera_->height(), 
-                        depth_camera_->params()[2], depth_camera_->params()[3], 
-                        depth_camera_->params()[0], depth_camera_->params()[1]);
   transformer_ = new RigidTransformer<float>;
 }
 
@@ -172,7 +169,7 @@ void KinectFusion::create_tensors()
 void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ)
 {
   delete voxel_grid_;
-  voxel_grid_ = new DeviceVoxelGrid<float, TsdfVoxel>(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
@@ -182,22 +179,20 @@ void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY
 // estimate camera pose with ICP
 void KinectFusion::solve_pose(float* pose_worldToLive, float* pose_liveToWorld)
 {
-  // copy predicted depth map
-  predicted_verts_->copyFrom(*predicted_verts_device_);
-  unsigned short* depth = (unsigned short *)malloc(depth_camera_->width() * depth_camera_->height() * sizeof(unsigned short));
-  for (uint x = 0; x < depth_camera_->width(); x++)
-  {
-    for (uint y = 0; y < depth_camera_->height(); y++)
-      depth[y * depth_camera_->width() + x] = int((*predicted_verts_)(x, y)(2) * depth_factor_);
-  }
-  icpOdom_->initICPModel(depth, depth_cutoff_, depth_factor_);
-  free(depth);
+  const Camera<Poly3CameraModel,double> * poly3DepthCamera = dynamic_cast<const Camera<Poly3CameraModel,double> *>(depth_camera_);
+  if (!poly3DepthCamera)
+    throw std::runtime_error("expected Poly3 model for the depth camera");
+  Poly3CameraModel<float> model = poly3DepthCamera->model().cast<float>();
 
-  int threads = 224;
-  int blocks = 96;
-  Sophus::SE3d T_prev_curr;
-  icpOdom_->getIncrementalTransformation(T_prev_curr, threads, blocks);
-  Sophus::SE3f update = T_prev_curr.inverse().cast<float>();
+  Eigen::Vector2f depthRange(0.25, 6.0);
+  float maxError = 0.02;
+  uint icpIterations = 8;
+
+  std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
+
+  Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
+                                 model, transformer_->worldToLiveTransformation(),
+                                 depthRange, maxError, icpIterations);
 
   transformer_->setWorldToLiveTransformation(update * transformer_->worldToLiveTransformation());
   std::cout << transformer_->worldToLiveTransformation().matrix3x4() << std::endl << std::endl;
@@ -232,8 +227,8 @@ void KinectFusion::fuse_depth()
     throw std::runtime_error("expected Poly3 model for the depth camera");
   Poly3CameraModel<float> model = poly3DepthCamera->model().cast<float>();
 
-  float truncationDistance = 0.025;
-  fuseFrame(*voxel_grid_, *transformer_, model, *depth_map_device_, truncationDistance);
+  float truncationDistance = 0.04;
+  df::fuseFrame(*voxel_grid_, *transformer_, model, *depth_map_device_, truncationDistance);
 }
 
 // extract surface
@@ -245,13 +240,13 @@ void KinectFusion::extract_surface()
   dIndices_->resize(Eigen::Matrix<uint,1,1>(dVertices_->dimensionSize(1)));
   numUniqueVertices_ = weldVertices(*dVertices_, *dWeldedVertices_, *dIndices_);
 
-  // std::cout << numUniqueVertices_ << " unique vertices / " << dVertices_->dimensionSize(1) << std::endl;
+  std::cout << numUniqueVertices_ << " unique vertices / " << dVertices_->dimensionSize(1) << std::endl;
 
-  dNormals_->resize({3, numUniqueVertices_});
-  Tensor<2, float, DeviceResident> actualWeldedVertices(dNormals_->dimensions(), dWeldedVertices_->data());
+  dNormals_->resize(numUniqueVertices_);
+  DeviceTensor2<float> dNormals__( {3, dNormals_->length() }, reinterpret_cast<float *>(dNormals_->data()));
+  Tensor<2, float, DeviceResident> actualWeldedVertices(dNormals__.dimensions(), dWeldedVertices_->data());
 
-  computeSignedDistanceGradientNormals(actualWeldedVertices, *dNormals_, *voxel_grid_);
-  cudaDeviceSynchronize();
+  computeSignedDistanceGradientNormals(actualWeldedVertices, dNormals__, *voxel_grid_);
   cudaDeviceSynchronize();
   CheckCudaDieOnError();
 }
@@ -275,10 +270,10 @@ void KinectFusion::render()
   }
 
   // copy normals
-  normBuffer_->Resize(dNormals_->dimensionSize(1));
+  normBuffer_->Resize(dNormals_->length());
   {
     pangolin::CudaScopedMappedPtr scopedPtr(*normBuffer_);
-    checkCuda(cudaMemcpy(*scopedPtr, dNormals_->data(), dNormals_->count()*sizeof(float), cudaMemcpyDeviceToDevice));
+    checkCuda(cudaMemcpy(*scopedPtr, dNormals_->data(), dNormals_->length()*3*sizeof(float), cudaMemcpyDeviceToDevice));
   }
 
   std::vector<pangolin::GlBuffer *> attributeBuffers({vertBuffer_, normBuffer_});
@@ -294,6 +289,9 @@ void KinectFusion::render()
 
   // copy predicted vertices
   {
+    std::cout << vertTex.width << " x " << vertTex.height << std::endl;
+    std::cout << vertTex.internal_format << std::endl;
+
     pangolin::CudaScopedMappedArray scopedArray(vertTex);
     cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
   }
@@ -396,6 +394,9 @@ void KinectFusion::back_project()
   Poly3CameraModel<float> model = poly3DepthCamera->model().cast<float>();
   depth_map_device_->copyFrom(*depth_map_);
   backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
+
+  std::cout << model.focalLength().transpose() << std::endl;
+  std::cout << model.principalPoint().transpose() << std::endl << std::endl;
 }
 
 
@@ -432,9 +433,6 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 {
   // set the depth factor
   depth_factor_ = factor;
-
-  // icp cuda
-  icpOdom_->initICP(reinterpret_cast<ushort *>(depth), depth_cutoff_, depth_factor_);
 
   // convert depth values
   float* p = depth_map()->data();
@@ -484,9 +482,46 @@ void KinectFusion::feed_label(unsigned char* im_label, int* labels_voxel, unsign
 // reset voxels
 void KinectFusion::reset()
 {
-  voxel_grid_->fill(TsdfVoxel::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel>::zero());
   delete transformer_;
   transformer_ = new RigidTransformer<float>;
+}
+
+
+// save reconstructed model
+void KinectFusion::save_model(std::string filename)
+{
+  ManagedHostTensor1<Vec3> hWeldedVertices(numUniqueVertices_);
+  hWeldedVertices.copyFrom(DeviceTensor1<Vec3>(numUniqueVertices_, reinterpret_cast<Vec3*>(dWeldedVertices_->data())));
+
+  const int nFaces = dIndices_->length() / 3;
+  ManagedHostTensor1<Vec3i> hIndices(nFaces);
+  hIndices.copyFrom(DeviceTensor1<Vec3i>(nFaces, reinterpret_cast<Vec3i *>(dIndices_->data())));
+
+  std::ofstream meshStream(filename);
+  meshStream << "ply" << std::endl;
+  meshStream << "format ascii 1.0" << std::endl;
+
+  meshStream << "element vertex " << numUniqueVertices_ << std::endl;
+  meshStream << "property float32 x" << std::endl;
+  meshStream << "property float32 y" << std::endl;
+  meshStream << "property float32 z" << std::endl;
+  meshStream << "element face " << nFaces << std::endl;
+  meshStream << "property list uint8 int32 vertex_index" << std::endl;
+  meshStream << "end_header" << std::endl;
+
+  for (int i = 0; i < numUniqueVertices_; i++)
+  {
+    const Vec3 & vGrid = hWeldedVertices(i);
+    const Vec3 vWorld = voxel_grid_->gridToWorld(vGrid);
+    meshStream << vWorld(0) << " " << vWorld(1) << " " << vWorld(2) << std::endl;
+  }
+
+  for (int i = 0; i < nFaces; ++i)
+  {
+    const Vec3i & face = hIndices(i);
+    meshStream << "3 " << face(2) << " " << face(1) << " " << face(0) << std::endl;
+  }
 }
 
 int main(int argc, char * * argv) 

@@ -15,7 +15,8 @@ namespace df {
 
 template <typename Scalar,
           typename CameraModelT,
-          int DPred>
+          int DPred,
+          typename ... DebugArgsT>
 Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
@@ -23,7 +24,8 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
                              const Sophus::SE3Group<Scalar> & predictionPose,
                              const Eigen::Matrix<Scalar,2,1> & depthRange,
                              const Scalar maxError,
-                             const uint numIterations) {
+                             const uint numIterations,
+                             DebugArgsT ... debugArgs) {
 
     typedef Sophus::SE3Group<Scalar> SE3;
 
@@ -42,13 +44,16 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
 
     for (uint iter = 0; iter < numIterations; ++iter) {
 
+        std::cout << iter << std::endl;
+
         internal::LinearSystem<Scalar,6> system = internal::icpIteration(liveVertices,
                                                                          predVertices,
                                                                          predNormals,
                                                                          cameraModel,
                                                                          accumulatedUpdate,
                                                                          depthRange,maxError,
-                                                                         grid,block);
+                                                                         grid,block,
+                                                                         debugArgs ...);
 
         Eigen::Matrix<Scalar,6,6,Eigen::DontAlign> fullJTJ = internal::SquareMatrixReconstructor<Scalar,6>::reconstruct(system.JTJ);
 
@@ -82,6 +87,12 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
         Eigen::Matrix<Scalar,6,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
 //        std::cout << std::endl << solution2 << std::endl;
 
+        std::cout << fullJTJ << std::endl;
+
+        std::cout << system.JTr << std::endl;
+
+        std::cout << solution.transpose() << std::endl;
+
         SE3 update = SE3::exp(solution);
         accumulatedUpdate = update*accumulatedUpdate;
 
@@ -103,6 +114,17 @@ template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const uint);
 
 template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                          const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                          const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                          const Poly3CameraModel<float> &,
+                          const Sophus::SE3f &,
+                          const Eigen::Vector2f &,
+                          const float,
+                          const uint,
+                          DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
+
+
+template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const Poly3CameraModel<float> &,
@@ -110,5 +132,16 @@ template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const Eigen::Vector2f &,
                           const float,
                           const uint);
+
+template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+                          const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
+                          const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
+                          const Poly3CameraModel<float> &,
+                          const Sophus::SE3f &,
+                          const Eigen::Vector2f &,
+                          const float,
+                          const uint,
+                          DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
+
 
 } // namespace df
