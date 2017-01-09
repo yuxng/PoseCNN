@@ -23,6 +23,7 @@ class vgg16_convs(Network):
         # define a queue
         q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
         self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.depth, self.meta_data])
+        self.close_queue_op = q.close(cancel_pending_enqueues=True)
         data, gt_label_2d, depth, meta_data = q.dequeue()
 
         self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'depth': depth, 'meta_data': meta_data})
@@ -61,5 +62,5 @@ class vgg16_convs(Network):
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
 
-        (self.feed('upscore', 'gt_label_2d')       
+        (self.feed('score', 'gt_label_2d', 'label_2d')       
              .triplet_loss(1.0, name='triplet'))

@@ -171,20 +171,19 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
-    sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
 
-    # thread to load data
-    coord = tf.train.Coordinator()
-    t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
-    t.start()
+        # thread to load data
+        coord = tf.train.Coordinator()
+        t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
+        t.start()
 
-    print 'Solving...'
-    sw.train_model(sess, train_op, loss_cls, loss_metric, learning_rate, max_iters)
-    print 'done solving'
+        print 'Solving...'
+        sw.train_model(sess, train_op, loss_cls, loss_metric, learning_rate, max_iters)
+        print 'done solving'
 
-    coord.request_stop()
-    coord.join([t])
-
-    sess.close()
+        sess.run(network.close_queue_op)
+        coord.request_stop()
+        coord.join([t])

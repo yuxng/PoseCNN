@@ -11,4 +11,4 @@ def _triplet_grad(op, grad, _):
   # compute gradient
   data_grad = triplet_loss_op.triplet_loss_grad(diff, grad, margin)
 
-  return [data_grad, None]  # List of one Tensor, since we have two input
+  return [data_grad, None, None]  # List of one Tensor, since we have three input

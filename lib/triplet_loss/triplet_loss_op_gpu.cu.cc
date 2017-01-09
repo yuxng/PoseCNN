@@ -108,7 +108,7 @@ __global__ void sum_gradients(const int nthreads, const Dtype* diffs, const int*
 
 // bottom_data: (batch_size, height, width, channels)
 bool TripletForwardLaucher(
-    const float* bottom_data, const float* bottom_label,
+    const float* bottom_data, const float* bottom_label, const int* bottom_prediction,
     const int batch_size, const int height, const int width, const int channels, const int num_classes,
     const float margin, float* top_data, float* bottom_diff, const Eigen::GpuDevice& d)
 {
@@ -116,9 +116,14 @@ bool TripletForwardLaucher(
   float* labels = (float*)malloc(batch_size * height * width * num_classes * sizeof(float));
   cudaMemcpy(labels, bottom_label, batch_size * height * width * num_classes * sizeof(float), cudaMemcpyDeviceToHost);
 
+  // copy predictions to CPU
+  int* predictions = (int*)malloc(batch_size * height * width * sizeof(int));
+  cudaMemcpy(predictions, bottom_prediction, batch_size * height * width * sizeof(int), cudaMemcpyDeviceToHost);
+
   // sample triplets to define the loss
   // compute label indexes
   std::vector< std::vector<int> > label_indexes(num_classes);
+  std::vector< std::vector<int> > label_indexes_correct(num_classes);
   for (int n = 0; n < batch_size; n++)
   {
     for (int h = 0; h < height; h++)
@@ -126,14 +131,18 @@ bool TripletForwardLaucher(
       for (int w = 0; w < width; w++)
       {
         int index = n * height * width + h * width + w;
+        int cls;
         for (int c = 0; c < num_classes; c++)
         {
           if(labels[index * num_classes + c] > 0)
           {
             label_indexes[c].push_back(index);
+            cls = c;
             break;
           }
         }
+        if (predictions[index] == cls)
+          label_indexes_correct[cls].push_back(index);
       } 
     }
   }
@@ -170,30 +179,62 @@ bool TripletForwardLaucher(
         }
 
         // sample a positive pixel
-        int num = label_indexes[cls].size();
+        int num = label_indexes_correct[cls].size();
         int index_p;
-        if (num == 1)
-          index_p = index;
+        if (num > 0 && rand() % 2 == 0)
+        {
+          if (num == 1)
+            index_p = label_indexes_correct[cls][0];
+          else
+          {
+            while(1)
+            {
+              index_p = label_indexes_correct[cls][rand() % num];
+              if (index_p != index)
+                break;
+            }
+          }
+        }
         else
         {
-          while(1)
+          num = label_indexes[cls].size();
+          if (num == 1)
+            index_p = index;
+          else
           {
-            index_p = label_indexes[cls][rand() % num];
-            if (index_p != index)
-              break;
+            while(1)
+            {
+              index_p = label_indexes[cls][rand() % num];
+              if (index_p != index)
+                break;
+            }
           }
         }
 
         // sample a negative pixel
         int cls_neg;
-        while(1)
+        // check the predicted label of this pixel for hard negative
+        int cls_pred = predictions[index];
+        if (cls_pred != cls && label_indexes[cls_pred].size() > 0 && rand() % 2 == 0)
+          cls_neg = cls_pred;
+        else
         {
-          cls_neg = class_indexes[rand() % class_indexes.size()];
-          if (cls_neg != cls)
-            break;
+          while(1)
+          {
+            cls_neg = class_indexes[rand() % class_indexes.size()];
+            if (cls_neg != cls)
+              break;
+          }
         }
-        num = label_indexes[cls_neg].size();
-        int index_n = label_indexes[cls_neg][rand() % num];
+        int index_n;
+        num = label_indexes_correct[cls_neg].size();
+        if (num > 0 && rand() % 2 == 0)
+          index_n = label_indexes_correct[cls_neg][rand() % num];
+        else
+        {
+          num = label_indexes[cls_neg].size();
+          index_n = label_indexes[cls_neg][rand() % num];
+        }
 
         // store the triplet
         triplets[index * 3 + 0] = index;
@@ -251,6 +292,7 @@ bool TripletForwardLaucher(
 
   // clean up
   free(labels);
+  free(predictions);
   cudaFree(losses);
   cudaFree(diffs);
   cudaFree(triplets_device);
