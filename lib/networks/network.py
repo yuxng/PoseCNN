@@ -187,7 +187,7 @@ class Network(object):
 
     @layer
     def triplet_loss(self, input, margin, name):
-        return triplet_loss_op.triplet_loss(input[0], input[1], margin, name=name)
+        return triplet_loss_op.triplet_loss(input[0], input[1], tf.cast(input[2], tf.int32), margin, name=name)
 
     @layer
     def project(self, input, kernel_size, threshold, name):

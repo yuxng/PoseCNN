@@ -36,6 +36,7 @@ REGISTER_OP("Triplet")
     .Attr("margin: float")
     .Input("bottom_data: T")
     .Input("bottom_label: T")
+    .Input("bottom_prediction: int32")
     .Output("loss: T")
     .Output("bottom_diff: T");
 
@@ -69,12 +70,18 @@ class TripletOp : public OpKernel {
     const Tensor& bottom_label = context->input(1);
     const T* labels = bottom_label.flat<T>().data();
 
+    const Tensor& bottom_prediction = context->input(2);
+    const int* predictions = bottom_prediction.flat<int>().data();
+
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
                 errors::InvalidArgument("data must be 4-dimensional"));
 
     OP_REQUIRES(context, bottom_label.dims() == 4,
                 errors::InvalidArgument("label must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_prediction.dims() == 3,
+                errors::InvalidArgument("prediction must be 3-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
@@ -105,6 +112,7 @@ class TripletOp : public OpKernel {
     // sample triplets to define the loss
     // compute label indexes
     std::vector< std::vector<int> > label_indexes(num_classes);
+    std::vector< std::vector<int> > label_indexes_correct(num_classes);
     for (int n = 0; n < batch_size; n++)
     {
       for (int h = 0; h < height; h++)
@@ -112,14 +120,18 @@ class TripletOp : public OpKernel {
         for (int w = 0; w < width; w++)
         {
           int index = n * height * width + h * width + w;
+          int cls;
           for (int c = 0; c < num_classes; c++)
           {
             if(labels[index * num_classes + c] > 0)
             {
               label_indexes[c].push_back(index);
+              cls = c;
               break;
             }
           }
+          if (predictions[index] == cls)
+            label_indexes_correct[cls].push_back(index);
         } 
       }
     }
@@ -154,30 +166,62 @@ class TripletOp : public OpKernel {
           }
 
           // sample a positive pixel
-          int num = label_indexes[cls].size();
+          int num = label_indexes_correct[cls].size();
           int index_p;
-          if (num == 1)
-            index_p = index;
+          if (num > 0 && rand() % 2 == 0)
+          {
+            if (num == 1)
+              index_p = label_indexes_correct[cls][0];
+            else
+            {
+              while(1)
+              {
+                index_p = label_indexes_correct[cls][rand() % num];
+                if (index_p != index)
+                  break;
+              }
+            }
+          }
           else
           {
-            while(1)
+            num = label_indexes[cls].size();
+            if (num == 1)
+              index_p = index;
+            else
             {
-              index_p = label_indexes[cls][rand() % num];
-              if (index_p != index)
-                break;
+              while(1)
+              {
+                index_p = label_indexes[cls][rand() % num];
+                if (index_p != index)
+                  break;
+              }
             }
           }
 
           // sample a negative pixel
           int cls_neg;
-          while(1)
+          // check the predicted label of this pixel for hard negative
+          int cls_pred = predictions[index];
+          if (cls_pred != cls && label_indexes[cls_pred].size() > 0 && rand() % 2 == 0)
+            cls_neg = cls_pred;
+          else
           {
-            cls_neg = class_indexes[rand() % class_indexes.size()];
-            if (cls_neg != cls)
-              break;
+            while(1)
+            {
+              cls_neg = class_indexes[rand() % class_indexes.size()];
+              if (cls_neg != cls)
+                break;
+            }
           }
-          num = label_indexes[cls_neg].size();
-          int index_n = label_indexes[cls_neg][rand() % num];
+          int index_n;
+          num = label_indexes_correct[cls_neg].size();
+          if (num > 0 && rand() % 2 == 0)
+            index_n = label_indexes_correct[cls_neg][rand() % num];
+          else
+          {
+            num = label_indexes[cls_neg].size();
+            index_n = label_indexes[cls_neg][rand() % num];
+          }
 
           // store the triplet
           triplets[index * 3 + 0] = index;
@@ -243,12 +287,12 @@ REGISTER_KERNEL_BUILDER(Name("Triplet").Device(DEVICE_CPU).TypeConstraint<double
 
 // GPU implementation for forward pass
 bool TripletForwardLaucher(
-    const float* bottom_data, const float* bottom_label,
+    const float* bottom_data, const float* bottom_label, const int* bottom_prediction,
     const int batch_size, const int height, const int width, const int channels, const int num_classes,
     const float margin, float* top_data, float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void TripletKernel(
-    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_label,
+    OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_label, const Tensor* bottom_prediction,
     const int batch_size, const int height, const int width, const int channels, const int num_classes,
     const float margin, const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_diff) 
 {
@@ -262,7 +306,7 @@ static void TripletKernel(
   }
 
   TripletForwardLaucher(
-    bottom_data->flat<float>().data(), bottom_label->flat<float>().data(),
+    bottom_data->flat<float>().data(), bottom_label->flat<float>().data(), bottom_prediction->flat<int>().data(),
     batch_size, height, width, channels, num_classes, margin,
     top_data->flat<float>().data(), bottom_diff->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
@@ -286,6 +330,7 @@ class TripletOp<Eigen::GpuDevice, T> : public OpKernel {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
     const Tensor& bottom_label = context->input(1);
+    const Tensor& bottom_prediction = context->input(2);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
@@ -293,6 +338,9 @@ class TripletOp<Eigen::GpuDevice, T> : public OpKernel {
 
     OP_REQUIRES(context, bottom_label.dims() == 4,
                 errors::InvalidArgument("label must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_prediction.dims() == 3,
+                errors::InvalidArgument("prediction must be 3-dimensional"));
 
     // batch size
     int batch_size = bottom_data.dim_size(0);
@@ -313,7 +361,7 @@ class TripletOp<Eigen::GpuDevice, T> : public OpKernel {
     // bottom diff
     TensorShape output_shape_diff = bottom_data.shape();
 
-    TripletKernel(context, &bottom_data, &bottom_label, batch_size, height,
+    TripletKernel(context, &bottom_data, &bottom_label, &bottom_prediction, batch_size, height,
       width, num_channels, num_classes, margin_, output_shape, output_shape_diff);
   }
  private:

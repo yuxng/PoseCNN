@@ -16,7 +16,7 @@ namespace tensorflow {
 // the mask array, if it is not nullptr. If mask is passed in as nullptr, the
 // argmax indices are not written.
 bool TripletForwardLaucher(
-    const float* bottom_data, const float* bottom_label,
+    const float* bottom_data, const float* bottom_label, const int* bottom_prediction,
     const int batch_size, const int height, const int width, const int channels, const int num_classes,
     const float margin, float* top_data, float* bottom_diff, const Eigen::GpuDevice& d);
 
