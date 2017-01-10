@@ -61,6 +61,3 @@ class vgg16_convs(Network):
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
-
-        (self.feed('score', 'gt_label_2d', 'label_2d')       
-             .triplet_loss(1.0, name='triplet'))
