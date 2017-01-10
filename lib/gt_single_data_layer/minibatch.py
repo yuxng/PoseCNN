@@ -223,7 +223,7 @@ def _get_label_blob(roidb, voxelizer):
         label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
-    return depth_blob, label_blob, meta_data_blob
+    return depth_blob, label_blob,  meta_data_blob
 
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):
