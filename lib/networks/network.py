@@ -117,7 +117,7 @@ class Network(object):
         return var
 
     @layer
-    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, c_i=-1):
+    def conv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, biased=True, c_i=-1):
         self.validate_padding(padding)
         if isinstance(input, tuple):
             input = input[0]
@@ -128,20 +128,23 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name, reuse=reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
-            init_biases = tf.constant_initializer(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
-            biases = self.make_var('biases', [c_o], init_biases, trainable)
+
             if group==1:
-                conv = convolve(input, kernel)
+                output = convolve(input, kernel)
             else:
                 input_groups = tf.split(3, group, input)
                 kernel_groups = tf.split(3, group, kernel)
                 output_groups = [convolve(i, k) for i,k in zip(input_groups, kernel_groups)]
-                conv = tf.concat(3, output_groups)
+                output = tf.concat(3, output_groups)
+            # Add the biases
+            if biased:
+                init_biases = tf.constant_initializer(0.0)
+                biases = self.make_var('biases', [c_o], init_biases, trainable)
+                output = tf.nn.bias_add(output, biases)
             if relu:
-                bias = tf.nn.bias_add(conv, biases)
-                return tf.nn.relu(bias, name=scope.name)    
-        return tf.nn.bias_add(conv, biases, name=scope.name)
+                output = tf.nn.relu(output, name=scope.name)    
+        return output
 
 
     @layer
@@ -258,7 +261,7 @@ class Network(object):
 
     @layer
     def add(self, inputs, name):
-        return tf.add(inputs[0], inputs[1])
+        return tf.add_n(inputs, name=name)
 
     @layer
     def l2_normalize(self, input, dim, name):
@@ -336,6 +339,30 @@ class Network(object):
         e = tf.exp(d)
         s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
         return tf.sub(d, tf.log(tf.tile(s, multiples)))
+
+    @layer
+    def batch_normalization(self, input, name, scale_offset=True, relu=False):
+        # NOTE: Currently, only inference is supported
+        with tf.variable_scope(name) as scope:
+            shape = [input.get_shape()[-1]]
+            if scale_offset:
+                scale = self.make_var('scale', shape=shape)
+                offset = self.make_var('offset', shape=shape)
+            else:
+                scale, offset = (None, None)
+            output = tf.nn.batch_normalization(
+                input,
+                mean=self.make_var('mean', shape=shape),
+                variance=self.make_var('variance', shape=shape),
+                offset=offset,
+                scale=scale,
+                # TODO: This is the default Caffe batch norm eps
+                # Get the actual eps from parameters
+                variance_epsilon=1e-5,
+                name=name)
+            if relu:
+                output = tf.nn.relu(output)
+            return output
 
     @layer
     def dropout(self, input, keep_prob, name):

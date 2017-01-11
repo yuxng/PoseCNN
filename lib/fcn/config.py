@@ -30,6 +30,7 @@ cfg = __C
 
 __C.FLIP_X = False
 __C.INPUT = 'RGBD'
+__C.NETWORK = 'VGG16'
 
 #
 # Training options

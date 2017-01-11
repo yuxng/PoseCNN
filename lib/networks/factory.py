@@ -11,11 +11,15 @@ __sets = {}
 
 import networks.vgg16
 import networks.vgg16_convs
+import networks.resnet50
 import tensorflow as tf
 from fcn.config import cfg
 
 if cfg.TRAIN.SINGLE_FRAME:
-    __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
+    if cfg.NETWORK == 'VGG16':
+        __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
+    if cfg.NETWORK == 'RESNET50':
+        __sets['resnet50'] = networks.resnet50(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
 else:
     __sets['vgg16'] = networks.vgg16(cfg.INPUT, cfg.TRAIN.NUM_STEPS, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
 
