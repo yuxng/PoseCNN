@@ -49,13 +49,11 @@ class vgg16_convs(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_1', c_i=512)
              .conv(3, 3, 512, 1, 1, name='conv5_2', c_i=512)
              .conv(3, 3, 512, 1, 1, name='conv5_3', c_i=512)
-             .conv(3, 3, 128, 1, 1, name='conv5_4', c_i=512)
-             .conv(1, 1, 64, 1, 1, name='score_conv5', c_i=128)
+             .conv(1, 1, 64, 1, 1, name='score_conv5', c_i=512)
              .deconv(4, 4, 64, 2, 2, name='upscore_conv5', trainable=False))
 
         (self.feed('conv4_3')
-             .conv(3, 3, 128, 1, 1, name='conv4_4', c_i=512)
-             .conv(1, 1, 64, 1, 1, name='score_conv4', c_i=128))
+             .conv(1, 1, 64, 1, 1, name='score_conv4', c_i=512))
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add1')
