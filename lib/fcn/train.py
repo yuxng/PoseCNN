@@ -154,7 +154,12 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
         # classification loss
         scores = network.get_output('prob')
         labels = network.get_output('gt_label_2d')
-        loss = loss_cross_entropy_single_frame(scores, labels)
+        loss_0 = loss_cross_entropy_single_frame(scores, labels)
+        
+        scores_1 = network.get_output('prob_1')
+        loss_1 = loss_cross_entropy_single_frame(scores_1, labels)
+
+        loss = loss_0 + loss_1
     else:
         # classification loss
         scores = network.get_output('outputs')

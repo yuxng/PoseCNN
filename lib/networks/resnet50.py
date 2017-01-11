@@ -231,3 +231,9 @@ class resnet50(Network):
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
+        
+        (self.feed('res4f_relu') 
+             .conv(1, 1, 64, 1, 1, name='score_res4f', c_i=1024)
+             .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore_res4f', trainable=False)
+             .conv(1, 1, self.num_classes, 1, 1, name='score_1', c_i=64)
+             .log_softmax_high_dimension(self.num_classes, name='prob_1'))
