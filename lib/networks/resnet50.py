@@ -33,11 +33,11 @@ class resnet50(Network):
     def setup(self):
         (self.feed('data')
              .conv(7, 7, 64, 2, 2, relu=False, name='conv1', c_i=self.input_dim)
-             .batch_normalization(relu=True, name='pool1')
+             .batch_normalization(relu=True, name='bn_conv1')
              .conv(1, 1, 256, 1, 1, biased=False, relu=False, name='res2a_branch1', c_i=64)
              .batch_normalization(name='bn2a_branch1'))
 
-        (self.feed('pool1')
+        (self.feed('bn_conv1')
              .conv(1, 1, 64, 1, 1, biased=False, relu=False, name='res2a_branch2a', c_i=64)
              .batch_normalization(relu=True, name='bn2a_branch2a')
              .conv(3, 3, 64, 1, 1, biased=False, relu=False, name='res2a_branch2b', c_i=64)
@@ -230,7 +230,8 @@ class resnet50(Network):
              .deconv(int(32*self.scale), int(32*self.scale), self.num_classes, int(16*self.scale), int(16*self.scale), name='upscore', trainable=False)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
-        
+
+        '''
         (self.feed('res4f_relu') 
              .conv(1, 1, self.num_classes, 1, 1, name='score_res4f', c_i=1024)
              .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='upscore_res4f', trainable=False)
@@ -240,3 +241,4 @@ class resnet50(Network):
              .conv(1, 1, self.num_classes, 1, 1, name='score_res3d', c_i=512)
              .deconv(int(8*self.scale), int(8*self.scale), self.num_classes, int(4*self.scale), int(4*self.scale), name='upscore_res3d', trainable=False)
              .log_softmax_high_dimension(self.num_classes, name='prob_2'))
+        '''

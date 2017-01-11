@@ -73,7 +73,7 @@ class SolverWrapper(object):
             loss_value, lr, _ = sess.run([loss, learning_rate, train_op])
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, lr: %.12f, time: %.2f' %\
+            print 'iter: %d / %d, loss: %.4f, lr: %.8f, time: %.2f' %\
                     (iter+1, max_iters, loss_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
@@ -154,15 +154,15 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
         # classification loss
         scores = network.get_output('prob')
         labels = network.get_output('gt_label_2d')
-        loss_0 = loss_cross_entropy_single_frame(scores, labels)
+        loss = loss_cross_entropy_single_frame(scores, labels)
         
-        scores_1 = network.get_output('prob_1')
-        loss_1 = loss_cross_entropy_single_frame(scores_1, labels)
+        #scores_1 = network.get_output('prob_1')
+        #loss_1 = loss_cross_entropy_single_frame(scores_1, labels)
 
-        scores_2 = network.get_output('prob_2')
-        loss_2 = loss_cross_entropy_single_frame(scores_2, labels)
+        #scores_2 = network.get_output('prob_2')
+        #loss_2 = loss_cross_entropy_single_frame(scores_2, labels)
 
-        loss = (loss_0 + loss_1 + loss_2) / 3
+        #loss = (loss_0 + loss_1 + loss_2) / 3
     else:
         # classification loss
         scores = network.get_output('outputs')
