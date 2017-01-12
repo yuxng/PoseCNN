@@ -58,6 +58,9 @@ def _get_image_blob(roidb, scale_ind):
     processed_ims_normal = []
     im_scales = []
     for i in xrange(num_images):
+        # depth raw
+        im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+
         # rgba
         rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
         if rgba.shape[2] == 4:
@@ -67,6 +70,10 @@ def _get_image_blob(roidb, scale_ind):
             im[I[0], I[1], :] = 255
         else:
             im = rgba
+
+        # mask the color image according to depth
+        I = np.where(im_depth_raw == 0)
+        im[I[0], I[1], :] = 0
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
@@ -79,7 +86,6 @@ def _get_image_blob(roidb, scale_ind):
         processed_ims.append(im)
 
         # depth
-        im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
         im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
         im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
         if roidb[i]['flipped']:
