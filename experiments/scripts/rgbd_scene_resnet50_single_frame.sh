@@ -19,7 +19,11 @@ time ./tools/train_net.py --gpu 0 \
   --cfg experiments/cfgs/rgbd_scene_single_frame_resnet50.yml \
   --iters 80000
 
-rm output/rgbd_scene/rgbd_scene_val/resnet50_fcn_rgbd_single_frame_rgbd_scene_iter_80000/segmentations.pkl
+
+if [ -f $PWD/output/rgbd_scene/rgbd_scene_val/resnet50_fcn_rgbd_single_frame_rgbd_scene_iter_80000/segmentations.pkl ]
+then
+  rm $PWD/output/rgbd_scene/rgbd_scene_val/resnet50_fcn_rgbd_single_frame_rgbd_scene_iter_80000/segmentations.pkl
+fi
 
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
