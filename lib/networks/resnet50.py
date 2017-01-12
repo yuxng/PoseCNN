@@ -189,6 +189,12 @@ class resnet50(Network):
                    'bn4f_branch2c')
              .add(name='res4f')
              .relu(name='res4f_relu')
+             .conv(1, 1, self.num_classes, 1, 1, name='embedding_res4f', c_i=1024)
+             .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='embedding', trainable=False)
+             .log_softmax_high_dimension(self.num_classes, name='prob')
+             .argmax_2d(name='label_2d'))
+
+'''
              .conv(1, 1, 2048, 2, 2, biased=False, relu=False, name='res5a_branch1', c_i=1024)
              .batch_normalization(name='bn5a_branch1'))
 
@@ -226,15 +232,15 @@ class resnet50(Network):
                    'bn5c_branch2c')
              .add(name='res5c')
              .relu(name='res5c_relu')
-             .conv(1, 1, 64, 1, 1, name='embedding_res5c', c_i=2048)
-             .deconv(4, 4, 64, 2, 2, name='upembedding_res5c', trainable=False))
+             .conv(1, 1, self.num_classes, 1, 1, name='embedding_res5c', c_i=2048)
+             .deconv(4, 4, self.num_classes, 2, 2, name='upembedding_res5c', trainable=False))
 
         (self.feed('res4f_relu')
-             .conv(1, 1, 64, 1, 1, name='embedding_res4f', c_i=1024))
+             .conv(1, 1, self.num_classes, 1, 1, name='embedding_res4f', c_i=1024))
 
         (self.feed('embedding_res4f', 'upembedding_res5c')
              .add(name='add1')
-             .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='embedding', trainable=False)
-             .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
+             .deconv(int(16*self.scale), int(16*self.scale), self.num_classes, int(8*self.scale), int(8*self.scale), name='embedding', trainable=False)
              .log_softmax_high_dimension(self.num_classes, name='prob')
              .argmax_2d(name='label_2d'))
+'''
