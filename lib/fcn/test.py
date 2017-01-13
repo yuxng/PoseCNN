@@ -186,19 +186,24 @@ def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pos
     label_blob = label_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     depth_blob = depth_blob.reshape((num_steps, ims_per_batch, height, width, -1))
     meta_data_blob = meta_data_blob.reshape((num_steps, ims_per_batch, 1, 1, -1))
-    im_rgbd_blob = np.concatenate((im_blob, im_depth_blob), axis=4)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
-        data_blob = im_rgbd_blob
+        data_blob = im_blob
+        data_p_blob = im_depth_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
     elif cfg.INPUT == 'DEPTH':
         data_blob = im_depth_blob
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
-    feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
-                 net.meta_data: meta_data_blob, net.points: points}
+
+    if cfg.INPUT == 'RGBD':
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+                     net.meta_data: meta_data_blob, net.points: points}
+    else:
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+                     net.meta_data: meta_data_blob, net.points: points}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
     labels_pred_2d, state, points = sess.run([net.get_output('labels_pred_2d'), \

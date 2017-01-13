@@ -124,16 +124,21 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
             else:
                 feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label']}
         else:
-            feed_dict={net.data: blobs['data_image'], net.gt_label_2d: blobs['data_label'], \
-                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
-                       net.state: blobs['data_state'], net.points: blobs['data_points']}
+            if cfg.INPUT == 'RGBD':
+                feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
+                           net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
+                           net.state: blobs['data_state'], net.points: blobs['data_points']}
+            else:
+                feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], \
+                           net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
+                           net.state: blobs['data_state'], net.points: blobs['data_points']}
 
         sess.run(net.enqueue_op, feed_dict=feed_dict)
 
 def loss_cross_entropy(scores, labels):
     """
-    scores: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
-    labels: a list of tensors [batch_size, grid_size, grid_size, grid_size, num_classes]
+    scores: a list of tensors [batch_size, height, width, num_classes]
+    labels: a list of tensors [batch_size, height, width, num_classes]
     """
 
     with tf.name_scope('loss'):
