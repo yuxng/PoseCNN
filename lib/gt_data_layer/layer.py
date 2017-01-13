@@ -37,14 +37,22 @@ class GtDataLayer(object):
         count = 0
         while count < ims_per_batch:
             ind = self._perm[self._cur]
-            if ind + num_steps - 1 < len(self._roidb) and self._roidb[ind]['video_id'] == self._roidb[ind+num_steps-1]['video_id']:
-                db_inds[count * num_steps : (count+1) * num_steps] = range(ind, ind + num_steps)
+            interval = np.random.randint(1, 5)
+            if ind + (num_steps - 1) * interval < len(self._roidb) and self._roidb[ind]['video_id'] == self._roidb[ind + (num_steps-1) * interval]['video_id']:
+                db_inds[count * num_steps : (count+1) * num_steps] = range(ind, ind + num_steps * interval, interval)
                 count += 1
             self._cur += 1
             if self._cur >= len(self._roidb):
                 self._shuffle_roidb_inds()
 
-        return db_inds
+        db_inds_reorder = np.zeros(num_steps * ims_per_batch, dtype=np.int32)
+        count = 0
+        for i in xrange(num_steps):
+            for j in xrange(ims_per_batch):
+                db_inds_reorder[count] = db_inds[j * num_steps + i]
+                count = count + 1
+
+        return db_inds_reorder
 
     def _get_next_minibatch(self):
         """Return the blobs to be used for the next minibatch."""
