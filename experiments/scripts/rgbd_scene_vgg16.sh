@@ -21,7 +21,7 @@ time ./tools/train_net.py --gpu 0 \
 
 if [ -f $PWD/output/rgbd_scene/rgbd_scene_val/vgg16_fcn_rgbd_multi_frame_rgbd_scene_iter_40000/segmentations.pkl ]
 then
-  rm $PWD/output/rgbd_scene/rgbd_scene_val/vgg16_fcn_multi_single_frame_rgbd_scene_iter_40000/segmentations.pkl
+  rm $PWD/output/rgbd_scene/rgbd_scene_val/vgg16_fcn_multi_frame_rgbd_scene_iter_40000/segmentations.pkl
 fi
 
 # test FCN for multiple frames
