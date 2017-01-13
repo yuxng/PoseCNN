@@ -24,7 +24,6 @@ def get_minibatch(roidb, voxelizer):
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
-    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=3)
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob = _get_label_blob(roidb, voxelizer)
@@ -32,16 +31,9 @@ def get_minibatch(roidb, voxelizer):
     # For debug visualizations
     # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob)
 
-    if cfg.INPUT == 'RGBD':
-        data_blob = im_rgbd_blob
-    elif cfg.INPUT == 'COLOR':
-        data_blob = im_blob
-    elif cfg.INPUT == 'DEPTH':
-        data_blob = im_depth_blob
-    elif cfg.INPUT == 'NORMAL':
-        data_blob = im_normal_blob
-
-    blobs = {'data_image': data_blob,
+    blobs = {'data_image_color': im_blob,
+             'data_image_depth': im_depth_blob,
+             'data_image_normal': im_normal_blob,
              'data_label': label_blob,
              'data_depth': depth_blob,
              'data_meta_data': meta_data_blob}

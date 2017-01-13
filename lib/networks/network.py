@@ -65,6 +65,15 @@ class Network(object):
                     except ValueError:
                         if not ignore_missing:
                             raise
+            # try to assign dual weights
+            with tf.variable_scope(op_name+'_p', reuse=True):
+                for param_name, data in data_dict[op_name].iteritems():
+                    try:
+                        var = tf.get_variable(param_name)
+                        session.run(var.assign(data))
+                    except ValueError:
+                        if not ignore_missing:
+                            raise
 
     def feed(self, *args):
         assert len(args)!=0

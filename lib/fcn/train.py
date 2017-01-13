@@ -108,9 +108,21 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
     while not coord.should_stop():
         blobs = data_layer.forward()
 
+        if cfg.INPUT == 'RGBD':
+            data_blob = blobs['data_image_color']
+            data_p_blob = blobs['data_image_depth']
+        elif cfg.INPUT == 'COLOR':
+            data_blob = blobs['data_image_color']
+        elif cfg.INPUT == 'DEPTH':
+            data_blob = blobs['data_image_depth']
+        elif cfg.INPUT == 'NORMAL':
+            data_blob = blobs['data_image_normal']
+
         if cfg.TRAIN.SINGLE_FRAME:
-            feed_dict={net.data: blobs['data_image'], net.gt_label_2d: blobs['data_label'], \
-                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data']}
+            if cfg.INPUT == 'RGBD':
+                feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label']}
+            else:
+                feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label']}
         else:
             feed_dict={net.data: blobs['data_image'], net.gt_label_2d: blobs['data_label'], \
                        net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \

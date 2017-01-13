@@ -91,75 +91,39 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
-def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_world2live, pose_live2world):
+def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     """segment image
     """
 
     # compute image blob
     im_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
-    im_rgbd_blob = np.concatenate((im_blob, im_normal_blob), axis=3)
 
-    # depth
-    depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
-
-    # construct the meta data
-    """
-    format of the meta_data
-    intrinsic matrix: meta_data[0 ~ 8]
-    inverse intrinsic matrix: meta_data[9 ~ 17]
-    pose_world2live: meta_data[18 ~ 29]
-    pose_live2world: meta_data[30 ~ 41]
-    voxel step size: meta_data[42, 43, 44]
-    voxel min value: meta_data[45, 46, 47]
-    """
-    K = np.matrix(meta_data['intrinsic_matrix'])
-    Kinv = np.linalg.pinv(K)
-    mdata = np.zeros(48, dtype=np.float32)
-    mdata[0:9] = K.flatten()
-    mdata[9:18] = Kinv.flatten()
-    mdata[18:30] = pose_world2live.flatten()
-    mdata[30:42] = pose_live2world.flatten()
-    mdata[42] = voxelizer.step_x
-    mdata[43] = voxelizer.step_y
-    mdata[44] = voxelizer.step_z
-    mdata[45] = voxelizer.min_x
-    mdata[46] = voxelizer.min_y
-    mdata[47] = voxelizer.min_z
-    if cfg.FLIP_X:
-        mdata[0] = -1 * mdata[0]
-        mdata[9] = -1 * mdata[9]
-        mdata[11] = -1 * mdata[11]
-
-    # construct blobs
+    # use a fake label blob of ones
     height = im_depth.shape[0]
     width = im_depth.shape[1]
-    depth_blob = np.zeros((1, height, width, 1), dtype=np.float32)
-    meta_data_blob = np.zeros((1, 1, 1, 48), dtype=np.float32)
-    depth_blob[0,:,:,0] = depth
-    meta_data_blob[0,0,0,:] = mdata
-    # use a fake label blob of ones
-    label_blob = np.ones((1, height, width, voxelizer.num_classes), dtype=np.float32)
+    label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
-        data_blob = im_rgbd_blob
+        data_blob = im_blob
+        data_p_blob = im_depth_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
     elif cfg.INPUT == 'DEPTH':
         data_blob = im_depth_blob
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
-    feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.depth: depth_blob, \
-                 net.meta_data: meta_data_blob}
 
-    # labels_2d, labels_3d = sess.run([net.get_output('label_2d'), net.get_output('label_3d')], feed_dict=feed_dict)
-    # return labels_2d[0,:,:,0], labels_3d[0,:,:,:].astype(np.int32)
+    if cfg.INPUT == 'RGBD':
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob}
+    else:
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
     output = sess.run([net.get_output('label_2d')], feed_dict=feed_dict)
     labels_2d = output[0]
-    labels_3d = np.zeros((cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE, cfg.TEST.GRID_SIZE), dtype=np.int32)
-    return labels_2d[0,:,:], labels_3d
+
+    return labels_2d[0,:,:]
 
 
 def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -245,7 +209,7 @@ def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pos
     return labels_2d[0,:,:].astype(np.int32), state, points
 
 
-def vis_segmentations(im, im_depth, labels, labels_gt, colors, voxelizer):
+def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -447,7 +411,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
@@ -482,9 +446,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
     # timers
     _t = {'im_segment' : Timer(), 'misc' : Timer()}
 
-    # voxelizer
-    voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
-
     # perm = np.random.permutation(np.arange(num_images))
 
     for i in xrange(num_images):
@@ -515,17 +476,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
             im_label_gt[:,:,0] = labels_gt[:,:,2]
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
-        # backprojection
-        points = voxelizer.backproject_camera(im_depth, meta_data) 
-        voxelizer.voxelize(points)
-        pose_world2live = np.zeros((3,4), dtype=np.float32)
-        pose_world2live[0, 0] = 1
-        pose_world2live[1, 1] = 1
-        pose_world2live[2, 2] = 1
-        pose_live2world = pose_world2live
-
         _t['im_segment'].tic()
-        labels, labels_voxel = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, pose_world2live, pose_live2world)
+        labels = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
@@ -537,7 +489,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
         im_label = imdb.labels_to_image(im, labels)
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors, voxelizer)
+        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
