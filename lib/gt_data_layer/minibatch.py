@@ -12,7 +12,7 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from fcn.config import cfg
-from utils.blob import im_list_to_blob, pad_im
+from utils.blob import im_list_to_blob, pad_im, chromatic_transform
 from utils.se3 import *
 import scipy.io
 from normals import gpu_normals
@@ -83,6 +83,9 @@ def _get_image_blob(roidb, scale_ind):
             im[I[0], I[1], :] = 255
         else:
             im = rgba
+
+        # chromatic transform
+        im = chromatic_transform(im)
 
         # mask the color image according to depth
         I = np.where(im_depth_raw == 0)

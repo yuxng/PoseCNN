@@ -57,6 +57,7 @@ def pad_im(im, factor, value=0):
     elif len(im.shape) == 2:
         return np.lib.pad(im, ((0, pad_height), (0, pad_width)), 'constant', constant_values=value)
 
+
 def unpad_im(im, factor):
     height = im.shape[0]
     width = im.shape[1]
@@ -68,3 +69,27 @@ def unpad_im(im, factor):
         return im[0:height-pad_height, 0:width-pad_width, :]
     elif len(im.shape) == 2:
         return im[0:height-pad_height, 0:width-pad_width]
+
+
+def chromatic_transform(im, d_h=None, d_s=None, d_l=None):
+    """
+    Given an image array, add the hue, saturation and luminosity to the image
+    """
+    # Set random hue, luminosity and saturation which ranges from -0.1 to 0.1
+    if d_h is None:
+        d_h = (np.random.rand(1) - 0.5) * 0.2 * 180
+    if d_l is None:
+        d_l = (np.random.rand(1) - 0.5) * 0.2 * 256
+    if d_s is None:
+        d_s = (np.random.rand(1) - 0.5) * 0.2 * 256
+    # Convert the BGR to HLS
+    hls = cv2.cvtColor(im, cv2.COLOR_BGR2HLS)
+    h, l, s = cv2.split(hls)
+    # Add the values to the image H, L, S
+    new_h = (h + d_h) % 180
+    new_l = np.clip(l + d_l, 0, 255)
+    new_s = np.clip(s + d_s, 0, 255)
+    # Convert the HLS to BGR
+    new_hls = cv2.merge((new_h, new_l, new_s)).astype('uint8')
+    new_im = cv2.cvtColor(new_hls, cv2.COLOR_HLS2BGR)
+    return new_im
