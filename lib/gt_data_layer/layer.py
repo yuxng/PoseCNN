@@ -34,10 +34,10 @@ class GtDataLayer(object):
         num_steps = cfg.TRAIN.NUM_STEPS
         ims_per_batch = cfg.TRAIN.IMS_PER_BATCH
         db_inds = np.zeros(num_steps * ims_per_batch, dtype=np.int32)
+        interval = 1
         count = 0
         while count < ims_per_batch:
             ind = self._perm[self._cur]
-            interval = np.random.randint(1, 5)
             if ind + (num_steps - 1) * interval < len(self._roidb) and self._roidb[ind]['video_id'] == self._roidb[ind + (num_steps-1) * interval]['video_id']:
                 db_inds[count * num_steps : (count+1) * num_steps] = range(ind, ind + num_steps * interval, interval)
                 count += 1
