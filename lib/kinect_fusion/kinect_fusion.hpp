@@ -14,6 +14,7 @@
 #include <df/prediction/raycast.h>
 #include <df/surface/marchingCubes.h>
 #include <df/surface/normals.h>
+#include <df/surface/color.h>
 #include <df/transform/rigid.h>
 #include <df/util/args.h>
 #include <df/util/cudaHelpers.h>
@@ -45,10 +46,10 @@ class KinectFusion
   void fuse_depth();
   void extract_surface();
   void render();
-  void draw();
+  void draw(std::string filename, int flag);
   void back_project();
   void feed_data(unsigned char* depth, unsigned char* color, int width, int height, float factor);
-  void feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes);
+  void feed_label(unsigned char* im_label);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
   void save_model(std::string filename);
@@ -77,6 +78,10 @@ class KinectFusion
   ManagedTensor<2, float>* depth_map_;
   ManagedTensor<2, float, DeviceResident>* depth_map_device_;
 
+  // color
+  ManagedHostTensor2<Vec3>* color_map_;
+  ManagedDeviceTensor2<Vec3>* color_map_device_;
+
   // 3D points
   ManagedHostTensor2<Vec3>* vertex_map_;
   ManagedDeviceTensor2<Vec3>* vertex_map_device_;
@@ -93,12 +98,13 @@ class KinectFusion
   ManagedTensor<2, float, DeviceResident>* dWeldedVertices_;
   ManagedTensor<1, int, DeviceResident>* dIndices_;
   ManagedDeviceTensor1<Eigen::UnalignedVec3<float> >* dNormals_;
-  ManagedTensor<2, unsigned char, DeviceResident>* dColors_;
+  // ManagedTensor<2, unsigned char, DeviceResident>* dColors_;
+  ManagedDeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> >* dColors_;
   uint numUniqueVertices_;
 
   // voxels
-  ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>* voxel_data_;
-  DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >* voxel_grid_;
+  ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident>* voxel_data_;
+  DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >* voxel_grid_;
 
   // ICP
   RigidTransformer<float>* transformer_;
@@ -113,6 +119,7 @@ class KinectFusion
   GLRenderer<VertAndNormalRenderType>* renderer_;
 
   // draw
+  pangolin::View* allView_;
   pangolin::View* disp3d_;
   pangolin::View* colorView_;
   pangolin::View* depthView_;

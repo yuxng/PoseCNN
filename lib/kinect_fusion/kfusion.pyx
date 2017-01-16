@@ -16,10 +16,10 @@ cdef extern from "kfusion.hpp" namespace "df":
         void fuse_depth()
         void extract_surface()
         void render()
-        void draw()
+        void draw(string, int)
         void back_project()
         void feed_data(unsigned char*, unsigned char*, int, int, float)
-        void feed_label(unsigned char*, int*, unsigned char*, int, int)
+        void feed_label(unsigned char*)
         void reset()
         void set_voxel_grid(float, float, float, float, float, float);
         void save_model(string)
@@ -48,8 +48,8 @@ cdef class PyKinectFusion:
     def render(self):
         return self.kfusion.render()
 
-    def draw(self):
-        return self.kfusion.draw()
+    def draw(self, string filename, np.int32_t flag):
+        return self.kfusion.draw(filename, flag)
 
     def back_project(self):
         return self.kfusion.back_project()
@@ -59,15 +59,9 @@ cdef class PyKinectFusion:
         cdef unsigned char* color_buff = <unsigned char*> color.data
         return self.kfusion.feed_data(depth_buff, color_buff, width, height, factor)
 
-    def feed_label(self, np.ndarray[np.uint8_t, ndim=3] im_label, np.ndarray[np.int32_t, ndim=3] labels_voxel, np.ndarray[np.uint8_t, ndim=2] colors):
+    def feed_label(self, np.ndarray[np.uint8_t, ndim=3] im_label):
         cdef unsigned char* im_label_buff = <unsigned char*> im_label.data
-        cdef int* labels_voxel_buff = <int*> labels_voxel.data
-        cdef unsigned char* colors_buff = <unsigned char*> colors.data
-
-        cdef int dimension = labels_voxel.shape[0]
-        cdef int num_classes = colors.shape[1]
-
-        return self.kfusion.feed_label(im_label_buff, labels_voxel_buff, colors_buff, dimension, num_classes)
+        return self.kfusion.feed_label(im_label_buff)
 
     def reset(self):
         return self.kfusion.reset()

@@ -16,7 +16,7 @@ class rgbd_scene(datasets.imdb):
                             else rgbd_scene_path
         self._data_path = os.path.join(self._rgbd_scene_path, 'data')
         self._classes = ('__background__', 'bowl', 'cap', 'cereal_box', 'coffee_mug', 'coffee_table', 'office_chair', 'soda_can', 'sofa', 'table')
-        self._class_colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), \
+        self._class_colors = [(1, 1, 1), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), \
                               (0.5, 0, 0), (0, 0.5, 0), (0, 0, 0.5)]
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))

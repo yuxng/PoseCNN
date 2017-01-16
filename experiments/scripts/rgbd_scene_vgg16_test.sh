@@ -17,4 +17,5 @@ time ./tools/test_net.py --gpu 0 \
   --model output/rgbd_scene/rgbd_scene_train/vgg16_fcn_rgbd_multi_frame_rgbd_scene_iter_40000.ckpt \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene.yml \
-  --rig data/RGBDScene/camera.json
+  --rig data/RGBDScene/camera.json \
+  --kfusion 1

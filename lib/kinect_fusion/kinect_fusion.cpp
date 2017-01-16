@@ -60,9 +60,9 @@ void KinectFusion::create_window()
   depthView_ = &pangolin::Display("depth");
   labelView_ = &pangolin::Display("label");
 
-  pangolin::CreatePanel("panel").SetBounds(0, 1, 0, pangolin::Attach::Pix(200));
-  pangolin::Display("multi").AddDisplay(*disp3d_).AddDisplay(*colorView_).AddDisplay(*depthView_).AddDisplay(*labelView_)
-            .SetBounds(0, 1, pangolin::Attach::Pix(200), 1).SetLayout(pangolin::LayoutEqual);
+  pangolin::CreatePanel("panel").SetBounds(0, 1, 0, pangolin::Attach::Pix(0));
+  allView_ = &pangolin::Display("multi").AddDisplay(*disp3d_).AddDisplay(*colorView_).AddDisplay(*depthView_).AddDisplay(*labelView_)
+            .SetBounds(0, 1, pangolin::Attach::Pix(0), 1).SetLayout(pangolin::LayoutEqual);
 
   // texture
   colorTex_ = new pangolin::GlTexture(color_camera_->width(), color_camera_->height());
@@ -96,12 +96,15 @@ void KinectFusion::create_window()
 // allocate tensors
 void KinectFusion::create_tensors()
 {
-
   // depth map
   depth_map_ = new ManagedTensor<2, float>({depth_camera_->width(), depth_camera_->height()});
   depth_map_device_ = new ManagedTensor<2, float, DeviceResident>(depth_map_->dimensions());
   depth_factor_ = 1000.0;
   depth_cutoff_ = 20.0;
+
+  // color
+  color_map_ = new ManagedHostTensor2<Vec3>({depth_camera_->width(), depth_camera_->height()});
+  color_map_device_ = new ManagedDeviceTensor2<Vec3>(color_map_->dimensions());
 
   // 3D points
   vertex_map_ = new ManagedHostTensor2<Vec3>({depth_camera_->width(), depth_camera_->height()});
@@ -119,7 +122,8 @@ void KinectFusion::create_tensors()
   dWeldedVertices_ = new ManagedTensor<2, float, DeviceResident>({3,1});
   dIndices_ = new ManagedTensor<1, int, DeviceResident>(Eigen::Matrix<uint,1,1>(1));
   dNormals_ = new ManagedDeviceTensor1<Eigen::UnalignedVec3<float> >(1);
-  dColors_ = new ManagedTensor<2, unsigned char, DeviceResident>({3,1});
+  // dColors_ = new ManagedTensor<2, unsigned char, DeviceResident>({3,1});
+  dColors_ = new ManagedDeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> >(1);
   numUniqueVertices_ = 0;
 
   // for rendering
@@ -129,18 +133,18 @@ void KinectFusion::create_tensors()
   colorBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_UNSIGNED_BYTE, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
 
   // voxels
-  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel>, DeviceResident>({512, 512, 512});
+  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident>({512, 512, 512});
   float voxelGridOffsetX = -1;
   float voxelGridOffsetY = -1;
   float voxelGridOffsetZ = 0;
   float voxelGridDimX = 2;
   float voxelGridDimY = 2;
   float voxelGridDimZ = 2;
-  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
-  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel>::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ColorVoxel>::zero());
   initMarchingCubesTables();
 
   // renderer
@@ -169,7 +173,7 @@ void KinectFusion::create_tensors()
 void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ)
 {
   delete voxel_grid_;
-  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
@@ -225,10 +229,16 @@ void KinectFusion::fuse_depth()
   const Camera<Poly3CameraModel,double> * poly3DepthCamera = dynamic_cast<const Camera<Poly3CameraModel,double> *>(depth_camera_);
   if (!poly3DepthCamera) 
     throw std::runtime_error("expected Poly3 model for the depth camera");
-  Poly3CameraModel<float> model = poly3DepthCamera->model().cast<float>();
+  Poly3CameraModel<float> depthModel = poly3DepthCamera->model().cast<float>();
+
+  const Camera<Poly3CameraModel,double> * poly3ColorCamera = dynamic_cast<const Camera<Poly3CameraModel,double> *>(color_camera_);
+  if (!poly3ColorCamera)
+    throw std::runtime_error("expected Poly3 model for the color camera");
+  Poly3CameraModel<float> colorModel = poly3ColorCamera->model().cast<float>();
 
   float truncationDistance = 0.04;
-  df::fuseFrame(*voxel_grid_, *transformer_, model, *depth_map_device_, truncationDistance);
+  df::fuseFrame(*voxel_grid_, *transformer_, depthModel, colorModel, T_dc_.inverse().cast<float>(), *depth_map_device_, truncationDistance, 
+                internal::FusionTypeTraits<ColorVoxel>::PackedInput<float>(truncationDistance, 100.f, *color_map_device_));
 }
 
 // extract surface
@@ -247,6 +257,18 @@ void KinectFusion::extract_surface()
   Tensor<2, float, DeviceResident> actualWeldedVertices(dNormals__.dimensions(), dWeldedVertices_->data());
 
   computeSignedDistanceGradientNormals(actualWeldedVertices, dNormals__, *voxel_grid_);
+
+  DeviceTensor1<Vec3> actualWeldedVertices_( dNormals_->length(), reinterpret_cast<Vec3 *>(actualWeldedVertices.data()) );
+  dColors_->resize(actualWeldedVertices_.length());
+  computeSurfaceColors(actualWeldedVertices_, *dColors_, *voxel_grid_);
+
+  // copy colors
+  colorBuffer_->Resize(numUniqueVertices_);
+  {
+    pangolin::CudaScopedMappedPtr scopedPtr(*colorBuffer_);
+    checkCuda(cudaMemcpy(*scopedPtr, dColors_->data(), dColors_->length()*sizeof(Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign>), cudaMemcpyDeviceToDevice));
+  }
+
   cudaDeviceSynchronize();
   CheckCudaDieOnError();
 }
@@ -309,11 +331,13 @@ void KinectFusion::render()
 
 
 // draw model
-void KinectFusion::draw()
+void KinectFusion::draw(std::string filename, int flag)
 { 
   disp3d_->ActivateScissorAndClear(*depthCamState_);
   glColor3ub(255, 255, 255);
+  colorTex_->RenderToViewportFlipY();
 
+  /*
   glPushMatrix();
   glMultMatrixX(transformer_->liveToWorldTransformation().matrix());
 
@@ -352,6 +376,7 @@ void KinectFusion::draw()
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
   glPopMatrix();
+  */
 
   // show color image
   glColor3ub(255,255,255);
@@ -381,6 +406,10 @@ void KinectFusion::draw()
   labelTex_->RenderToViewportFlipY();
 
   pangolin::FinishFrame();
+
+  // save frame
+  if (flag)
+    allView_->SaveOnRender(filename);
 }
 
 
@@ -447,42 +476,27 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 
 
 // feed predicted labels
-void KinectFusion::feed_label(unsigned char* im_label, int* labels_voxel, unsigned char* colors, int dimension, int num_classes)
+void KinectFusion::feed_label(unsigned char* im_label)
 {
   label_texture()->Upload(im_label, GL_RGB, GL_UNSIGNED_BYTE);
 
-  // compute the color for vertices
-  dColors_->resize(dWeldedVertices_->dimensions());
+  // process color
+  ConstHostTensor2<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > colorImage({depth_camera_->width(), depth_camera_->height()}, 
+    reinterpret_cast<const Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> *>(im_label));
 
-  // locate device memory
-  int* labels_voxel_device = NULL;
-  unsigned char* colors_device = NULL;
+  std::transform(colorImage.data(), colorImage.data() + colorImage.count(),
+                 color_map_->data(), [](const Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> & c) {
+                 return c.cast<float>()*(1/float(255));
+  });
 
-  checkCuda( cudaMalloc((void **)&labels_voxel_device, dimension * dimension * dimension * sizeof(int)) );
-  checkCuda( cudaMalloc((void **)&colors_device, num_classes * 3 * sizeof(unsigned char)) );
-
-  checkCuda( cudaMemcpy(labels_voxel_device, labels_voxel, dimension * dimension * dimension * sizeof(int), cudaMemcpyHostToDevice));
-  checkCuda( cudaMemcpy(colors_device, colors, num_classes * 3 * sizeof(unsigned char), cudaMemcpyHostToDevice));
-
-  computeColors(*dWeldedVertices_, labels_voxel_device, colors_device, *voxel_grid_, *dColors_, dimension, num_classes);
-
-  // copy colors
-  const uint numVertices = dWeldedVertices_->dimensionSize(1);
-  colorBuffer_->Resize(numVertices);
-  {
-    pangolin::CudaScopedMappedPtr scopedPtr(*colorBuffer_);
-    checkCuda(cudaMemcpy(*scopedPtr, dColors_->data(), numVertices*3*sizeof(unsigned char), cudaMemcpyDeviceToDevice));
-  }
-
-  checkCuda( cudaFree(labels_voxel_device) );
-  checkCuda( cudaFree(colors_device) );
+  color_map_device_->copyFrom(*color_map_);
 }
 
 
 // reset voxels
 void KinectFusion::reset()
 {
-  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel>::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ColorVoxel>::zero());
   delete transformer_;
   transformer_ = new RigidTransformer<float>;
 }
@@ -636,7 +650,7 @@ int main(int argc, char * * argv)
 
     // drawing
     GlobalTimer::tick("rendering");
-    KF.draw();
+    KF.draw("test", 0);
 
     // move to next frame
     frameCurrent = false;

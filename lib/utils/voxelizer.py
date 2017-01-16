@@ -13,8 +13,6 @@ class Voxelizer(object):
         self.grid_size = grid_size
         self.num_classes = num_classes
         self.margin = 0.3
-        self.filter_h = 5
-        self.filter_w = 5
         self.min_x = 0
         self.min_y = 0
         self.min_z = 0
@@ -27,25 +25,20 @@ class Voxelizer(object):
         self.voxelized = False
         self.height = 0
         self.width = 0
-        self.data = np.zeros((grid_size, grid_size, grid_size, num_classes), dtype=np.float32)
-        self.count = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
 
-    def update(self, im, grid_indexes):
-        height = im.shape[0]
-        width = im.shape[1]
-        assert height*width == grid_indexes.shape[1], \
-               'in voxelizer.update, image shape {} not compatible to grid indexes {}'.format(height*width, grid_indexes.shape[1])
-        
-        index = np.where(im.flatten() > 0)[0]
-        for i in range(len(index)):
-            ind = index[i]
-            gx = grid_indexes[0, ind]
-            gy = grid_indexes[1, ind]
-            gz = grid_indexes[2, ind]
-            if np.isfinite(gx) and np.isfinite(gy) and np.isfinite(gz):
-                if gx >= 0 and gx < self.grid_size and gy >= 0 and gy < self.grid_size and gz >= 0 and gz < self.grid_size:
-                    self.data[int(gx), int(gy), int(gz), :] = 1
-                    self.count[int(gx), int(gy), int(gz)] += 1
+    def setup(self, min_x, min_y, min_z, max_x, max_y, max_z):
+        self.min_x = min_x
+        self.min_y = min_y
+        self.min_z = min_z
+        self.max_x = max_x
+        self.max_y = max_y
+        self.max_z = max_z
+
+        # step size
+        self.step_x = (max_x - min_x) / self.grid_size
+        self.step_y = (max_y - min_y) / self.grid_size
+        self.step_z = (max_z - min_z) / self.grid_size
+        self.voxelized = True
 
     def draw(self, labels, colors, ax):
 
@@ -72,8 +65,6 @@ class Voxelizer(object):
         self.step_y = 0
         self.step_z = 0
         self.voxelized = False
-        self.data = np.zeros((self.grid_size, self.grid_size, self.grid_size, self.num_classes), dtype=np.float32)
-        self.count = np.zeros((self.grid_size, self.grid_size, self.grid_size), dtype=np.int32)
 
     def voxelize(self, points):
         if not self.voxelized:

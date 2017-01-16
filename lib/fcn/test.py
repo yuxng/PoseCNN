@@ -263,7 +263,7 @@ def vis_segmentations(im, im_depth, labels, labels_gt, colors):
 ##################
 # test video
 ##################
-def test_net(sess, net, imdb, weights_filename, rig_filename):
+def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
@@ -286,23 +286,15 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
 
     # voxelizer
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
+    voxelizer.setup(-3, -3, -3, 3, 3, 4)
 
     # kinect fusion
-    if cfg.TEST.KINECT_FUSION:
+    if is_kfusion:
         KF = kfusion.PyKinectFusion(rig_filename)
-
-    # construct colors
-    colors = np.zeros((3, imdb.num_classes), dtype=np.uint8)
-    for i in range(imdb.num_classes):
-        colors[0, i] = 255 * imdb._class_colors[i][0]
-        colors[1, i] = 255 * imdb._class_colors[i][1]
-        colors[2, i] = 255 * imdb._class_colors[i][2]
-    colors[:,0] = 255
 
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
-    video_count = 0
     have_prediction = False
     for i in xrange(num_images):
     # for i in perm:
@@ -315,22 +307,16 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         pos = image_index.find('/')
         if video_index == '':
             video_index = image_index[:pos]
-            video_count = 0
-            voxelizer.reset()
             have_prediction = False
             state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
             points = np.zeros((1, height, width, 3), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
-                voxelizer.reset()
                 have_prediction = False
-                video_count = 0
                 video_index = image_index[:pos]
                 state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                 points = np.zeros((1, height, width, 3), dtype=np.float32)
                 print 'start video {}'.format(video_index)
-
-        video_count += 1
 
         # read color image
         if rgba.shape[2] == 4:
@@ -347,28 +333,21 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         # load meta data
         meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
-        # read label image
-        labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-        if len(labels_gt.shape) == 2:
-            im_label_gt = imdb.labels_to_image(im, labels_gt)
-        else:
-            im_label_gt = np.copy(labels_gt[:,:,:3])
-            im_label_gt[:,:,0] = labels_gt[:,:,2]
-            im_label_gt[:,:,2] = labels_gt[:,:,0]
-
         # backprojection for the first frame
-        points_voxel = voxelizer.backproject_camera(im_depth, meta_data)
         if not have_prediction:    
-            voxelizer.voxelize(points_voxel)
-            if cfg.TEST.KINECT_FUSION:
+            if is_kfusion:
+                # KF.set_voxel_grid(-3, -3, -3, 6, 6, 7)
                 KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
             else:
                 # store the RT for the first frame
                 RT_world = meta_data['rotation_translation_matrix']
 
         # run kinect fusion
-        if cfg.TEST.KINECT_FUSION:
-            KF.feed_data(im_depth, im, im.shape[1], im.shape[0], float(meta_data['factor_depth']))
+        if is_kfusion:
+            im_rgb = np.copy(im)
+            im_rgb[:, :, 0] = im[:, :, 2]
+            im_rgb[:, :, 2] = im[:, :, 0]
+            KF.feed_data(im_depth, im_rgb, im.shape[1], im.shape[0], float(meta_data['factor_depth']))
             KF.back_project();
             if have_prediction:
                 pose_world2live, pose_live2world = KF.solve_pose()
@@ -384,12 +363,6 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
             pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
             pose_live2world = se3_inverse(pose_world2live)
 
-        # check if points outside voxel space
-        # flag = voxelizer.check_points(points, pose_live2world)
-        # if not flag:
-        #    print 'points outside voxel space, restart from next frame'
-        #    restart = True
-
         _t['im_segment'].tic()
         labels, state, points = im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
@@ -403,20 +376,29 @@ def test_net(sess, net, imdb, weights_filename, rig_filename):
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
-        if cfg.TEST.KINECT_FUSION:
+        if is_kfusion:
+            KF.feed_label(im_label)
             KF.fuse_depth()
             KF.extract_surface()
             KF.render()
-            KF.feed_label(im_label, labels_voxel, colors)
-            KF.draw()
+            filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
+            KF.draw(filename, 1)
         have_prediction = True
-
-        # show voxel labels
-        # voxelizer.draw(labels_voxel, imdb._class_colors)
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
+        '''
+        # read label image
+        labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+        if len(labels_gt.shape) == 2:
+            im_label_gt = imdb.labels_to_image(im, labels_gt)
+        else:
+            im_label_gt = np.copy(labels_gt[:,:,:3])
+            im_label_gt[:,:,0] = labels_gt[:,:,2]
+            im_label_gt[:,:,2] = labels_gt[:,:,0]
+        vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
+        '''
+
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

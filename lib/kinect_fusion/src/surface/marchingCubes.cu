@@ -558,4 +558,8 @@ template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
                    unsigned char*, const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel>, DeviceResident> &,
                    Tensor<2, unsigned char, DeviceResident> &, int, int);
 
+template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
+                   unsigned char*, const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident> &,
+                   Tensor<2, unsigned char, DeviceResident> &, int, int);
+
 } // namespace df

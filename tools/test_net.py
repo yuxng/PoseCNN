@@ -43,6 +43,9 @@ def parse_args():
     parser.add_argument('--rig', dest='rig_name',
                         help='name of the camera rig file',
                         default=None, type=str)
+    parser.add_argument('--kfusion', dest='kfusion',
+                        help='run kinect fusion or not',
+                        default=False, type=bool)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -79,7 +82,7 @@ if __name__ == '__main__':
 
     # start a session
     saver = tf.train.Saver()
-    if cfg.TEST.KINECT_FUSION:
+    if args.kfusion:
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
     else:
@@ -90,4 +93,4 @@ if __name__ == '__main__':
     if cfg.TEST.SINGLE_FRAME:
         test_net_single_frame(sess, network, imdb, weights_filename)
     else:
-        test_net(sess, network, imdb, weights_filename, args.rig_name)
+        test_net(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)
