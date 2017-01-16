@@ -56,6 +56,10 @@ class SolverWrapper(object):
 
     def train_model(self, sess, train_op, loss, learning_rate, max_iters):
         """Network training loop."""
+        # add summary
+        tf.summary.scalar('loss', loss)
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
 
         # intialize variables
         sess.run(tf.global_variables_initializer())
@@ -70,7 +74,8 @@ class SolverWrapper(object):
         timer = Timer()
         for iter in range(max_iters):
             timer.tic()
-            loss_value, lr, _ = sess.run([loss, learning_rate, train_op])
+            summary, loss_value, lr, _ = sess.run([merged, loss, learning_rate, train_op])
+            train_writer.add_summary(summary, iter)
             timer.toc()
             
             print 'iter: %d / %d, loss: %.4f, lr: %.8f, time: %.2f' %\
