@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-# from kinect_fusion import kfusion
+from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -126,7 +126,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     return labels_2d[0,:,:]
 
 
-def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world):
+def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
     """segment image
     """
 
@@ -199,19 +199,19 @@ def im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pos
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
                      net.meta_data: meta_data_blob, net.points: points}
     else:
-        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.depth: depth_blob, \
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
                      net.meta_data: meta_data_blob, net.points: points}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
-    labels_pred_2d, state, points = sess.run([net.get_output('labels_pred_2d'), \
-        net.get_output('output_state'),  net.get_output('output_points')], feed_dict=feed_dict)
+    labels_pred_2d, state, weights, points = sess.run([net.get_output('labels_pred_2d'), \
+        net.get_output('output_state'), net.get_output('output_weights'), net.get_output('output_points')], feed_dict=feed_dict)
 
     labels_2d = labels_pred_2d[0]
 
-    return labels_2d[0,:,:].astype(np.int32), state, points
+    return labels_2d[0,:,:].astype(np.int32), state, weights, points
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
@@ -309,12 +309,14 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             video_index = image_index[:pos]
             have_prediction = False
             state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+            weights = np.ones((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
             points = np.zeros((1, height, width, 3), dtype=np.float32)
         else:
             if video_index != image_index[:pos]:
                 have_prediction = False
                 video_index = image_index[:pos]
                 state = np.zeros((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+                weights = np.ones((1, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
                 points = np.zeros((1, height, width, 3), dtype=np.float32)
                 print 'start video {}'.format(video_index)
 
@@ -364,7 +366,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             pose_live2world = se3_inverse(pose_world2live)
 
         _t['im_segment'].tic()
-        labels, state, points = im_segment(sess, net, im, im_depth, state, points, meta_data, voxelizer, pose_world2live, pose_live2world)
+        labels, state, weights, points = im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
         # time.sleep(3)
 
@@ -382,7 +384,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             KF.extract_surface()
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
-            KF.draw(filename, 1)
+            KF.draw(filename, 0)
         have_prediction = True
 
         _t['misc'].toc()

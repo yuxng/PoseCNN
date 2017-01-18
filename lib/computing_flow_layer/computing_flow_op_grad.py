@@ -18,7 +18,7 @@ def _computeflow_shape(op):
   return [output_shape, output_shape_points]
 '''
 @ops.RegisterGradient("Computeflow")
-def _computeflow_grad(op, grad, _):
+def _computeflow_grad(op, grad, grad_weights, _):
   """The gradients for `computeflow`.
   Args:
     op: The `computeflow` `Operation` that we are differentiating, which we can use
@@ -28,12 +28,14 @@ def _computeflow_grad(op, grad, _):
     Gradients with respect to the input of `computeflow`.
   """
   data = op.inputs[0]
-  bottom_points = op.inputs[1]
-  top_points = op.outputs[1]
+  bottom_weights = op.inputs[1]
+  bottom_points = op.inputs[2]
+  top_points = op.outputs[2]
   kernel_size = op.get_attr('kernel_size')
   threshold = op.get_attr('threshold')
+  max_weight = op.get_attr('max_weight')
 
   # compute gradient
-  data_grad = computing_flow_op.compute_flow_grad(data, bottom_points, top_points, grad, kernel_size, threshold)
+  data_grad, data_grad_weights = computing_flow_op.compute_flow_grad(data, bottom_weights, bottom_points, top_points, grad, grad_weights, kernel_size, threshold, max_weight)
 
-  return [data_grad, None, None, None]  # List of one Tensor, since we have four input
+  return [data_grad, data_grad_weights, None, None, None]  # List of one Tensor, since we have five input

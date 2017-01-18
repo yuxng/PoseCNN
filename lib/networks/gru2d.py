@@ -20,7 +20,7 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
 
     # inputs: [batch_size, height, width, channels]
     # state:  [batch_size, height, width, num_units]
-    def __call__(self, inputs, state, scope=None):
+    def __call__(self, inputs, state, weights, scope=None):
         with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
             inputs_shape = tf.shape(inputs)
             inputs = tf.reshape(inputs, [inputs_shape[0], inputs_shape[1], inputs_shape[2], self._channels])
@@ -56,5 +56,6 @@ class GRU2DCell(tf.nn.rnn_cell.RNNCell):
                 c = tf.nn.tanh(tf.nn.bias_add(conv_1, biases_1))
             '''
 
-            new_h = tf.nn.relu(u * state + (1 - u) * inputs)
-        return new_h, new_h
+            new_w = weights + u
+            new_h = tf.nn.relu(tf.div(weights * state + u * inputs, new_w))
+        return new_h, new_h, new_w

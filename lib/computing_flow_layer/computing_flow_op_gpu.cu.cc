@@ -15,9 +15,9 @@
 using namespace tensorflow;
 
 template <typename Dtype>
-__global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_points, const Dtype* bottom_depth,
+__global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data, const Dtype* bottom_weights, const Dtype* bottom_points, const Dtype* bottom_depth,
     const Dtype* bottom_meta_data, const int height, const int width, const int channels, const int num_meta_data,
-    const int kernel_size, const float threshold, Dtype* top_data, Dtype* top_points)
+    const int kernel_size, const float threshold, const float max_weight, Dtype* top_data, Dtype* top_weights, Dtype* top_points)
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -34,6 +34,7 @@ __global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data,
 
     // initialization
     top_data[index] = 0;
+    top_weights[index] = 1;
     if (c == 0)
     {
       top_points[index_pixel * 3 + 0] = NAN;
@@ -108,9 +109,14 @@ __global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data,
 
       if (dmin < threshold)
       {
-        // assign data
+        // assign data and weight
         int index_bottom = n * height * width + fy * width + fx;
         top_data[index] = bottom_data[index_bottom * channels + c];
+        Dtype weight = bottom_weights[index_bottom * channels + c];
+        if (weight > max_weight)
+          top_weights[index] = max_weight;
+        else
+          top_weights[index] = weight;
       }
     }
   }
@@ -118,12 +124,12 @@ __global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data,
 
 // bottom_data: (batch_size, height, width, channels)
 bool ComputeFlowForwardLaucher(
-    const float* bottom_data, const float* bottom_points,
+    const float* bottom_data, const float* bottom_weights, const float* bottom_points,
     const float* bottom_depth, const float* bottom_meta_data,
     const int batch_size, const int height, const int width,
     const int channels, const int num_meta_data, 
-    const int kernel_size, const float threshold,
-    float* top_data, float* top_points, const Eigen::GpuDevice& d)
+    const int kernel_size, const float threshold, const float max_weight,
+    float* top_data, float* top_weights, float* top_points, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
   cudaError_t err;
@@ -131,8 +137,8 @@ bool ComputeFlowForwardLaucher(
   const int output_size = batch_size * height * width * channels;
   ComputeFlowForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, bottom_data, bottom_points, bottom_depth, bottom_meta_data, height, width, channels, num_meta_data,
-      kernel_size, threshold, top_data, top_points);
+      output_size, bottom_data, bottom_weights, bottom_points, bottom_depth, bottom_meta_data, height, width, channels, num_meta_data,
+      kernel_size, threshold, max_weight, top_data, top_weights, top_points);
 
   cudaDeviceSynchronize();
   err = cudaGetLastError();
@@ -147,10 +153,10 @@ bool ComputeFlowForwardLaucher(
 
 
 template <typename Dtype>
-__global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff,
-    const Dtype* bottom_points, const Dtype* top_points, 
+__global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, const Dtype* top_diff_weights,
+    const Dtype* bottom_weights, const Dtype* bottom_points, const Dtype* top_points, 
     const int height, const int width, const int channels, const int kernel_size,
-    const float threshold, Dtype* bottom_diff) 
+    const float threshold, const float max_weight, Dtype* bottom_diff, Dtype* bottom_diff_weights) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -168,7 +174,10 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff,
     Dtype Y_prev = bottom_points[index_pixel * 3 + 1];
     Dtype Z_prev = bottom_points[index_pixel * 3 + 2];
     if (isnan(X_prev) || isnan(Y_prev) || isnan(Z_prev))
+    {
       bottom_diff[index] = 0;
+      bottom_diff_weights[index] = 0;
+    }
     else
     {
       // check a neighborhood around (w, h)
@@ -205,17 +214,24 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff,
         // assign data
         int index_top = n * height * width + fy * width + fx;
         bottom_diff[index] = top_diff[index_top * channels + c];
+        if (bottom_weights[index] > max_weight)
+          bottom_diff_weights[index] = 0;
+        else
+          bottom_diff_weights[index] = top_diff_weights[index_top * channels + c];
       }
       else
+      {
         bottom_diff[index] = 0;
+        bottom_diff_weights[index] = 0;
+      }
     }
   }
 }
 
  
-bool ComputeFlowBackwardLaucher(const float* top_diff, const float* bottom_points, const float* top_points, 
-    const int batch_size, const int height, const int width, const int channels, const int kernel_size, const float threshold,
-    float* bottom_diff, const Eigen::GpuDevice& d)
+bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, const float* bottom_points, const float* top_points, const int batch_size,
+    const int height, const int width, const int channels, const int kernel_size, const float threshold, const float max_weight,
+    float* bottom_diff, float* bottom_diff_weights, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
   const int output_size = batch_size * height * width * channels;
@@ -223,8 +239,8 @@ bool ComputeFlowBackwardLaucher(const float* top_diff, const float* bottom_point
 
   ComputeFlowBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, top_diff, bottom_points, top_points,
-      height, width, channels, kernel_size, threshold, bottom_diff);
+      output_size, top_diff, top_diff_weights, bottom_weights, bottom_points, top_points,
+      height, width, channels, kernel_size, threshold, max_weight, bottom_diff, bottom_diff_weights);
 
   cudaDeviceSynchronize();
   err = cudaGetLastError();

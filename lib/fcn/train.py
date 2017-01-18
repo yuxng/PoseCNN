@@ -132,11 +132,11 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
                            net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
-                           net.state: blobs['data_state'], net.points: blobs['data_points']}
+                           net.state: blobs['data_state'], net.weights: blobs['data_weights'], net.points: blobs['data_points']}
             else:
                 feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], \
                            net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
-                           net.state: blobs['data_state'], net.points: blobs['data_points']}
+                           net.state: blobs['data_state'], net.weights: blobs['data_weights'], net.points: blobs['data_points']}
 
         sess.run(net.enqueue_op, feed_dict=feed_dict)
 

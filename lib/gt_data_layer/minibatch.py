@@ -29,7 +29,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, state_blob, points_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, state_blob, weights_blob, points_blob = _get_label_blob(roidb, voxelizer)
 
     # reshape the blobs
     num_steps = cfg.TRAIN.NUM_STEPS
@@ -57,6 +57,7 @@ def get_minibatch(roidb, voxelizer):
              'data_label': label_blob,
              'data_meta_data': meta_data_blob,
              'data_state': state_blob,
+             'data_weights': weights_blob,
              'data_points': points_blob}
 
     return blobs
@@ -248,9 +249,10 @@ def _get_label_blob(roidb, voxelizer):
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     state_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
+    weights_blob = np.ones((cfg.TRAIN.IMS_PER_BATCH, height, width, cfg.TRAIN.NUM_UNITS), dtype=np.float32)
     points_blob = np.zeros((cfg.TRAIN.IMS_PER_BATCH, height, width, 3), dtype=np.float32)
 
-    return depth_blob, label_blob, meta_data_blob, state_blob, points_blob
+    return depth_blob, label_blob, meta_data_blob, state_blob, weights_blob, points_blob
 
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):

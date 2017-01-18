@@ -194,8 +194,8 @@ class Network(object):
         return backproject_op.backproject(input[0], input[1], input[2], input[3], input[4], grid_size, kernel_size, threshold, name=name)
 
     @layer
-    def compute_flow(self, input, kernel_size, threshold, name):
-        return compute_flow_op.compute_flow(input[0], input[1], input[2], input[3], kernel_size, threshold, name=name)
+    def compute_flow(self, input, kernel_size, threshold, max_weight, name):
+        return compute_flow_op.compute_flow(input[0], input[1], input[2], input[3], input[4], kernel_size, threshold, max_weight, name=name)
 
     @layer
     def triplet_loss(self, input, margin, name):
@@ -213,7 +213,7 @@ class Network(object):
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse) as scope:
             gru2d = GRU2DCell(num_units, channels)
-            return gru2d(input[0], input[1][0], scope)
+            return gru2d(input[0], input[1][0], input[1][1], scope)
 
     @layer
     def rnn_gru3d(self, input, num_units, channels, name, reuse=None):

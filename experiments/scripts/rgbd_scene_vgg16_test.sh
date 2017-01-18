@@ -18,4 +18,4 @@ time ./tools/test_net.py --gpu 0 \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene.yml \
   --rig data/RGBDScene/camera.json \
-  --kfusion 1
+#  --kfusion 1

@@ -18,19 +18,20 @@ class vgg16(Network):
         self.depth = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 1])
         self.meta_data = tf.placeholder(tf.float32, shape=[self.num_steps, None, None, None, 48])
         self.state = tf.placeholder(tf.float32, [None, None, None, self.num_units])
+        self.weights = tf.placeholder(tf.float32, [None, None, None, self.num_units])
         self.points = tf.placeholder(tf.float32, [None, None, None, 3])
 
         # define a queue
         if input_format == 'RGBD':
-            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.depth, self.meta_data, self.state, self.points])
-            self.data_queue, self.data_p_queue, self.gt_label_2d_queue, self.depth_queue, self.meta_data_queue, self.state_queue, self.points_queue = q.dequeue()
-            self.layers = dict({'data': [], 'data_p': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'points': []})
+            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+            self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.depth, self.meta_data, self.state, self.weights, self.points])
+            self.data_queue, self.data_p_queue, self.gt_label_2d_queue, self.depth_queue, self.meta_data_queue, self.state_queue, self.weights_queue, self.points_queue = q.dequeue()
+            self.layers = dict({'data': [], 'data_p': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'weights': [], 'points': []})
         else:
-            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.depth, self.meta_data, self.state, self.points])
-            self.data_queue, self.gt_label_2d_queue, self.depth_queue, self.meta_data_queue, self.state_queue, self.points_queue = q.dequeue()
-            self.layers = dict({'data': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'points': []})
+            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+            self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.depth, self.meta_data, self.state, self.weights, self.points])
+            self.data_queue, self.gt_label_2d_queue, self.depth_queue, self.meta_data_queue, self.state_queue, self.weights_queue, self.points_queue = q.dequeue()
+            self.layers = dict({'data': [], 'gt_label_2d': [], 'depth': [], 'meta_data': [], 'state': [], 'weights': [], 'points': []})
 
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
         self.trainable = trainable
@@ -44,6 +45,7 @@ class vgg16(Network):
         input_depth = tf.unpack(self.depth_queue, self.num_steps)
         input_meta_data = tf.unpack(self.meta_data_queue, self.num_steps)
         input_state = self.state_queue
+        input_weights = self.weights_queue
         input_points = self.points_queue
         outputs = []
         labels_gt_2d = []
@@ -58,6 +60,7 @@ class vgg16(Network):
             self.layers['depth'] = input_depth[i]
             self.layers['meta_data'] = input_meta_data[i]
             self.layers['state'] = input_state
+            self.layers['weights'] = input_weights
             self.layers['points'] = input_points
             if i == 0:
                 reuse = None
@@ -123,8 +126,8 @@ class vgg16(Network):
                  .add(name='add_score')
                  .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
 
-            (self.feed('state', 'points', 'depth', 'meta_data')
-                 .compute_flow(5, 0.02, name='flow'))
+            (self.feed('state', 'weights', 'points', 'depth', 'meta_data')
+                 .compute_flow(5, 0.02, 50, name='flow'))
 
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
@@ -134,7 +137,8 @@ class vgg16(Network):
 
             # collect outputs
             input_state = self.get_output('gru2d')[1]
-            input_points = self.get_output('flow')[1]
+            input_weights = self.get_output('gru2d')[2]
+            input_points = self.get_output('flow')[2]
             outputs.append(self.get_output('prob'))
             labels_gt_2d.append(self.get_output('gt_label_2d'))
             labels_pred_2d.append(self.get_output('label_2d'))
@@ -143,4 +147,5 @@ class vgg16(Network):
         self.layers['labels_gt_2d'] = labels_gt_2d
         self.layers['labels_pred_2d'] = labels_pred_2d
         self.layers['output_state'] = input_state
+        self.layers['output_weights'] = input_weights
         self.layers['output_points'] = input_points
