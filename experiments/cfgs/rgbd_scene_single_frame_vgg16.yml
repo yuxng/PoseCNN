@@ -15,5 +15,4 @@ TRAIN:
   USE_FLIPPED: False
 TEST:
   SINGLE_FRAME: True
-  KINECT_FUSION: False
   SCALES_BASE: !!python/tuple [1.0]

@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # start a session
     saver = tf.train.Saver()
     if args.kfusion:
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
     else:
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -91,6 +91,6 @@ if __name__ == '__main__':
     print ('Loading model weights from {:s}').format(args.model)
 
     if cfg.TEST.SINGLE_FRAME:
-        test_net_single_frame(sess, network, imdb, weights_filename)
+        test_net_single_frame(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)
     else:
         test_net(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)

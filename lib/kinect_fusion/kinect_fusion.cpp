@@ -102,9 +102,21 @@ void KinectFusion::create_tensors()
   depth_factor_ = 1000.0;
   depth_cutoff_ = 20.0;
 
+  // probability
+  probability_map_device_ = new ManagedDeviceTensor2<Vec>({depth_camera_->width(), depth_camera_->height()});
+
+  // class colors
+  class_colors_device_ = new ManagedDeviceTensor1<Vec3uc>(10);
+
   // color
   color_map_ = new ManagedHostTensor2<Vec3>({depth_camera_->width(), depth_camera_->height()});
   color_map_device_ = new ManagedDeviceTensor2<Vec3>(color_map_->dimensions());
+
+  // labels
+  labels_ = new ManagedHostTensor2<int>({depth_camera_->width(), depth_camera_->height()});
+  labels_device_ = new ManagedDeviceTensor2<int>(labels_->dimensions());
+  label_colors_ = new ManagedHostTensor2<Vec3uc>(labels_->dimensions());
+  label_colors_device_ = new ManagedDeviceTensor2<Vec3uc>(labels_->dimensions());
 
   // 3D points
   vertex_map_ = new ManagedHostTensor2<Vec3>({depth_camera_->width(), depth_camera_->height()});
@@ -133,18 +145,18 @@ void KinectFusion::create_tensors()
   colorBuffer_ = new pangolin::GlBufferCudaPtr(pangolin::GlArrayBuffer, dVertices_->dimensionSize(1), GL_UNSIGNED_BYTE, 3, cudaGraphicsMapFlagsWriteDiscard, GL_STATIC_DRAW);
 
   // voxels
-  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident>({512, 512, 512});
+  voxel_data_ = new ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident>({512, 512, 512});
   float voxelGridOffsetX = -1;
   float voxelGridOffsetY = -1;
   float voxelGridOffsetZ = 0;
   float voxelGridDimX = 2;
   float voxelGridDimY = 2;
   float voxelGridDimZ = 2;
-  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
-  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ColorVoxel>::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>::zero());
   initMarchingCubesTables();
 
   // renderer
@@ -173,7 +185,7 @@ void KinectFusion::create_tensors()
 void KinectFusion::set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ)
 {
   delete voxel_grid_;
-  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
+  voxel_grid_ = new DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> >(voxel_data_->dimensions(), voxel_data_->data(),
                                                       Eigen::AlignedBox3f(Eigen::Vector3f(voxelGridOffsetX, voxelGridOffsetY, voxelGridOffsetZ),
                                                                           Eigen::Vector3f(voxelGridOffsetX + voxelGridDimX, voxelGridOffsetY + voxelGridDimY, voxelGridOffsetZ + voxelGridDimZ)));
 
@@ -238,11 +250,11 @@ void KinectFusion::fuse_depth()
 
   float truncationDistance = 0.04;
   df::fuseFrame(*voxel_grid_, *transformer_, depthModel, colorModel, T_dc_.inverse().cast<float>(), *depth_map_device_, truncationDistance, 
-                internal::FusionTypeTraits<ColorVoxel>::PackedInput<float>(truncationDistance, 100.f, *color_map_device_));
+                internal::FusionTypeTraits<ProbabilityVoxel>::PackedInput<float>(truncationDistance, 100.f, *probability_map_device_));
 }
 
 // extract surface
-void KinectFusion::extract_surface()
+void KinectFusion::extract_surface(int* labels_return)
 {
   extractSurface(*dVertices_, *voxel_grid_, 0.02f);
 
@@ -258,6 +270,20 @@ void KinectFusion::extract_surface()
 
   computeSignedDistanceGradientNormals(actualWeldedVertices, dNormals__, *voxel_grid_);
 
+  // compute labels
+  const Camera<Poly3CameraModel,double> * poly3DepthCamera = dynamic_cast<const Camera<Poly3CameraModel,double> *>(depth_camera_);
+  if (!poly3DepthCamera) 
+    throw std::runtime_error("expected Poly3 model for the depth camera");
+  Poly3CameraModel<float> depthModel = poly3DepthCamera->model().cast<float>();
+  
+  computeLabels(*transformer_, depthModel, *depth_map_device_, *voxel_grid_, *labels_device_, *label_colors_device_, *class_colors_device_);
+  labels_->copyFrom(*labels_device_);
+  if(labels_return)
+    memcpy(labels_return, labels_->data(), sizeof(int) * labels_->dimensionSize(0) * labels_->dimensionSize(1));
+  label_colors_->copyFrom(*label_colors_device_);
+  label_texture()->Upload(reinterpret_cast<unsigned char *>(label_colors_->data()), GL_RGB, GL_UNSIGNED_BYTE);
+
+  // compute vertex color
   DeviceTensor1<Vec3> actualWeldedVertices_( dNormals_->length(), reinterpret_cast<Vec3 *>(actualWeldedVertices.data()) );
   dColors_->resize(actualWeldedVertices_.length());
   computeSurfaceColors(actualWeldedVertices_, *dColors_, *voxel_grid_);
@@ -476,9 +502,10 @@ void KinectFusion::feed_data(unsigned char* depth, unsigned char* color, int wid
 
 
 // feed predicted labels
-void KinectFusion::feed_label(unsigned char* im_label)
+void KinectFusion::feed_label(unsigned char* im_label, float* probability, unsigned char* colors)
 {
-  label_texture()->Upload(im_label, GL_RGB, GL_UNSIGNED_BYTE);
+  // label_texture()->Upload(im_label, GL_RGB, GL_UNSIGNED_BYTE);
+  depth_texture()->Upload(im_label, GL_RGB, GL_UNSIGNED_BYTE);
 
   // process color
   ConstHostTensor2<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > colorImage({depth_camera_->width(), depth_camera_->height()}, 
@@ -490,13 +517,25 @@ void KinectFusion::feed_label(unsigned char* im_label)
   });
 
   color_map_device_->copyFrom(*color_map_);
+
+  // process probability
+  HostTensor2<Eigen::Matrix<float,10,1,Eigen::DontAlign> > probImage({depth_camera_->width(), depth_camera_->height()}, 
+    reinterpret_cast<Eigen::Matrix<float,10,1,Eigen::DontAlign> *>(probability));
+
+  probability_map_device_->copyFrom(probImage);
+
+  // class colors
+  HostTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > class_color({10}, 
+    reinterpret_cast<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> *>(colors));
+
+  class_colors_device_->copyFrom(class_color);
 }
 
 
 // reset voxels
 void KinectFusion::reset()
 {
-  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ColorVoxel>::zero());
+  voxel_grid_->fill(CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>::zero());
   delete transformer_;
   transformer_ = new RigidTransformer<float>;
 }
@@ -638,7 +677,7 @@ int main(int argc, char * * argv)
     // extract surface
     GlobalTimer::tick("marching cubes");
     std::cout << "extract surface" << std::endl;
-    KF.extract_surface();
+    KF.extract_surface(NULL);
     GlobalTimer::tock("marching cubes");
 
     // rendering

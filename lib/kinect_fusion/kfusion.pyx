@@ -8,18 +8,19 @@
 from libcpp.string cimport string
 import numpy as np
 cimport numpy as np
+import ctypes
 
 cdef extern from "kfusion.hpp" namespace "df":
     cdef cppclass KinectFusion:
         KinectFusion(string) except +
         void solve_pose(float*, float*)
         void fuse_depth()
-        void extract_surface()
+        void extract_surface(int*)
         void render()
         void draw(string, int)
         void back_project()
         void feed_data(unsigned char*, unsigned char*, int, int, float)
-        void feed_label(unsigned char*)
+        void feed_label(unsigned char*, float*, unsigned char*)
         void reset()
         void set_voxel_grid(float, float, float, float, float, float);
         void save_model(string)
@@ -42,8 +43,11 @@ cdef class PyKinectFusion:
     def fuse_depth(self):
         return self.kfusion.fuse_depth()
 
-    def extract_surface(self):
-        return self.kfusion.extract_surface()
+    def extract_surface(self, np.ndarray[np.int32_t, ndim=2] labels):
+        cdef np.ndarray[int, ndim=2, mode="c"] l_c
+        l_c = np.ascontiguousarray(labels, dtype=ctypes.c_int)
+        self.kfusion.extract_surface(&l_c[0, 0])
+        return l_c
 
     def render(self):
         return self.kfusion.render()
@@ -59,9 +63,10 @@ cdef class PyKinectFusion:
         cdef unsigned char* color_buff = <unsigned char*> color.data
         return self.kfusion.feed_data(depth_buff, color_buff, width, height, factor)
 
-    def feed_label(self, np.ndarray[np.uint8_t, ndim=3] im_label):
+    def feed_label(self, np.ndarray[np.uint8_t, ndim=3] im_label, np.ndarray[np.float32_t, ndim=3] probs, np.ndarray[np.uint8_t, ndim=1] colors):
         cdef unsigned char* im_label_buff = <unsigned char*> im_label.data
-        return self.kfusion.feed_label(im_label_buff)
+        cdef unsigned char* colors_buff = <unsigned char*> colors.data
+        return self.kfusion.feed_label(im_label_buff, &probs[0, 0, 0], colors_buff)
 
     def reset(self):
         return self.kfusion.reset()

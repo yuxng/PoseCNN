@@ -4,6 +4,7 @@
 #include <df/util/macros.h>
 
 #include <df/voxel/color.h>
+#include <df/voxel/probability.h>
 #include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h> // TODO
 
@@ -209,6 +210,10 @@ template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceRe
 template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceResident> &,
                                                    Tensor<2,float,DeviceResident> &,
                                                    VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &);
+
+template void computeSignedDistanceGradientNormals(const Tensor<2,float,DeviceResident> &,
+                                                   Tensor<2,float,DeviceResident> &,
+                                                   VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>,DeviceResident> &);
 
 
 template <typename Scalar, int D>

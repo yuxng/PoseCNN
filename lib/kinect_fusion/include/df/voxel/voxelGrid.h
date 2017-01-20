@@ -5,6 +5,7 @@
 
 #include <df/util/tensor.h>
 #include <df/voxel/color.h>
+#include <df/voxel/probability.h>
 #include <df/voxel/tsdf.h>
 
 namespace df {
@@ -66,6 +67,19 @@ struct ColorValueExtractor {
     __host__ __device__
     inline ReturnType operator()(const VoxelT & voxel) const {
         return voxel.template value<ColorVoxel>();
+    }
+
+};
+
+template <typename Scalar, typename VoxelT>
+struct ProbabilityValueExtractor {
+
+    typedef Eigen::Matrix<Scalar,10,1,Eigen::DontAlign> ReturnType;
+    typedef Scalar ScalarType;
+
+    __host__ __device__
+    inline ReturnType operator()(const VoxelT & voxel) const {
+        return voxel.template value<ProbabilityVoxel>();
     }
 
 };

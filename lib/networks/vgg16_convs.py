@@ -88,5 +88,8 @@ class vgg16_convs(Network):
              .add(name='add_score')
              .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
-             .log_softmax_high_dimension(self.num_classes, name='prob')
+             .log_softmax_high_dimension(self.num_classes, name='prob'))
+
+        (self.feed('score')
+             .softmax_high_dimension(self.num_classes, name='prob_normalized')
              .argmax_2d(name='label_2d'))

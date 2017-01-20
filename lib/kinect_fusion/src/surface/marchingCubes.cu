@@ -1,12 +1,14 @@
 #include <df/surface/marchingCubes.h>
 
+#include <df/camera/poly3.h>
 #include <df/surface/marchingCubesTables.h>
 #include <df/util/cudaHelpers.h>
 #include <df/util/eigenHelpers.h>
 #include <df/voxel/color.h>
+#include <df/voxel/probability.h>
 #include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h>
-
+#include <df/transform/rigid.h>
 
 #include <thrust/device_ptr.h>
 #include <thrust/binary_search.h>
@@ -541,13 +543,105 @@ void computeColors(const Tensor<2, Scalar, DeviceResident> & vertices, int* labe
     voxelGrid.gridToWorldOffset(), voxelGrid.gridToWorldScale(), colors, dimension, num_classes);
 }
 
+// extract labels from voxel grid
 
+template <typename TransformerT,
+          typename DepthCameraModelT,
+          typename DepthT>
+__global__ void computeLabelsKernel(const typename TransformerT::DeviceModule transformer,
+                   const DepthCameraModelT depthCameraModel,
+                   const DeviceTensor2<DepthT> depthMap,
+                   const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident> voxelGrid,
+                   DeviceTensor2<int> labels, 
+                   DeviceTensor2<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > label_colors, 
+                   const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > class_colors, int width, int height) 
+{
+  typedef Eigen::Matrix<int,2,1,Eigen::DontAlign> Vec2i;
+
+  const uint index = threadIdx.x + blockDim.x * blockIdx.x;
+
+  const int x = index % width;
+  const int y = index / width;
+  if (x < width && y < height)
+  {
+
+    const Vec2i loc(x, y);
+    DepthT depth = depthMap(loc);
+
+    if (depth > 0)
+    {
+      // backprojection
+      const Eigen::Matrix<float,2,1> point2d(x, y);
+      const Eigen::Matrix<float,3,1> liveCoord = depthCameraModel.unproject(point2d, depth);
+      const Eigen::Matrix<float,3,1> worldCoord = transformer.transformLiveToWorld(liveCoord);
+
+      const Eigen::Matrix<float,3,1> gridCoord = voxelGrid.worldToGrid(worldCoord);
+      int X = int(gridCoord(0));
+      int Y = int(gridCoord(1));
+      int Z = int(gridCoord(2));
+
+      if (X >= 0 && X < voxelGrid.size(0) && Y >= 0 && Y < voxelGrid.size(1) && Z >= 0 && Z < voxelGrid.size(2))
+      {
+        CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> voxel = voxelGrid(X, Y, Z);
+        Eigen::Matrix<float,10,1,Eigen::DontAlign> prob;
+        prob = voxel.value<ProbabilityVoxel>();
+
+        int label = -1;
+        float max_prob = -1;
+        for (int i = 0; i < 10; i++)
+        {
+          if (prob(i) > max_prob)
+          {
+            max_prob = prob(i);
+            label = i;
+          }
+        }
+        labels(loc) = label;
+      }
+      else
+        labels(loc) = 0;
+    }
+    else
+      labels(loc) = 0;
+    // set color
+    label_colors(loc) = class_colors(labels(loc));
+  }
+}
+
+template <typename TransformerT,
+          typename DepthCameraModelT,
+          typename DepthT>
+void computeLabels(const TransformerT & transformer,
+                   const DepthCameraModelT & depthCameraModel,
+                   const DeviceTensor2<DepthT> & depthMap,
+                   const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident> & voxelGrid,
+                   DeviceTensor2<int> & labels, 
+                   DeviceTensor2<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > & label_colors, 
+                   const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > & class_colors)
+{
+  const uint width = depthMap.width();
+  const uint height = depthMap.height();
+
+  const uint output_size = width * height;
+  const uint nThreads = 256;
+
+  computeLabelsKernel<TransformerT,DepthCameraModelT,DepthT><<<intDivideAndCeil(output_size, nThreads), nThreads>>>
+    (transformer.deviceModule(), depthCameraModel, depthMap, voxelGrid, labels, label_colors, class_colors, width, height);
+}
+
+
+
+// instances
 template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
                              const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel>,DeviceResident> &,
                              const float);
 
 template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
                              const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &,
+                             const float);
+
+template void extractSurface(ManagedTensor<2,float,DeviceResident> &,
+                             const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>,DeviceResident> &,
                              const float);
 
 template uint weldVertices(const Tensor<2,float,DeviceResident> &,
@@ -561,5 +655,16 @@ template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
 template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
                    unsigned char*, const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident> &,
                    Tensor<2, unsigned char, DeviceResident> &, int, int);
+
+template void computeColors(const Tensor<2, float, DeviceResident> &, int*,
+                   unsigned char*, const VoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident> &,
+                   Tensor<2, unsigned char, DeviceResident> &, int, int);
+
+template void computeLabels(const RigidTransformer<float> &,
+                        const Poly3CameraModel<float> &,
+                        const DeviceTensor2<float> &,
+                        const VoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident> &,
+                        DeviceTensor2<int> &, DeviceTensor2<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &, 
+                        const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &);
 
 } // namespace df

@@ -1,4 +1,5 @@
 #include <df/voxel/color.h>
+#include <df/voxel/probability.h>
 #include <df/voxel/compositeVoxel.h>
 #include <df/voxel/voxelGrid.h>
 #include <df/voxel/tsdf.h>
@@ -43,6 +44,8 @@ void VoxelGridFiller<DeviceResident>::fill(Tensor<3,VoxelT,DeviceResident> & gri
 template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,CompositeVoxel<float,TsdfVoxel>,DeviceResident> &, const CompositeVoxel<float,TsdfVoxel> &);
 
 template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,CompositeVoxel<float,TsdfVoxel,ColorVoxel>,DeviceResident> &, const CompositeVoxel<float,TsdfVoxel,ColorVoxel> &);
+
+template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>,DeviceResident> &, const CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> &);
 
 template void VoxelGridFiller<DeviceResident>::fill(Tensor<3,Eigen::Matrix<int,4,1,Eigen::DontAlign>,DeviceResident> &, const Eigen::Matrix<int,4,1,Eigen::DontAlign> &);
 

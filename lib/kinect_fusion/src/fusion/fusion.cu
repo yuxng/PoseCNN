@@ -9,6 +9,7 @@
 #include <df/util/cudaHelpers.h>
 #include <df/util/dualQuaternion.h> // TODO
 #include <df/voxel/color.h>
+#include <df/voxel/probability.h>
 #include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h>
 #include <df/voxel/voxelGrid.h>
@@ -90,7 +91,35 @@ struct SingleColorFusionHandler<Scalar,ColorVoxel, CompositeVoxelT> {
         }
 
     }
+};
 
+template <typename Scalar, typename CompositeVoxelT>
+struct SingleColorFusionHandler<Scalar, ProbabilityVoxel, CompositeVoxelT> {
+
+    typedef Eigen::Matrix<Scalar,2,1,Eigen::DontAlign> Vec2;
+    typedef Eigen::Matrix<Scalar,10,1,Eigen::DontAlign> Vec;
+
+    __device__
+    static inline void doFusion(CompositeVoxelT & voxel,
+                                const Vec2 colorFrameProjection,
+                                const Scalar signedDistance,
+                                const typename internal::FusionTypeTraits<ProbabilityVoxel>::template PackedInput<Scalar> & voxelInput) {
+
+        if (fabs(signedDistance) < voxelInput.truncationDistance) {
+
+            const DeviceTensor2<Vec> & colorImage = voxelInput.colorImage;
+
+            if (voxelInput.colorImage.inBounds(colorFrameProjection(0),colorFrameProjection(1),Scalar(2))) {
+
+                const Vec color = colorImage.interpolate(colorFrameProjection(0),colorFrameProjection(1));
+
+                voxel.template fuse<ProbabilityVoxel>(color,1.f,voxelInput.maxWeight);
+
+            }
+
+        }
+
+    }
 };
 
 template <typename Scalar, typename CompositeVoxelT, typename ... NonTsdfVoxelTs>
@@ -176,7 +205,7 @@ __global__ void fuseFrameKernel(DeviceVoxelGrid<Scalar,CompositeVoxel<Scalar,Tsd
     typedef Eigen::Matrix<int,2,1,Eigen::DontAlign> Vec2i;
 
     static constexpr Scalar border = Scalar(5);
-    static constexpr Scalar maxWeight = Scalar(100);
+    static constexpr Scalar maxWeight = Scalar(50);
 
     const int x = threadIdx.x + blockIdx.x * blockDim.x;
     const int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -338,6 +367,15 @@ template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,Col
                         const DeviceTensor2<float> &,
                         const float,
                         typename internal::FusionTypeTraits<ColorVoxel>::PackedInput<float>);
+
+template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> > &,
+                        const RigidTransformer<float> &,
+                        const Poly3CameraModel<float> &,
+                        const Poly3CameraModel<float> &,
+                        const Sophus::SE3f &,
+                        const DeviceTensor2<float> &,
+                        const float,
+                        typename internal::FusionTypeTraits<ProbabilityVoxel>::PackedInput<float> );
 
 
 } // namespace df

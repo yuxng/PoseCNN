@@ -120,10 +120,9 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
-    output = sess.run([net.get_output('label_2d')], feed_dict=feed_dict)
-    labels_2d = output[0]
+    labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
 
-    return labels_2d[0,:,:]
+    return labels_2d[0,:,:], probs[0,:,:,:]
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -206,12 +205,12 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
                      net.meta_data: meta_data_blob, net.points: points}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
-    labels_pred_2d, state, weights, points = sess.run([net.get_output('labels_pred_2d'), \
+    labels_pred_2d, probs, state, weights, points = sess.run([net.get_output('labels_pred_2d'), net.get_output('probs'), \
         net.get_output('output_state'), net.get_output('output_weights'), net.get_output('output_points')], feed_dict=feed_dict)
 
     labels_2d = labels_pred_2d[0]
 
-    return labels_2d[0,:,:].astype(np.int32), state, weights, points
+    return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
@@ -292,6 +291,13 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
     if is_kfusion:
         KF = kfusion.PyKinectFusion(rig_filename)
 
+    # construct colors
+    colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
+    for i in range(imdb.num_classes):
+        colors[i * 3 + 0] = 255 * imdb._class_colors[i][0]
+        colors[i * 3 + 1] = 255 * imdb._class_colors[i][1]
+        colors[i * 3 + 2] = 255 * imdb._class_colors[i][2]
+
     # perm = np.random.permutation(np.arange(num_images))
 
     video_index = ''
@@ -366,26 +372,32 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             pose_live2world = se3_inverse(pose_world2live)
 
         _t['im_segment'].tic()
-        labels, state, weights, points = im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world)
+        labels, probs, state, weights, points = im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world)
         _t['im_segment'].toc()
         # time.sleep(3)
 
         _t['misc'].tic()
         labels = unpad_im(labels, 16)
-        seg = {'labels': labels}
-        segmentations[i] = seg
 
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
         if is_kfusion:
-            KF.feed_label(im_label)
+            labels_kfusion = np.zeros((height, width), dtype=np.int32)
+            KF.feed_label(im_label, probs, colors)
             KF.fuse_depth()
-            KF.extract_surface()
+            labels_kfusion = KF.extract_surface(labels_kfusion)
+            im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
             KF.draw(filename, 0)
         have_prediction = True
+
+        if is_kfusion:
+            seg = {'labels': labels_kfusion}
+        else:
+            seg = {'labels': labels}
+        segmentations[i] = seg
 
         _t['misc'].toc()
 
@@ -399,7 +411,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             im_label_gt[:,:,0] = labels_gt[:,:,2]
             im_label_gt[:,:,2] = labels_gt[:,:,0]
         vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
-        '''
+        #'''
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
@@ -414,7 +426,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 ###################
 # test single frame
 ###################
-def test_net_single_frame(sess, net, imdb, weights_filename):
+def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
@@ -435,10 +447,35 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
     # timers
     _t = {'im_segment' : Timer(), 'misc' : Timer()}
 
+    # kinect fusion
+    if is_kfusion:
+        KF = kfusion.PyKinectFusion(rig_filename)
+
+    # construct colors
+    colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
+    for i in range(imdb.num_classes):
+        colors[i * 3 + 0] = 255 * imdb._class_colors[i][0]
+        colors[i * 3 + 1] = 255 * imdb._class_colors[i][1]
+        colors[i * 3 + 2] = 255 * imdb._class_colors[i][2]
+
     # perm = np.random.permutation(np.arange(num_images))
 
+    video_index = ''
+    have_prediction = False
     for i in xrange(num_images):
     # for i in perm:
+
+        # parse image name
+        image_index = imdb.image_index[i]
+        pos = image_index.find('/')
+        if video_index == '':
+            video_index = image_index[:pos]
+            have_prediction = False
+        else:
+            if video_index != image_index[:pos]:
+                have_prediction = False
+                video_index = image_index[:pos]
+                print 'start video {}'.format(video_index)
 
         # read color image
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
@@ -466,16 +503,47 @@ def test_net_single_frame(sess, net, imdb, weights_filename):
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         _t['im_segment'].tic()
-        labels = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        labels, probs = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
         labels = unpad_im(labels, 16)
-        seg = {'labels': labels}
-        segmentations[i] = seg
-
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
+
+        if not have_prediction:    
+            if is_kfusion:
+                KF.set_voxel_grid(-3, -3, -3, 6, 6, 7)
+
+        # run kinect fusion
+        if is_kfusion:
+            height = im.shape[0]
+            width = im.shape[1]
+            labels_kfusion = np.zeros((height, width), dtype=np.int32)
+
+            im_rgb = np.copy(im)
+            im_rgb[:, :, 0] = im[:, :, 2]
+            im_rgb[:, :, 2] = im[:, :, 0]
+            KF.feed_data(im_depth, im_rgb, im.shape[1], im.shape[0], float(meta_data['factor_depth']))
+            KF.back_project();
+            if have_prediction:
+                pose_world2live, pose_live2world = KF.solve_pose()
+
+            KF.feed_label(im_label, probs, colors)
+            KF.fuse_depth()
+            labels_kfusion = KF.extract_surface(labels_kfusion)
+            im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
+            KF.render()
+            filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
+            KF.draw(filename, 0)
+        have_prediction = True
+
+        if is_kfusion:
+            seg = {'labels': labels_kfusion}
+        else:
+            seg = {'labels': labels}
+        segmentations[i] = seg
+
         _t['misc'].toc()
 
         # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)

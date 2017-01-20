@@ -48,6 +48,7 @@ class vgg16(Network):
         input_weights = self.weights_queue
         input_points = self.points_queue
         outputs = []
+        probs = []
         labels_gt_2d = []
         labels_pred_2d = []
         
@@ -132,7 +133,10 @@ class vgg16(Network):
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse, c_i=self.num_units)
-                 .log_softmax_high_dimension(self.num_classes, name='prob')
+                 .log_softmax_high_dimension(self.num_classes, name='prob'))
+
+            (self.feed('score')
+                 .softmax_high_dimension(self.num_classes, name='prob_normalized')
                  .argmax_2d(name='label_2d'))
 
             # collect outputs
@@ -140,10 +144,12 @@ class vgg16(Network):
             input_weights = self.get_output('gru2d')[2]
             input_points = self.get_output('flow')[2]
             outputs.append(self.get_output('prob'))
+            probs.append(self.get_output('prob_normalized'))
             labels_gt_2d.append(self.get_output('gt_label_2d'))
             labels_pred_2d.append(self.get_output('label_2d'))
 
         self.layers['outputs'] = outputs
+        self.layers['probs'] = probs
         self.layers['labels_gt_2d'] = labels_gt_2d
         self.layers['labels_pred_2d'] = labels_pred_2d
         self.layers['output_state'] = input_state

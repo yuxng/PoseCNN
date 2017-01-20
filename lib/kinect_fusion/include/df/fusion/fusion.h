@@ -6,6 +6,7 @@
 #include <df/voxel/compositeVoxel.h>
 #include <df/voxel/tsdf.h>
 #include <df/voxel/voxelGrid.h>
+#include <df/voxel/probability.h>
 
 #include <sophus/se3.hpp>
 
@@ -51,6 +52,26 @@ struct FusionTypeTraits<ColorVoxel> {
         Scalar truncationDistance;
         Scalar maxWeight;
         DeviceTensor2<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > colorImage;
+    };
+
+    static constexpr FusionFrame frame = ColorFrame;
+
+};
+
+
+template <>
+struct FusionTypeTraits<ProbabilityVoxel> {
+
+    template <typename Scalar>
+    struct PackedInput {
+
+        PackedInput(const Scalar truncationDistance, const Scalar maxWeight,
+                    const DeviceTensor2<Eigen::Matrix<Scalar,10,1,Eigen::DontAlign> > colorImage)
+            : truncationDistance(truncationDistance), maxWeight(maxWeight), colorImage(colorImage) { }
+
+        Scalar truncationDistance;
+        Scalar maxWeight;
+        DeviceTensor2<Eigen::Matrix<Scalar,10,1,Eigen::DontAlign> > colorImage;
     };
 
     static constexpr FusionFrame frame = ColorFrame;

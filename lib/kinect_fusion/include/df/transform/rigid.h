@@ -17,6 +17,10 @@ public:
         return transform_*world;
     }
 
+    inline __host__ __device__ Vec3 transformLiveToWorld(Vec3 live) const {
+        return transform_.inverse()*live;
+    }
+
     inline __host__ __device__ Transform worldToLiveTransformation() const {
         return transform_;
     }

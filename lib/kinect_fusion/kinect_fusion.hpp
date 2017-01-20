@@ -26,11 +26,14 @@
 #include <df/voxel/tsdf.h>
 #include <df/voxel/voxelGrid.h>
 #include <df/voxel/compositeVoxel.h>
+#include <df/voxel/probability.h>
 
 namespace df {
 
 typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
+typedef Eigen::Matrix<float,10,1,Eigen::DontAlign> Vec;
 typedef Eigen::Matrix<int,3,1,Eigen::DontAlign> Vec3i;
+typedef Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> Vec3uc;
 
 class KinectFusion
 {
@@ -44,12 +47,12 @@ class KinectFusion
 
   void solve_pose(float* pose_worldToLive, float* pose_liveToWorld);
   void fuse_depth();
-  void extract_surface();
+  void extract_surface(int* labels_return);
   void render();
   void draw(std::string filename, int flag);
   void back_project();
   void feed_data(unsigned char* depth, unsigned char* color, int width, int height, float factor);
-  void feed_label(unsigned char* im_label);
+  void feed_label(unsigned char* im_label, float* probability, unsigned char* colors);
   void reset();
   void set_voxel_grid(float voxelGridOffsetX, float voxelGridOffsetY, float voxelGridOffsetZ, float voxelGridDimX, float voxelGridDimY, float voxelGridDimZ);
   void save_model(std::string filename);
@@ -78,9 +81,22 @@ class KinectFusion
   ManagedTensor<2, float>* depth_map_;
   ManagedTensor<2, float, DeviceResident>* depth_map_device_;
 
+  // probability
+  ManagedDeviceTensor2<Vec>* probability_map_device_;
+
+  // class colors
+  ManagedDeviceTensor1<Vec3uc>* class_colors_device_;
+
   // color
   ManagedHostTensor2<Vec3>* color_map_;
   ManagedDeviceTensor2<Vec3>* color_map_device_;
+
+  // labels
+  ManagedHostTensor2<int>* labels_;
+  ManagedDeviceTensor2<int>* labels_device_;
+
+  ManagedHostTensor2<Vec3uc>* label_colors_;
+  ManagedDeviceTensor2<Vec3uc>* label_colors_device_;
 
   // 3D points
   ManagedHostTensor2<Vec3>* vertex_map_;
@@ -103,8 +119,8 @@ class KinectFusion
   uint numUniqueVertices_;
 
   // voxels
-  ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ColorVoxel>, DeviceResident>* voxel_data_;
-  DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ColorVoxel> >* voxel_grid_;
+  ManagedTensor<3, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel>, DeviceResident>* voxel_data_;
+  DeviceVoxelGrid<float, CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> >* voxel_grid_;
 
   // ICP
   RigidTransformer<float>* transformer_;
