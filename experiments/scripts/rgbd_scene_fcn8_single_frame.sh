@@ -27,6 +27,7 @@ fi
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network fcn8_vgg \
+  --weights data/imagenet_models/vgg16.npy \
   --model output/rgbd_scene/rgbd_scene_train/fcn8_rgbd_single_frame_rgbd_scene_iter_40000.ckpt \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene_single_frame_fcn8.yml

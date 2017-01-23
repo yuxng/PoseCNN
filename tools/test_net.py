@@ -18,6 +18,7 @@ import argparse
 import pprint
 import time, os, sys
 import tensorflow as tf
+import os.path as osp
 
 def parse_args():
     """
@@ -26,6 +27,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Test a Fast R-CNN network')
     parser.add_argument('--gpu', dest='gpu_id', help='GPU id to use',
                         default=0, type=int)
+    parser.add_argument('--weights', dest='pretrained_model',
+                        help='pretrained model',
+                        default=None, type=str)
     parser.add_argument('--model', dest='model',
                         help='model to test',
                         default=None, type=str)
@@ -76,6 +80,10 @@ if __name__ == '__main__':
 
     cfg.TRAIN.NUM_STEPS = 1
     cfg.TRAIN.GRID_SIZE = cfg.TEST.GRID_SIZE
+    if cfg.NETWORK == 'FCN8VGG':
+        path = osp.abspath(osp.join(cfg.ROOT_DIR, args.pretrained_model))
+        cfg.TRAIN.MODEL_PATH = path
+
     from networks.factory import get_network
     network = get_network(args.network_name)
     print 'Use network `{:s}` in training'.format(args.network_name)

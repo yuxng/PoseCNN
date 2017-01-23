@@ -120,7 +120,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
-    labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
+
+    if cfg.NETWORK == 'FCN8VGG':
+        labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
+    else:
+        labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
 
     return labels_2d[0,:,:], probs[0,:,:,:]
 
