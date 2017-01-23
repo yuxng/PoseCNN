@@ -17,6 +17,7 @@ import argparse
 import pprint
 import numpy as np
 import sys
+import os.path as osp
 
 def parse_args():
     """
@@ -79,10 +80,17 @@ if __name__ == '__main__':
     cfg.GPU_ID = args.gpu_id
     print device_name
 
+    if cfg.NETWORK == 'FCN8VGG':
+        path = osp.abspath(osp.join(cfg.ROOT_DIR, args.pretrained_model))
+        cfg.TRAIN.MODEL_PATH = path
+        pretrained_model = None
+    else:
+        pretrained_model = args.pretrained_model
+
     from networks.factory import get_network
     network = get_network(args.network_name)
     print 'Use network `{:s}` in training'.format(args.network_name)
 
     train_net(network, imdb, roidb, output_dir,
-              pretrained_model=args.pretrained_model,
+              pretrained_model=pretrained_model,
               max_iters=args.max_iters)

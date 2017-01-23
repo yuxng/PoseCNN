@@ -174,9 +174,14 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
 
     if cfg.TRAIN.SINGLE_FRAME:
         # classification loss
-        scores = network.get_output('prob')
-        labels = network.get_output('gt_label_2d')
-        loss = loss_cross_entropy_single_frame(scores, labels)
+        if cfg.NETWORK == 'FCN8VGG':
+            scores = network.prob
+            labels = network.gt_label_2d_queue
+            loss = loss_cross_entropy_single_frame(scores, labels)
+        else:
+            scores = network.get_output('prob')
+            labels = network.get_output('gt_label_2d')
+            loss = loss_cross_entropy_single_frame(scores, labels)
     else:
         # classification loss
         scores = network.get_output('outputs')
