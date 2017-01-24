@@ -165,7 +165,7 @@ class fcn8_vgg:
 
             relu = tf.nn.relu(bias)
             # Add summary to Tensorboard
-            _activation_summary(relu)
+            # _activation_summary(relu)
             return relu
 
     def _fc_layer(self, bottom, name, num_classes=None,
@@ -182,7 +182,7 @@ class fcn8_vgg:
             else:
                 filt = self.get_fc_weight_reshape(name, [1, 1, 4096, 4096])
 
-            self._add_wd_and_summary(filt, self.wd, "fc_wlosses")
+            # self._add_wd_and_summary(filt, self.wd, "fc_wlosses")
 
             conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
             conv_biases = self.get_bias(name, num_classes=num_classes)
@@ -190,7 +190,7 @@ class fcn8_vgg:
 
             if relu:
                 bias = tf.nn.relu(bias)
-            _activation_summary(bias)
+            # _activation_summary(bias)
 
             if debug:
                 bias = tf.Print(bias, [tf.shape(bias)],
@@ -221,7 +221,7 @@ class fcn8_vgg:
             conv_biases = self._bias_variable([num_classes], constant=0.0)
             bias = tf.nn.bias_add(conv, conv_biases)
 
-            _activation_summary(bias)
+            # _activation_summary(bias)
 
             return bias
 
@@ -251,7 +251,7 @@ class fcn8_vgg:
             stddev = (2 / num_input)**0.5
 
             weights = self.get_deconv_filter(f_shape)
-            self._add_wd_and_summary(weights, self.wd, "fc_wlosses")
+            # self._add_wd_and_summary(weights, self.wd, "fc_wlosses")
             deconv = tf.nn.conv2d_transpose(bottom, weights, output_shape,
                                             strides=strides, padding='SAME')
 
@@ -260,7 +260,7 @@ class fcn8_vgg:
                                   message='Shape of %s' % name,
                                   summarize=4, first_n=1)
 
-        _activation_summary(deconv)
+        # _activation_summary(deconv)
         return deconv
 
     def get_deconv_filter(self, f_shape):
