@@ -17,16 +17,16 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb shapenet_scene_train \
   --cfg experiments/cfgs/shapenet_scene_single_frame_vgg16.yml \
-  --iters 40000
+  --iters 80000
 
-if [ -f $PWD/output/shapenet_scene/shapenet_scene_val/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_40000/segmentations.pkl ]
+if [ -f $PWD/output/shapenet_scene/shapenet_scene_val/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_80000/segmentations.pkl ]
 then
-  rm $PWD/output/shapenet_scene/shapenet_scene_val/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_40000/segmentations.pkl
+  rm $PWD/output/shapenet_scene/shapenet_scene_val/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_80000/segmentations.pkl
 fi
 
 # test the single frame network
 time ./tools/test_net.py --gpu $1 \
   --network vgg16_convs \
-  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_40000.ckpt \
+  --model output/shapenet_scene/shapenet_scene_train/vgg16_fcn_rgbd_single_frame_shapenet_scene_iter_80000.ckpt \
   --imdb shapenet_scene_val \
   --cfg experiments/cfgs/shapenet_scene_single_frame_vgg16.yml
