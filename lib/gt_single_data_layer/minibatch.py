@@ -131,11 +131,11 @@ def _process_label_image(label_image, class_colors, class_weights):
     label_index = np.zeros((height, width, num_classes), dtype=np.float32)
 
     if len(label_image.shape) == 3:
-        # label image is in BRG order
+        # label image is in BGR order
         index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
         for i in xrange(len(class_colors)):
             color = class_colors[i]
-            ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
+            ind = color[0] + 256*color[1] + 256*256*color[2]
             I = np.where(index == ind)
             label_index[I[0], I[1], i] = class_weights[i]
     else:

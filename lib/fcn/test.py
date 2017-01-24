@@ -298,9 +298,9 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
     # construct colors
     colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
     for i in range(imdb.num_classes):
-        colors[i * 3 + 0] = 255 * imdb._class_colors[i][0]
-        colors[i * 3 + 1] = 255 * imdb._class_colors[i][1]
-        colors[i * 3 + 2] = 255 * imdb._class_colors[i][2]
+        colors[i * 3 + 0] = imdb._class_colors[i][0]
+        colors[i * 3 + 1] = imdb._class_colors[i][1]
+        colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     # perm = np.random.permutation(np.arange(num_images))
 
@@ -458,9 +458,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
     # construct colors
     colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
     for i in range(imdb.num_classes):
-        colors[i * 3 + 0] = 255 * imdb._class_colors[i][0]
-        colors[i * 3 + 1] = 255 * imdb._class_colors[i][1]
-        colors[i * 3 + 2] = 255 * imdb._class_colors[i][2]
+        colors[i * 3 + 0] = imdb._class_colors[i][0]
+        colors[i * 3 + 1] = imdb._class_colors[i][1]
+        colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     # perm = np.random.permutation(np.arange(num_images))
 

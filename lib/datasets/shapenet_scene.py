@@ -16,7 +16,7 @@ class shapenet_scene(datasets.imdb):
                             else shapenet_scene_path
         self._data_path = os.path.join(self._shapenet_scene_path, 'data')
         self._classes = ('__background__', 'table', 'chair', 'sofa', 'lamp', 'tvmonitor', 'bottle', 'mug', 'bowl', 'can', 'keyboard', 'cap')
-        self._class_colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (0.5, 0, 0), (0, 0.5, 0), (0, 0, 0.5), (0.5, 0.5, 0), (0.5, 0, 0.5)]
+        self._class_colors = [(0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), (188, 0, 0), (0, 188, 0), (0, 0, 188), (188, 188, 0), (188, 0, 188)]
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
@@ -177,11 +177,11 @@ class shapenet_scene(datasets.imdb):
         height = label_image.shape[0]
         label_index = np.zeros((height, width), dtype=np.float32)
 
-        # label image is in BRG order
+        # label image is in BGR order
         index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
         for i in xrange(len(class_colors)):
             color = class_colors[i]
-            ind = 255 * (color[0] + 256*color[1] + 256*256*color[2])
+            ind = color[0] + 256*color[1] + 256*256*color[2]
             I = np.where(index == ind)
             label_index[I] = i
 
@@ -199,9 +199,9 @@ class shapenet_scene(datasets.imdb):
         for i in xrange(len(class_colors)):
             color = class_colors[i]
             I = np.where(labels == i)
-            image_r[I] = 255 * color[0]
-            image_g[I] = 255 * color[1]
-            image_b[I] = 255 * color[2]
+            image_r[I] = color[0]
+            image_g[I] = color[1]
+            image_b[I] = color[2]
 
         image = np.stack((image_r, image_g, image_b), axis=-1)
         # index = np.where(image == 255)
