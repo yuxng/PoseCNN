@@ -604,7 +604,10 @@ __global__ void computeLabelsKernel(const typename TransformerT::DeviceModule tr
     else
       labels(loc) = 0;
     // set color
-    label_colors(loc) = class_colors(labels(loc));
+    // label_colors(loc) = class_colors(labels(loc));
+    label_colors(loc)(0) = 0;
+    label_colors(loc)(1) = 0;
+    label_colors(loc)(2) = 0;
   }
 }
 

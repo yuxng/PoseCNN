@@ -256,7 +256,7 @@ class rgbd_scene(datasets.imdb):
             filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
             print filename
             scipy.io.savemat(filename, labels)
-            '''
+            #'''
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()

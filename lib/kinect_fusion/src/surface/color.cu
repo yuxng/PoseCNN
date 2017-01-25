@@ -8,7 +8,8 @@ namespace df {
 __global__
 void computeSurfaceColorsKernel(const DeviceTensor1<Eigen::Matrix<float,3,1,Eigen::DontAlign> > vertices,
                                 DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > colors,
-                                const DeviceTensor3<CompositeVoxel<float,TsdfVoxel,ColorVoxel> > voxelGrid) {
+                                const DeviceTensor3<CompositeVoxel<float,TsdfVoxel,ColorVoxel> > voxelGrid,
+                                const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > class_colors) {
 
     typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
 
@@ -57,7 +58,8 @@ void computeSurfaceColorsKernel(const DeviceTensor1<Eigen::Matrix<float,3,1,Eige
 __global__
 void computeSurfaceColorsKernel(const DeviceTensor1<Eigen::Matrix<float,3,1,Eigen::DontAlign> > vertices,
                                 DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > colors,
-                                const DeviceTensor3<CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> > voxelGrid) {
+                                const DeviceTensor3<CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> > voxelGrid,
+                                const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > class_colors) {
 
     typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
     typedef Eigen::Matrix<float,10,1,Eigen::DontAlign> Vec;
@@ -96,9 +98,21 @@ void computeSurfaceColorsKernel(const DeviceTensor1<Eigen::Matrix<float,3,1,Eige
 
         }
 
-        c(0) = (unsigned char)(255 * 1);
-        c(1) = (unsigned char)(255 * 1);
-        c(2) = (unsigned char)(255 * 1);
+        // find the label
+        int label = -1;
+        float max_prob = -1;
+        for (int i = 0; i < 10; i++)
+        {
+          if (prob(i) > max_prob)
+          {
+            max_prob = prob(i);
+            label = i;
+          }
+        }
+
+        c(0) = class_colors(label)(0);
+        c(1) = class_colors(label)(1);
+        c(2) = class_colors(label)(2);
 
     }
 
@@ -107,7 +121,8 @@ void computeSurfaceColorsKernel(const DeviceTensor1<Eigen::Matrix<float,3,1,Eige
 template <typename Scalar, typename VoxelT>
 void computeSurfaceColors(const DeviceTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & vertices,
                           DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > & colors,
-                          const DeviceVoxelGrid<Scalar,VoxelT> & voxelGrid) {
+                          const DeviceVoxelGrid<Scalar,VoxelT> & voxelGrid, 
+                          const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > & class_colors) {
 
     const int numVertices = vertices.length();
 
@@ -120,18 +135,20 @@ void computeSurfaceColors(const DeviceTensor1<Eigen::Matrix<Scalar,3,1,Eigen::Do
     const dim3 block(1024);
     const dim3 grid(intDivideAndCeil((uint)numVertices,block.x));
 
-    computeSurfaceColorsKernel<<<grid,block>>>(vertices,colors,voxelGrid.grid());
+    computeSurfaceColorsKernel<<<grid,block>>>(vertices,colors,voxelGrid.grid(), class_colors);
 
 }
 
 
 template void computeSurfaceColors(const DeviceTensor1<Eigen::Matrix<float,3,1,Eigen::DontAlign> > &,
                                    DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &,
-                                   const DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel> > &);
+                                   const DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel> > &,
+                                   const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &);
 
 template void computeSurfaceColors(const DeviceTensor1<Eigen::Matrix<float,3,1,Eigen::DontAlign> > &,
                                    DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &,
-                                   const DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> > &);
+                                   const DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ProbabilityVoxel> > &,
+                                   const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &);
 
 
 } // namespace df

@@ -286,7 +286,7 @@ void KinectFusion::extract_surface(int* labels_return)
   // compute vertex color
   DeviceTensor1<Vec3> actualWeldedVertices_( dNormals_->length(), reinterpret_cast<Vec3 *>(actualWeldedVertices.data()) );
   dColors_->resize(actualWeldedVertices_.length());
-  computeSurfaceColors(actualWeldedVertices_, *dColors_, *voxel_grid_);
+  computeSurfaceColors(actualWeldedVertices_, *dColors_, *voxel_grid_, *class_colors_device_);
 
   // copy colors
   colorBuffer_->Resize(numUniqueVertices_);
@@ -362,8 +362,7 @@ void KinectFusion::draw(std::string filename, int flag)
   disp3d_->ActivateScissorAndClear(*depthCamState_);
   glColor3ub(255, 255, 255);
   colorTex_->RenderToViewportFlipY();
-
-  /*
+/*
   glPushMatrix();
   glMultMatrixX(transformer_->liveToWorldTransformation().matrix());
 
@@ -402,15 +401,27 @@ void KinectFusion::draw(std::string filename, int flag)
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
   glPopMatrix();
-  */
+*/  
 
   // show color image
-  glColor3ub(255,255,255);
   colorView_->ActivateScissorAndClear();
-  colorTex_->RenderToViewportFlipY();
+  labelTex_->RenderToViewportFlipY();
+  glColor3ub(255,255,255);
+  // colorTex_->RenderToViewportFlipY();
+
+  Eigen::Matrix<float, 3, 3> R;
+  R << 1, 0, 0,
+       0, 1, 0,
+       0, 0, 1;
+  Eigen::Matrix<float, 3, 1> T;
+  T << 0, 0, 2;
+
+  Sophus::SE3Group<float> RT(R, T);
+  RigidTransformer<float> transformer;
+  transformer.setWorldToLiveTransformation(RT);
 
   // show overlay
-  colorCamState_->SetModelViewMatrix(transformer_->worldToLiveTransformation().matrix());
+  colorCamState_->SetModelViewMatrix(transformer.worldToLiveTransformation().matrix());
   colorCamState_->Apply();
 
   glClear(GL_DEPTH_BUFFER_BIT);
@@ -419,7 +430,7 @@ void KinectFusion::draw(std::string filename, int flag)
   glVoxelGridCoords(*voxel_grid_);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_, *colorBuffer_);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_);
   glDisable(GL_LIGHTING);
   glPopMatrix();
 
@@ -430,6 +441,16 @@ void KinectFusion::draw(std::string filename, int flag)
   // show label image
   labelView_->ActivateScissorAndClear();
   labelTex_->RenderToViewportFlipY();
+  colorCamState_->Apply();
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glPushMatrix();
+  glMultMatrixX(T_dc_.inverse().matrix());
+  glVoxelGridCoords(*voxel_grid_);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_, *colorBuffer_);
+  glDisable(GL_LIGHTING);
+  glPopMatrix();
 
   pangolin::FinishFrame();
 
@@ -480,6 +501,28 @@ void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin:
   glDisableClientState(GL_VERTEX_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
   glDisableClientState(GL_COLOR_ARRAY);
+}
+
+
+// render model
+void KinectFusion::renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer)
+{
+  vertBuffer.Bind();
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glVertexPointer(3,GL_FLOAT,0,0);
+
+  normBuffer.Bind();
+  glEnableClientState(GL_NORMAL_ARRAY);
+  glNormalPointer(GL_FLOAT,0,0);
+
+  indexBuffer.Bind();
+  glDrawElements(GL_TRIANGLES,indexBuffer.num_elements,GL_UNSIGNED_INT,0);
+
+  indexBuffer.Unbind();;
+  vertBuffer.Unbind();
+  normBuffer.Unbind();
+  glDisableClientState(GL_VERTEX_ARRAY);
+  glDisableClientState(GL_NORMAL_ARRAY);
 }
 
 

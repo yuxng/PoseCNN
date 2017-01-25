@@ -11,6 +11,7 @@ namespace df {
 template <typename Scalar, typename VoxelT>
 void computeSurfaceColors(const DeviceTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & vertices,
                           DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > & colors,
-                          const DeviceVoxelGrid<Scalar,VoxelT> & voxelGrid);
+                          const DeviceVoxelGrid<Scalar,VoxelT> & voxelGrid,
+                          const DeviceTensor1<Eigen::Matrix<unsigned char,3,1,Eigen::DontAlign> > &);
 
 } // namespace df

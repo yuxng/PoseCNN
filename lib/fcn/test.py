@@ -394,7 +394,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
-            KF.draw(filename, 0)
+            KF.draw(filename, 1)
         have_prediction = True
 
         if is_kfusion:
