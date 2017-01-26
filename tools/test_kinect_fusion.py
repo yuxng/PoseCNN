@@ -73,9 +73,9 @@ if __name__ == '__main__':
     # construct colors
     colors = np.zeros((3, imdb.num_classes), dtype=np.uint8)
     for i in range(imdb.num_classes):
-        colors[0, i] = 255 * imdb._class_colors[i][0]
-        colors[1, i] = 255 * imdb._class_colors[i][1]
-        colors[2, i] = 255 * imdb._class_colors[i][2]
+        colors[0, i] = imdb._class_colors[i][0]
+        colors[1, i] = imdb._class_colors[i][1]
+        colors[2, i] = imdb._class_colors[i][2]
     colors[:,0] = 255
 
     video_index = ''
