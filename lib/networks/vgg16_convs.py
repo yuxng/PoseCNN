@@ -2,10 +2,11 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, scales, trainable=True):
+    def __init__(self, input_format, num_classes, num_units, scales, trainable=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
+        self.num_units = num_units
         self.scale = 1 / scales[0]
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
@@ -70,24 +71,24 @@ class vgg16_convs(Network):
 
             (self.feed('conv5_3', 'conv5_3_p')
                  .concat(3, name='concat_conv5')
-                 .conv(1, 1, 64, 1, 1, name='score_conv5', c_i=1024)
-                 .deconv(4, 4, 64, 2, 2, name='upscore_conv5', trainable=False))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv5', c_i=1024)
+                 .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
 
             (self.feed('conv4_3', 'conv4_3_p')
                  .concat(3, name='concat_conv4')
-                 .conv(1, 1, 64, 1, 1, name='score_conv4', c_i=1024))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv4', c_i=1024))
         else:
             (self.feed('conv5_3')
-                 .conv(1, 1, 64, 1, 1, name='score_conv5', c_i=512)
-                 .deconv(4, 4, 64, 2, 2, name='upscore_conv5', trainable=False))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512)
+                 .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
 
             (self.feed('conv4_3')
-                 .conv(1, 1, 64, 1, 1, name='score_conv4', c_i=512))
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512))
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add_score')
-             .deconv(int(16*self.scale), int(16*self.scale), 64, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
-             .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=64)
+             .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+             .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
 
         (self.feed('score')

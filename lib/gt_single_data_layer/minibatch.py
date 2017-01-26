@@ -83,6 +83,7 @@ def _get_image_blob(roidb, scale_ind):
         # depth
         im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
         im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
+
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
 

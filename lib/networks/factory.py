@@ -17,7 +17,7 @@ from fcn.config import cfg
 
 if cfg.TRAIN.SINGLE_FRAME:
     if cfg.NETWORK == 'VGG16':
-        __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
+        __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE)
     if cfg.NETWORK == 'RESNET50':
         __sets['resnet50'] = networks.resnet50(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
     if cfg.NETWORK == 'FCN8VGG':
