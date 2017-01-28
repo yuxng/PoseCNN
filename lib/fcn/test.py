@@ -217,7 +217,7 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
     return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
 
 
-def vis_segmentations(im, im_depth, labels, labels_gt, colors):
+def vis_segmentations(im, im_depth, labels, labels_gt, colors, points):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -239,28 +239,31 @@ def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     plt.imshow(labels)
     ax.set_title('class labels')
 
-    ax = fig.add_subplot(224)
-    plt.imshow(labels_gt)
-    ax.set_title('gt class labels')
+    #ax = fig.add_subplot(224)
+    #plt.imshow(labels_gt)
+    #ax.set_title('gt class labels')
 
     # show the 3D points
-    '''
+    #'''
     from mpl_toolkits.mplot3d import Axes3D
     ax = fig.add_subplot(224, projection='3d')
     ax.set_aspect('equal')
-    X = points[0,:]
-    Y = points[1,:]
-    Z = points[2,:]
+
+    points = points[0,:,:,:].reshape((-1, 3))
+
+    X = points[:,0]
+    Y = points[:,1]
+    Z = points[:,2]
     index = np.where(np.isfinite(X))[0]
     perm = np.random.permutation(np.arange(len(index)))
     num = min(10000, len(index))
     index = index[perm[:num]]
-    ax.scatter(X[index], Y[index], Z[index], c='r', marker='o')
+    ax.scatter(X[index], Y[index], Z[index], c='r', marker='.')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     set_axes_equal(ax)
-    '''
+    #'''
     plt.show()
 
 ##################
@@ -414,7 +417,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             im_label_gt = np.copy(labels_gt[:,:,:3])
             im_label_gt[:,:,0] = labels_gt[:,:,2]
             im_label_gt[:,:,2] = labels_gt[:,:,0]
-        vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
+        vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors, points)
         #'''
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
