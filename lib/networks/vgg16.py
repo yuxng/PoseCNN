@@ -130,7 +130,6 @@ class vgg16(Network):
             (self.feed('state', 'weights', 'points', 'depth', 'meta_data')
                  .compute_flow(5, 0.02, 50, name='flow'))
 
-            '''
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse, c_i=self.num_units)
@@ -140,6 +139,7 @@ class vgg16(Network):
                  .rnn_gru2d_original(self.num_units, self.num_units, name='gru2d', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse, c_i=self.num_units)
                  .log_softmax_high_dimension(self.num_classes, name='prob'))
+            '''
 
             (self.feed('score')
                  .softmax_high_dimension(self.num_classes, name='prob_normalized')
