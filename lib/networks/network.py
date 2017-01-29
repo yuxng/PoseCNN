@@ -11,6 +11,7 @@ import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
 from gru2d import GRU2DCell
+from gru2d_original import GRUCell
 from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
 from add2d import Add2DCell
@@ -213,6 +214,12 @@ class Network(object):
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
         with tf.variable_scope(name, reuse=reuse) as scope:
             gru2d = GRU2DCell(num_units, channels)
+            return gru2d(input[0], input[1][0], input[1][1], scope)
+
+    @layer
+    def rnn_gru2d_original(self, input, num_units, channels, name, reuse=None):
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            gru2d = GRUCell(num_units, channels)
             return gru2d(input[0], input[1][0], input[1][1], scope)
 
     @layer
