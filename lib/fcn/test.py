@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-# from kinect_fusion import kfusion
+from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -309,7 +309,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     video_index = ''
     have_prediction = False
-    for i in xrange(num_images):
+    for i in xrange(3597, num_images):
     # for i in perm:
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         height = rgba.shape[0]
@@ -397,6 +397,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
+            print filename
             KF.draw(filename, 1)
         have_prediction = True
 
@@ -423,13 +424,16 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
+    if is_kfusion:
+        KF.draw(filename, 1)
+    '''
     seg_file = os.path.join(output_dir, 'segmentations.pkl')
     with open(seg_file, 'wb') as f:
         cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
-
+    '''
 ###################
 # test single frame
 ###################

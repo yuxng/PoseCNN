@@ -407,18 +407,18 @@ void KinectFusion::draw(std::string filename, int flag)
   colorView_->ActivateScissorAndClear();
   labelTex_->RenderToViewportFlipY();
   glColor3ub(255,255,255);
-  // colorTex_->RenderToViewportFlipY();
+  colorTex_->RenderToViewportFlipY();
 
   Eigen::Matrix<float, 3, 3> R;
   R << 1, 0, 0,
        0, 1, 0,
        0, 0, 1;
   Eigen::Matrix<float, 3, 1> T;
-  T << 0, 0, 2;
+  T << 0, 0, 4;
 
   Sophus::SE3Group<float> RT(R, T);
   RigidTransformer<float> transformer;
-  transformer.setWorldToLiveTransformation(RT);
+  transformer.setWorldToLiveTransformation(RT * transformer_->worldToLiveTransformation());
 
   // show overlay
   colorCamState_->SetModelViewMatrix(transformer.worldToLiveTransformation().matrix());
@@ -430,7 +430,7 @@ void KinectFusion::draw(std::string filename, int flag)
   glVoxelGridCoords(*voxel_grid_);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_, *colorBuffer_);
   glDisable(GL_LIGHTING);
   glPopMatrix();
 
@@ -441,6 +441,7 @@ void KinectFusion::draw(std::string filename, int flag)
   // show label image
   labelView_->ActivateScissorAndClear();
   labelTex_->RenderToViewportFlipY();
+  colorCamState_->SetModelViewMatrix(transformer_->worldToLiveTransformation().matrix());
   colorCamState_->Apply();
   glClear(GL_DEPTH_BUFFER_BIT);
   glPushMatrix();
@@ -456,7 +457,10 @@ void KinectFusion::draw(std::string filename, int flag)
 
   // save frame
   if (flag)
-    allView_->SaveOnRender(filename);
+  {
+    labelView_->SaveOnRender(filename + "_live");
+    colorView_->SaveOnRender(filename + "_world");
+  }
 }
 
 
