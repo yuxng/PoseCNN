@@ -66,57 +66,39 @@ __global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data,
       Dtype Y = depth * RY;
       Dtype Z = depth * RZ;
 
+      if (c == 0)
+      {
+        top_points[index_pixel * 3 + 0] = X;
+        top_points[index_pixel * 3 + 1] = Y;
+        top_points[index_pixel * 3 + 2] = Z;
+      }
+
       // apply pose_live2world
       Dtype X1 = meta_data[30] * X + meta_data[31] * Y + meta_data[32] * Z + meta_data[33];
       Dtype Y1 = meta_data[34] * X + meta_data[35] * Y + meta_data[36] * Z + meta_data[37];
       Dtype Z1 = meta_data[38] * X + meta_data[39] * Y + meta_data[40] * Z + meta_data[41];
 
-      if (c == 0)
-      {
-        top_points[index_pixel * 3 + 0] = X1;
-        top_points[index_pixel * 3 + 1] = Y1;
-        top_points[index_pixel * 3 + 2] = Z1;
-      }
+      // apply the intrinsic matrix
+      Dtype x1 = meta_data[0] * X1 + meta_data[1] * Y1 + meta_data[2] * Z1;
+      Dtype x2 = meta_data[3] * X1 + meta_data[4] * Y1 + meta_data[5] * Z1;
+      Dtype x3 = meta_data[6] * X1 + meta_data[7] * Y1 + meta_data[8] * Z1;
+      int px = round(x1 / x3);
+      int py = round(x2 / x3);
 
-      // check a neighborhood around (w, h)
-      Dtype dmin = 1000.0;
-      int fx = -1;
-      int fy = -1;
-      for (int x = w - kernel_size; x <= w + kernel_size; x++)
-      {
-        for (int y = h - kernel_size; y <= h + kernel_size; y++)
-        {
-          if (x >= 0 && x < width && y >= 0 && y < height)
-          {
-            int index_bottom = n * height * width + y * width + x;
-            Dtype X_prev = bottom_points[index_bottom * 3 + 0];
-            Dtype Y_prev = bottom_points[index_bottom * 3 + 1];
-            Dtype Z_prev = bottom_points[index_bottom * 3 + 2];
-            if (isnan(X_prev) || isnan(Y_prev) || isnan(Z_prev))
-              continue;
-
-            // distance
-            Dtype dis = sqrt((X1 - X_prev) * (X1 - X_prev) + (Y1 - Y_prev) * (Y1 - Y_prev) + (Z1 - Z_prev) * (Z1 - Z_prev));
-            if (dis < dmin)
-            {
-              dmin = dis;
-              fx = x;
-              fy = y;
-            }
-          }
-        }
-      }
-
-      if (dmin < threshold)
+      if (px >= 0 && px < width && py >= 0 && py < height)
       {
         // assign data and weight
-        int index_bottom = n * height * width + fy * width + fx;
-        top_data[index] = bottom_data[index_bottom * channels + c];
-        Dtype weight = bottom_weights[index_bottom * channels + c];
-        if (weight > max_weight)
-          top_weights[index] = max_weight;
-        else
-          top_weights[index] = weight;
+        int index_bottom = n * height * width + py * width + px;
+        Dtype Z_prev = bottom_points[index_bottom * 3 + 2];
+        if (fabs(Z_prev - Z1) < threshold)
+        {
+          top_data[index] = bottom_data[index_bottom * channels + c];
+          Dtype weight = bottom_weights[index_bottom * channels + c];
+          if (weight > max_weight)
+            top_weights[index] = max_weight;
+          else
+            top_weights[index] = weight;
+        }
       }
     }
   }
@@ -154,8 +136,8 @@ bool ComputeFlowForwardLaucher(
 
 template <typename Dtype>
 __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, const Dtype* top_diff_weights,
-    const Dtype* bottom_weights, const Dtype* bottom_points, const Dtype* top_points, 
-    const int height, const int width, const int channels, const int kernel_size,
+    const Dtype* bottom_weights, const Dtype* bottom_points, const float* bottom_depth, const Dtype* bottom_meta_data, 
+    const Dtype* top_points, const int height, const int width, const int channels, const int num_meta_data, const int kernel_size,
     const float threshold, const float max_weight, Dtype* bottom_diff, Dtype* bottom_diff_weights) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
@@ -180,44 +162,46 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, c
     }
     else
     {
-      // check a neighborhood around (w, h)
-      Dtype dmin = 1000.0;
-      int fx = -1;
-      int fy = -1;
-      for (int x = w - kernel_size; x <= w + kernel_size; x++)
-      {
-        for (int y = h - kernel_size; y <= h + kernel_size; y++)
-        {
-          if (x >= 0 && x < width && y >= 0 && y < height)
-          {
-            int index_top = n * height * width + y * width + x;
-            Dtype X1 = top_points[index_top * 3 + 0];
-            Dtype Y1 = top_points[index_top * 3 + 1];
-            Dtype Z1 = top_points[index_top * 3 + 2];
-            if (isnan(X1) || isnan(Y1) || isnan(Z1))
-              continue;
+      // backproject the pixel to 3D
+      // format of the meta_data
+      // intrinsic matrix: meta_data[0 ~ 8]
+      // inverse intrinsic matrix: meta_data[9 ~ 17]
+      // pose_world2live: meta_data[18 ~ 29]
+      // pose_live2world: meta_data[30 ~ 41]
+      // voxel step size: meta_data[42, 43, 44]
+      // voxel min value: meta_data[45, 46, 47]
+      const Dtype* meta_data = bottom_meta_data + n * num_meta_data;
 
-            // distance
-            Dtype dis = sqrt((X1 - X_prev) * (X1 - X_prev) + (Y1 - Y_prev) * (Y1 - Y_prev) + (Z1 - Z_prev) * (Z1 - Z_prev));
-            if (dis < dmin)
-            {
-              dmin = dis;
-              fx = x;
-              fy = y;
-            }
-          }
-        }
-      }
+      // apply pose_world2live
+      Dtype X1 = meta_data[18] * X_prev + meta_data[19] * Y_prev + meta_data[20] * Z_prev + meta_data[21];
+      Dtype Y1 = meta_data[22] * X_prev + meta_data[23] * Y_prev + meta_data[24] * Z_prev + meta_data[25];
+      Dtype Z1 = meta_data[26] * X_prev + meta_data[27] * Y_prev + meta_data[28] * Z_prev + meta_data[29];
 
-      if (dmin < threshold)
+      // apply the intrinsic matrix
+      Dtype x1 = meta_data[0] * X1 + meta_data[1] * Y1 + meta_data[2] * Z1;
+      Dtype x2 = meta_data[3] * X1 + meta_data[4] * Y1 + meta_data[5] * Z1;
+      Dtype x3 = meta_data[6] * X1 + meta_data[7] * Y1 + meta_data[8] * Z1;
+      int px = round(x1 / x3);
+      int py = round(x2 / x3);
+
+      if (px >= 0 && px < width && py >= 0 && py < height)
       {
         // assign data
-        int index_top = n * height * width + fy * width + fx;
-        bottom_diff[index] = top_diff[index_top * channels + c];
-        if (bottom_weights[index] > max_weight)
-          bottom_diff_weights[index] = 0;
+        int index_top = n * height * width + py * width + px;
+        Dtype d = bottom_depth[index_top];
+        if (fabs(d - Z1) < threshold)
+        {
+          bottom_diff[index] = top_diff[index_top * channels + c];
+          if (bottom_weights[index] > max_weight)
+            bottom_diff_weights[index] = 0;
+          else
+            bottom_diff_weights[index] = top_diff_weights[index_top * channels + c];
+        }
         else
-          bottom_diff_weights[index] = top_diff_weights[index_top * channels + c];
+        {
+          bottom_diff[index] = 0;
+          bottom_diff_weights[index] = 0;
+        }
       }
       else
       {
@@ -229,8 +213,9 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, c
 }
 
  
-bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, const float* bottom_points, const float* top_points, const int batch_size,
-    const int height, const int width, const int channels, const int kernel_size, const float threshold, const float max_weight,
+bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, 
+    const float* bottom_points, const float* bottom_depth, const float* bottom_meta_data, const float* top_points, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int kernel_size, const float threshold, const float max_weight,
     float* bottom_diff, float* bottom_diff_weights, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -239,8 +224,8 @@ bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_wei
 
   ComputeFlowBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, top_diff, top_diff_weights, bottom_weights, bottom_points, top_points,
-      height, width, channels, kernel_size, threshold, max_weight, bottom_diff, bottom_diff_weights);
+      output_size, top_diff, top_diff_weights, bottom_weights, bottom_points, bottom_depth, bottom_meta_data, top_points,
+      height, width, channels, num_meta_data, kernel_size, threshold, max_weight, bottom_diff, bottom_diff_weights);
 
   cudaDeviceSynchronize();
   err = cudaGetLastError();

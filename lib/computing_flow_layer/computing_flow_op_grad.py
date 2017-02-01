@@ -30,12 +30,15 @@ def _computeflow_grad(op, grad, grad_weights, _):
   data = op.inputs[0]
   bottom_weights = op.inputs[1]
   bottom_points = op.inputs[2]
+  bottom_depth = op.inputs[3]
+  bottom_meta_data = op.inputs[4]
   top_points = op.outputs[2]
   kernel_size = op.get_attr('kernel_size')
   threshold = op.get_attr('threshold')
   max_weight = op.get_attr('max_weight')
 
   # compute gradient
-  data_grad, data_grad_weights = computing_flow_op.compute_flow_grad(data, bottom_weights, bottom_points, top_points, grad, grad_weights, kernel_size, threshold, max_weight)
+  data_grad, data_grad_weights = computing_flow_op.compute_flow_grad(data, bottom_weights, bottom_points, bottom_depth, bottom_meta_data, \
+      top_points, grad, grad_weights, kernel_size, threshold, max_weight)
 
   return [data_grad, data_grad_weights, None, None, None]  # List of one Tensor, since we have five input

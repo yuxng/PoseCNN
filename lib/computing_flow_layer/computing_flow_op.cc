@@ -49,6 +49,8 @@ REGISTER_OP("ComputeflowGrad")
     .Input("bottom_data: T")
     .Input("bottom_weights: T")
     .Input("bottom_points: T")
+    .Input("bottom_depth: T")
+    .Input("bottom_meta_data: T")
     .Input("top_points: T")
     .Input("grad: T")
     .Input("grad_weights: T")
@@ -191,56 +193,40 @@ class ComputeFlowOp : public OpKernel {
             T Y = depth * RY;
             T Z = depth * RZ;
 
+            // store the points
+            top_points(index_pixel * 3 + 0) = X;
+            top_points(index_pixel * 3 + 1) = Y;
+            top_points(index_pixel * 3 + 2) = Z;
+
             // apply pose_live2world
             T X1 = meta_data(index_meta_data + 30) * X + meta_data(index_meta_data + 31) * Y + meta_data(index_meta_data + 32) * Z + meta_data(index_meta_data + 33);
             T Y1 = meta_data(index_meta_data + 34) * X + meta_data(index_meta_data + 35) * Y + meta_data(index_meta_data + 36) * Z + meta_data(index_meta_data + 37);
             T Z1 = meta_data(index_meta_data + 38) * X + meta_data(index_meta_data + 39) * Y + meta_data(index_meta_data + 40) * Z + meta_data(index_meta_data + 41);
 
-            top_points(index_pixel * 3 + 0) = X1;
-            top_points(index_pixel * 3 + 1) = Y1;
-            top_points(index_pixel * 3 + 2) = Z1;
+            // project the point into world image
+            // apply the intrinsic matrix
+            T x1 = meta_data(index_meta_data + 0) * X1 + meta_data(index_meta_data + 1) * Y1 + meta_data(index_meta_data + 2) * Z1;
+            T x2 = meta_data(index_meta_data + 3) * X1 + meta_data(index_meta_data + 4) * Y1 + meta_data(index_meta_data + 5) * Z1;
+            T x3 = meta_data(index_meta_data + 6) * X1 + meta_data(index_meta_data + 7) * Y1 + meta_data(index_meta_data + 8) * Z1;
+            int px = round(x1 / x3);
+            int py = round(x2 / x3);
 
-            // check a neighborhood around (w, h)
-            T dmin = 1000.0;
-            int fx = -1;
-            int fy = -1;
-            for (int x = w - kernel_size_; x <= w + kernel_size_; x++)
-            {
-              for (int y = h - kernel_size_; y <= h + kernel_size_; y++)
-              {
-                if (x >= 0 && x < width && y >= 0 && y < height)
-                {
-                  int index = n * height * width + y * width + x;
-                  T X_prev = im_points(index * 3 + 0);
-                  T Y_prev = im_points(index * 3 + 1);
-                  T Z_prev = im_points(index * 3 + 2);
-                  if (std::isnan(X_prev) || std::isnan(Y_prev) || std::isnan(Z_prev))
-                    continue;
-
-                  // distance
-                  T dis = sqrt((X1 - X_prev) * (X1 - X_prev) + (Y1 - Y_prev) * (Y1 - Y_prev) + (Z1 - Z_prev) * (Z1 - Z_prev));
-                  if (dis < dmin)
-                  {
-                    dmin = dis;
-                    fx = x;
-                    fy = y;
-                  }
-                }
-              }
-            }
-
-            if (dmin < threshold_)
+            if (px >= 0 && px < width && py >= 0 && py < height)
             {
               // assign data and weights
-              int index = n * height * width + fy * width + fx;
-              for(int c = 0; c < num_channels; c++)
+              int index = n * height * width + py * width + px;
+              T Z_prev = im_points(index * 3 + 2);
+              if (fabs(Z_prev - Z1) < threshold_)
               {
-                top_data(index_pixel * num_channels + c) = bottom_data_flat(index * num_channels + c);
-                T weight = bottom_weights_flat(index * num_channels + c);
-                if (weight > max_weight_)
-                  top_weights(index_pixel * num_channels + c) = max_weight_;
-                else
-                  top_weights(index_pixel * num_channels + c) = weight;
+                for(int c = 0; c < num_channels; c++)
+                {
+                  top_data(index_pixel * num_channels + c) = bottom_data_flat(index * num_channels + c);
+                  T weight = bottom_weights_flat(index * num_channels + c);
+                  if (weight > max_weight_)
+                    top_weights(index_pixel * num_channels + c) = max_weight_;
+                  else
+                    top_weights(index_pixel * num_channels + c) = weight;
+                }
               }
             }
           }
@@ -378,13 +364,15 @@ class ComputeFlowOp<Eigen::GpuDevice, T> : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("Computeflow").Device(DEVICE_GPU).TypeConstraint<float>("T"), ComputeFlowOp<Eigen::GpuDevice, float>);
 
 
-bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, const float* bottom_points, const float* top_points, const int batch_size,
-    const int height, const int width, const int channels, const int kernel_size, const float threshold, const float max_weight,
+bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, 
+    const float* bottom_points, const float* bottom_depth, const float* bottom_meta_data, const float* top_points, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int kernel_size, const float threshold, const float max_weight,
     float* bottom_diff, float* bottom_diff_weights, const Eigen::GpuDevice& d);
 
 static void ComputingFlowGradKernel(
-    OpKernelContext* context, const Tensor* bottom_weights, const Tensor* bottom_points, const Tensor* top_points, const Tensor* out_backprop, const Tensor* out_backprop_weights,
-    const int batch_size, const int height, const int width, const int channels, const int kernel_size, const float threshold, const float max_weight,
+    OpKernelContext* context, const Tensor* bottom_weights, const Tensor* bottom_points, const Tensor* bottom_depth, const Tensor* bottom_meta_data,
+    const Tensor* top_points, const Tensor* out_backprop, const Tensor* out_backprop_weights,
+    const int batch_size, const int height, const int width, const int channels, const int num_meta_data, const int kernel_size, const float threshold, const float max_weight,
     const TensorShape& tensor_output_shape) 
 {
   Tensor* output = nullptr;
@@ -397,8 +385,10 @@ static void ComputingFlowGradKernel(
   }
 
   ComputeFlowBackwardLaucher(
-    out_backprop->flat<float>().data(), out_backprop_weights->flat<float>().data(), bottom_weights->flat<float>().data(), bottom_points->flat<float>().data(), top_points->flat<float>().data(),
-    batch_size, height, width, channels, kernel_size, threshold, max_weight, output->flat<float>().data(), output_weights->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
+    out_backprop->flat<float>().data(), out_backprop_weights->flat<float>().data(), bottom_weights->flat<float>().data(), bottom_points->flat<float>().data(), 
+    bottom_depth->flat<float>().data(), bottom_meta_data->flat<float>().data(), top_points->flat<float>().data(),
+    batch_size, height, width, channels, num_meta_data, kernel_size, threshold, max_weight, output->flat<float>().data(), 
+    output_weights->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
 
@@ -433,9 +423,11 @@ class ComputeFlowGradOp : public OpKernel {
     const Tensor& bottom_data = context->input(0);
     const Tensor& bottom_weights = context->input(1);
     const Tensor& bottom_points = context->input(2);
-    const Tensor& top_points = context->input(3);
-    const Tensor& out_backprop = context->input(4);
-    const Tensor& out_backprop_weights = context->input(5);
+    const Tensor& bottom_depth = context->input(3);
+    const Tensor& bottom_meta_data = context->input(4);
+    const Tensor& top_points = context->input(5);
+    const Tensor& out_backprop = context->input(6);
+    const Tensor& out_backprop_weights = context->input(7);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_data.dims() == 4,
@@ -446,6 +438,12 @@ class ComputeFlowGradOp : public OpKernel {
 
     OP_REQUIRES(context, bottom_points.dims() == 4,
                 errors::InvalidArgument("bottom points must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_depth.dims() == 4,
+                errors::InvalidArgument("depth must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_meta_data.dims() == 4,
+                errors::InvalidArgument("meta data must be 4-dimensional"));
 
     OP_REQUIRES(context, top_points.dims() == 4,
                 errors::InvalidArgument("top points must be 4-dimensional"));
@@ -458,13 +456,14 @@ class ComputeFlowGradOp : public OpKernel {
     int width = bottom_data.dim_size(2);
     // number of channels
     int num_channels = bottom_data.dim_size(3);
+    int num_meta_data = bottom_meta_data.dim_size(3);
 
     // construct the output shape
     TensorShape output_shape = bottom_data.shape();
 
     ComputingFlowGradKernel(
-      context, &bottom_weights, &bottom_points, &top_points, &out_backprop, &out_backprop_weights,
-      batch_size, height, width, num_channels, kernel_size_, threshold_, max_weight_, output_shape);
+      context, &bottom_weights, &bottom_points, &bottom_depth, &bottom_meta_data, &top_points, &out_backprop, &out_backprop_weights,
+      batch_size, height, width, num_channels, num_meta_data, kernel_size_, threshold_, max_weight_, output_shape);
 
   }
  private:

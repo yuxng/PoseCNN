@@ -23,8 +23,9 @@ bool ComputeFlowForwardLaucher(
     const int kernel_size, const float threshold, const float max_weight,
     float* top_data, float* top_weights, float* top_points, const Eigen::GpuDevice& d);
 
-bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, const float* bottom_points, const float* top_points, const int batch_size,
-    const int height, const int width, const int channels, const int kernel_size, const float threshold, const float max_weight,
+bool ComputeFlowBackwardLaucher(const float* top_diff, const float* top_diff_weights, const float* bottom_weights, 
+    const float* bottom_points, const float* bottom_depth, const float* bottom_meta_data, const float* top_points, const int batch_size,
+    const int height, const int width, const int channels, const int num_meta_data, const int kernel_size, const float threshold, const float max_weight,
     float* bottom_diff, float* bottom_diff_weights, const Eigen::GpuDevice& d);
 
 }  // namespace tensorflow
