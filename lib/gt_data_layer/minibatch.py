@@ -236,6 +236,9 @@ def _get_label_blob(roidb, voxelizer):
             mdata[11] = -1 * mdata[11]
         processed_meta_data.append(mdata)
 
+        # compute the delta transformation between frames
+        RT_world = RT_live
+
     # construct the blobs
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
