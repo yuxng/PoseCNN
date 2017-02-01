@@ -17,7 +17,7 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb rgbd_scene_train \
   --cfg experiments/cfgs/rgbd_scene_multi_depth.yml \
-  --iters 10
+  --iters 40000
 
 if [ -f $PWD/output/rgbd_scene/rgbd_scene_val/vgg16_fcn_depth_multi_frame_rgbd_scene_iter_40000/segmentations.pkl ]
 then
@@ -27,7 +27,7 @@ fi
 # test FCN for multiple frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16 \
-  --model output/rgbd_scene/rgbd_scene_train/vgg16_fcn_depth_multi_frame_rgbd_scene_iter_10.ckpt \
+  --model output/rgbd_scene/rgbd_scene_train/vgg16_fcn_depth_multi_frame_rgbd_scene_iter_40000.ckpt \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene_multi_depth.yml \
   --rig data/RGBDScene/camera.json
