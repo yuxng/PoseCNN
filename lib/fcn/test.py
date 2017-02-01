@@ -292,7 +292,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     # voxelizer
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
-    voxelizer.setup(-3, -3, -3, 3, 3, 4)
+    # voxelizer.setup(-3, -3, -3, 3, 3, 4)
+    voxelizer.setup(-2, -2, -2, 2, 2, 2)
 
     # kinect fusion
     if is_kfusion:
@@ -309,7 +310,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     video_index = ''
     have_prediction = False
-    for i in xrange(num_images):
+    for i in xrange(4299, num_images):
     # for i in perm:
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         height = rgba.shape[0]
@@ -353,6 +354,11 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             if is_kfusion:
                 # KF.set_voxel_grid(-3, -3, -3, 6, 6, 7)
                 KF.set_voxel_grid(voxelizer.min_x, voxelizer.min_y, voxelizer.min_z, voxelizer.max_x-voxelizer.min_x, voxelizer.max_y-voxelizer.min_y, voxelizer.max_z-voxelizer.min_z)
+                # identity transformation
+                RT_world = np.zeros((3,4), dtype=np.float32)
+                RT_world[0, 0] = 1
+                RT_world[1, 1] = 1
+                RT_world[2, 2] = 1
             else:
                 # store the RT for the first frame
                 RT_world = meta_data['rotation_translation_matrix']
@@ -366,17 +372,15 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             KF.back_project();
             if have_prediction:
                 pose_world2live, pose_live2world = KF.solve_pose()
+                RT_live = pose_world2live
             else:
-                pose_world2live = np.zeros((3,4), dtype=np.float32)
-                pose_world2live[0, 0] = 1
-                pose_world2live[1, 1] = 1
-                pose_world2live[2, 2] = 1
-                pose_live2world = pose_world2live
+                RT_live = RT_world
         else:
             # compute camera poses
             RT_live = meta_data['rotation_translation_matrix']
-            pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
-            pose_live2world = se3_inverse(pose_world2live)
+
+        pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+        pose_live2world = se3_inverse(pose_world2live)
 
         _t['im_segment'].tic()
         labels, probs, state, weights, points = im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world)
@@ -391,15 +395,21 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
         if is_kfusion:
             labels_kfusion = np.zeros((height, width), dtype=np.int32)
+            if probs.shape[2] < 10:
+                probs_new = np.zeros((probs.shape[0], probs.shape[1], 10), dtype=np.float32)
+                probs_new[:,:,:imdb.num_classes] = probs
+                probs = probs_new
             KF.feed_label(im_label, probs, colors)
             KF.fuse_depth()
             labels_kfusion = KF.extract_surface(labels_kfusion)
             im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
-            print filename
             KF.draw(filename, 1)
         have_prediction = True
+
+        # compute the delta transformation between frames
+        RT_world = RT_live
 
         if is_kfusion:
             seg = {'labels': labels_kfusion}
@@ -426,14 +436,14 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     if is_kfusion:
         KF.draw(filename, 1)
-    '''
+
     seg_file = os.path.join(output_dir, 'segmentations.pkl')
     with open(seg_file, 'wb') as f:
         cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
-    '''
+
 ###################
 # test single frame
 ###################
