@@ -1,0 +1,18 @@
+EXP_DIR: rgbd_scene
+INPUT: DEPTH
+TRAIN:
+  SINGLE_FRAME: True
+  LEARNING_RATE: 0.0001
+  MOMENTUM: 0.9
+  GAMMA: 0.1
+  STEPSIZE: 30000
+  SCALES_BASE: !!python/tuple [1.0]
+  IMS_PER_BATCH: 1
+  NUM_CLASSES: 10
+  SNAPSHOT_ITERS: 10000
+  SNAPSHOT_INFIX: rgbd_scene
+  SNAPSHOT_PREFIX: vgg16_fcn_depth_single_frame
+  USE_FLIPPED: False
+TEST:
+  SINGLE_FRAME: True
+  SCALES_BASE: !!python/tuple [1.0]

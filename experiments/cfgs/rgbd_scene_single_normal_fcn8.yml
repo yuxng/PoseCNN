@@ -1,5 +1,5 @@
 EXP_DIR: rgbd_scene
-INPUT: COLOR
+INPUT: NORMAL
 NETWORK: FCN8VGG
 TRAIN:
   SINGLE_FRAME: True
@@ -12,7 +12,7 @@ TRAIN:
   NUM_CLASSES: 10
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: rgbd_scene
-  SNAPSHOT_PREFIX: fcn8_rgbd_single_frame
+  SNAPSHOT_PREFIX: fcn8_normal_single_frame
   USE_FLIPPED: False
 TEST:
   SINGLE_FRAME: True

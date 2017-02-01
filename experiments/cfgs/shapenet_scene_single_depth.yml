@@ -12,7 +12,7 @@ TRAIN:
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: shapenet_scene
-  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_single_frame
+  SNAPSHOT_PREFIX: vgg16_fcn_depth_single_frame
   USE_FLIPPED: False
 TEST:
   SINGLE_FRAME: True
