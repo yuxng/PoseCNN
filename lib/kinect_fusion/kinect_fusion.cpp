@@ -441,7 +441,7 @@ void KinectFusion::draw(std::string filename, int flag)
   // show label image
   labelView_->ActivateScissorAndClear();
   labelTex_->RenderToViewportFlipY();
-  colorCamState_->SetModelViewMatrix(transformer_->worldToLiveTransformation().matrix());
+  colorCamState_->SetModelViewMatrix(transformer.worldToLiveTransformation().matrix());
   colorCamState_->Apply();
   glClear(GL_DEPTH_BUFFER_BIT);
   glPushMatrix();
@@ -449,7 +449,7 @@ void KinectFusion::draw(std::string filename, int flag)
   glVoxelGridCoords(*voxel_grid_);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
-  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_, *colorBuffer_);
+  renderModel(*vertBuffer_, *normBuffer_, *indexBuffer_);
   glDisable(GL_LIGHTING);
   glPopMatrix();
 

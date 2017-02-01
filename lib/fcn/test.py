@@ -309,7 +309,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     video_index = ''
     have_prediction = False
-    for i in xrange(3597, num_images):
+    for i in xrange(num_images):
     # for i in perm:
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         height = rgba.shape[0]
