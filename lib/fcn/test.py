@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-from kinect_fusion import kfusion
+#from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -292,8 +292,8 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
     # voxelizer
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
-    # voxelizer.setup(-3, -3, -3, 3, 3, 4)
-    voxelizer.setup(-2, -2, -2, 2, 2, 2)
+    voxelizer.setup(-3, -3, -3, 3, 3, 4)
+    # voxelizer.setup(-2, -2, -2, 2, 2, 2)
 
     # kinect fusion
     if is_kfusion:
