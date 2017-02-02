@@ -16,7 +16,7 @@ class shapenet_scene(datasets.imdb):
                             else shapenet_scene_path
         self._data_path = os.path.join(self._shapenet_scene_path, 'data')
         self._classes = ('__background__', 'table', 'tvmonitor', 'bottle', 'mug', 'can', 'keyboard', 'cap')
-        self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), (188, 0, 0)]
+        self._class_colors = [(0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), (188, 0, 0)]
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1]
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
