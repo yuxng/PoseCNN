@@ -85,19 +85,28 @@ __global__ void ComputeFlowForward(const int nthreads, const Dtype* bottom_data,
       int px = round(x1 / x3);
       int py = round(x2 / x3);
 
-      if (px >= 0 && px < width && py >= 0 && py < height)
+      // averaging over a small neighborhood
+      int count = 0;
+      for (int x = px - kernel_size; x <= px + kernel_size; x++)
       {
-        // assign data and weight
-        int index_bottom = n * height * width + py * width + px;
-        Dtype Z_prev = bottom_points[index_bottom * 3 + 2];
-        if (fabs(Z_prev - Z1) < threshold)
+        for (int y = py - kernel_size; y <= py + kernel_size; y++)
         {
-          top_data[index] = bottom_data[index_bottom * channels + c];
-          Dtype weight = bottom_weights[index_bottom * channels + c];
-          if (weight > max_weight)
-            top_weights[index] = max_weight;
-          else
-            top_weights[index] = weight;
+          if (x >= 0 && x < width && y >= 0 && y < height)
+          {
+            // assign data and weight
+            int index_bottom = n * height * width + y * width + x;
+            Dtype Z_prev = bottom_points[index_bottom * 3 + 2];
+            if (fabs(Z_prev - Z1) < threshold)
+            {
+              top_data[index] = (bottom_data[index_bottom * channels + c] + count * top_data[index]) / (count + 1);
+              Dtype weight = bottom_weights[index_bottom * channels + c];
+              if (weight > max_weight)
+                top_weights[index] = (max_weight + count * top_weights[index]) / (count + 1);
+              else
+                top_weights[index] = (weight + count * top_weights[index]) / (count + 1);
+              count++;
+            }
+          }
         }
       }
     }
@@ -162,6 +171,8 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, c
     }
     else
     {
+      bottom_diff[index] = 0;
+      bottom_diff_weights[index] = 0;
       // backproject the pixel to 3D
       // format of the meta_data
       // intrinsic matrix: meta_data[0 ~ 8]
@@ -184,29 +195,28 @@ __global__ void ComputeFlowBackward(const int nthreads, const Dtype* top_diff, c
       int px = round(x1 / x3);
       int py = round(x2 / x3);
 
-      if (px >= 0 && px < width && py >= 0 && py < height)
+      // averaging over a small neighborhood
+      int count = 0;
+      for (int x = px - kernel_size; x <= px + kernel_size; x++)
       {
-        // assign data
-        int index_top = n * height * width + py * width + px;
-        Dtype d = bottom_depth[index_top];
-        if (fabs(d - Z1) < threshold)
+        for (int y = py - kernel_size; y <= py + kernel_size; y++)
         {
-          bottom_diff[index] = top_diff[index_top * channels + c];
-          if (bottom_weights[index] > max_weight)
-            bottom_diff_weights[index] = 0;
-          else
-            bottom_diff_weights[index] = top_diff_weights[index_top * channels + c];
+          if (x >= 0 && x < width && y >= 0 && y < height)
+          {
+            // assign data
+            int index_top = n * height * width + y * width + x;
+            Dtype d = bottom_depth[index_top];
+            if (fabs(d - Z1) < threshold)
+            {
+              bottom_diff[index] = (top_diff[index_top * channels + c] + count * bottom_diff[index]) / (count + 1);
+              if (bottom_weights[index] > max_weight)
+                bottom_diff_weights[index] = (0 + count * bottom_diff_weights[index]) / (count + 1);
+              else
+                bottom_diff_weights[index] = (top_diff_weights[index_top * channels + c] + count * bottom_diff_weights[index]) / (count + 1);
+              count++;
+            }
+          }
         }
-        else
-        {
-          bottom_diff[index] = 0;
-          bottom_diff_weights[index] = 0;
-        }
-      }
-      else
-      {
-        bottom_diff[index] = 0;
-        bottom_diff_weights[index] = 0;
       }
     }
   }

@@ -211,21 +211,29 @@ class ComputeFlowOp : public OpKernel {
             int px = round(x1 / x3);
             int py = round(x2 / x3);
 
-            if (px >= 0 && px < width && py >= 0 && py < height)
+            // averaging over a small neighborhood
+            int count = 0;
+            for (int x = px - kernel_size_; x <= px + kernel_size_; x++)
             {
-              // assign data and weights
-              int index = n * height * width + py * width + px;
-              T Z_prev = im_points(index * 3 + 2);
-              if (fabs(Z_prev - Z1) < threshold_)
+              for (int y = py - kernel_size_; y <= py + kernel_size_; y++)
               {
-                for(int c = 0; c < num_channels; c++)
+                if (x >= 0 && x < width && y >= 0 && y < height)
                 {
-                  top_data(index_pixel * num_channels + c) = bottom_data_flat(index * num_channels + c);
-                  T weight = bottom_weights_flat(index * num_channels + c);
-                  if (weight > max_weight_)
-                    top_weights(index_pixel * num_channels + c) = max_weight_;
-                  else
-                    top_weights(index_pixel * num_channels + c) = weight;
+                  int index = n * height * width + y * width + x;
+                  T Z_prev = im_points(index * 3 + 2);
+                  if (fabs(Z_prev - Z1) < threshold_)
+                  {
+                    for(int c = 0; c < num_channels; c++)
+                    {
+                      top_data(index_pixel * num_channels + c) = (bottom_data_flat(index * num_channels + c) + count * top_data(index_pixel * num_channels + c)) / (count + 1);
+                      T weight = bottom_weights_flat(index * num_channels + c);
+                      if (weight > max_weight_)
+                        top_weights(index_pixel * num_channels + c) = (max_weight_ + count * top_weights(index_pixel * num_channels + c)) / (count + 1);
+                      else
+                        top_weights(index_pixel * num_channels + c) = (weight + count * top_weights(index_pixel * num_channels + c)) / (count + 1);
+                    }
+                    count++;
+                  }
                 }
               }
             }
