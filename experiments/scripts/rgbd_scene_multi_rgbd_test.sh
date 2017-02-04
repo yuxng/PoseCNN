@@ -5,7 +5,7 @@ set -e
 
 export PYTHONUNBUFFERED="True"
 export CUDA_VISIBLE_DEVICES=$1
-#export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
+export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 
 LOG="experiments/logs/rgbd_scene_multi_rgbd_test.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
@@ -23,4 +23,4 @@ time ./tools/test_net.py --gpu 0 \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene_multi_rgbd.yml \
   --rig data/RGBDScene/camera.json \
-  --kfusion 1
+#  --kfusion 1
