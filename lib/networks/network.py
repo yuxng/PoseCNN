@@ -382,6 +382,8 @@ class Network(object):
 
     @layer
     def dropout(self, input, keep_prob, name):
+        if isinstance(input, tuple):
+            input = input[0]
         return tf.nn.dropout(input, keep_prob, name=name)
 
 

@@ -115,9 +115,9 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob}
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
-        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob}
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
 
@@ -203,10 +203,10 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
 
     if cfg.INPUT == 'RGBD':
         feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
-                     net.meta_data: meta_data_blob, net.points: points}
+                     net.meta_data: meta_data_blob, net.points: points, net.keep_prob: 1.0}
     else:
         feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
-                     net.meta_data: meta_data_blob, net.points: points}
+                     net.meta_data: meta_data_blob, net.points: points, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
     labels_pred_2d, probs, state, weights, points = sess.run([net.get_output('labels_pred_2d'), net.get_output('probs'), \
