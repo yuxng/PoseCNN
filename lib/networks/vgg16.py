@@ -128,7 +128,7 @@ class vgg16(Network):
                  .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', reuse=reuse, trainable=False))
 
             (self.feed('state', 'weights', 'points', 'depth', 'meta_data')
-                 .compute_flow(5, 0.02, 50, name='flow'))
+                 .compute_flow(3, 0.02, 50, name='flow'))
 
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
