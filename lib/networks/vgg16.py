@@ -133,7 +133,6 @@ class vgg16(Network):
 
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
-                 .dropout(self.keep_prob_queue, name='dropout')
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse, c_i=self.num_units)
                  .log_softmax_high_dimension(self.num_classes, name='prob'))
             '''

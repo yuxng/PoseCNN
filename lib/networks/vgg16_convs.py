@@ -89,7 +89,6 @@ class vgg16_convs(Network):
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add_score')
              .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
-             .dropout(self.keep_prob_queue, name='dropout')
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
 
