@@ -89,8 +89,9 @@ def _get_image_blob(roidb, scale_ind):
         im = chromatic_transform(im)
 
         # mask the color image according to depth
-        I = np.where(im_depth_raw == 0)
-        im[I[0], I[1], :] = 0
+        if cfg.EXP_DIR == 'rgbd_scene':
+            I = np.where(im_depth_raw == 0)
+            im[I[0], I[1], :] = 0
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
