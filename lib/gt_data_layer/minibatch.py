@@ -181,16 +181,23 @@ def _get_label_blob(roidb, voxelizer):
     for i in xrange(num_images):
         # load meta data
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
+        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
 
         # read label image
         im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+        # mask the label image according to depth
+        if cfg.INPUT == 'DEPTH':
+            I = np.where(im_depth == 0)
+            if len(im.shape) == 2:
+                im[I[0], I[1]] = 0
+            else:
+                im[I[0], I[1], :] = 0
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # depth
-        im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
         depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
