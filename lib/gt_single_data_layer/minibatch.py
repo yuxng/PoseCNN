@@ -172,7 +172,10 @@ def _get_label_blob(roidb, voxelizer):
             else:
                 im[I[0], I[1], :] = 0
         if roidb[i]['flipped']:
-            im = im[:, ::-1, :]
+            if len(im.shape) == 2:
+                im = im[:, ::-1]
+            else:
+                im = im[:, ::-1, :]
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
