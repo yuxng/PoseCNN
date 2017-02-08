@@ -127,7 +127,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     else:
         labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
 
-    return labels_2d[0,:,:].astype(np.int32), probs[0,:,:,:]
+    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:]
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -215,7 +215,7 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
 
     labels_2d = labels_pred_2d[0]
 
-    return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
+    return labels_2d[0,:,:].astype(np.uint8), probs[0][0,:,:,:], state, weights, points
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
