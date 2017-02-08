@@ -1,5 +1,5 @@
 EXP_DIR: lov
-INPUT: COLOR
+INPUT: DEPTH
 TRAIN:
   SINGLE_FRAME: True
   LEARNING_RATE: 0.0001
@@ -11,7 +11,7 @@ TRAIN:
   NUM_CLASSES: 22
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: lov
-  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
+  SNAPSHOT_PREFIX: vgg16_fcn_depth_single_frame
   USE_FLIPPED: False
 TEST:
   SINGLE_FRAME: True

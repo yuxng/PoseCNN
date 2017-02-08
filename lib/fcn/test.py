@@ -38,8 +38,9 @@ def _get_image_blob(im, im_depth, meta_data):
     # RGB
     im_orig = im.astype(np.float32, copy=True)
     # mask the color image according to depth
-    I = np.where(im_depth == 0)
-    im_orig[I[0], I[1], :] = 0
+    if cfg.EXP_DIR == 'rgbd_scene':
+        I = np.where(im_depth == 0)
+        im_orig[I[0], I[1], :] = 0
     im_orig -= cfg.PIXEL_MEANS
 
     processed_ims = []

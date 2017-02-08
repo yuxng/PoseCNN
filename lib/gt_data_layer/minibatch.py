@@ -86,7 +86,8 @@ def _get_image_blob(roidb, scale_ind):
             im = rgba
 
         # chromatic transform
-        im = chromatic_transform(im)
+        if cfg.EXP_DIR != 'lov':
+            im = chromatic_transform(im)
 
         # mask the color image according to depth
         if cfg.EXP_DIR == 'rgbd_scene':
