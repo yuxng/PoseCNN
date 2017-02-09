@@ -122,6 +122,24 @@ class lov(datasets.imdb):
         return os.path.join(datasets.ROOT_DIR, 'data', 'LOV')
 
 
+    def compute_class_weights(self):
+
+        print 'computing class weights'
+        num_classes = self.num_classes
+        count = np.zeros((num_classes,), dtype=np.int32)
+        for index in self.image_index:
+            # label path
+            label_path = self.label_path_from_index(index)
+            im = cv2.imread(label_path, cv2.IMREAD_UNCHANGED)
+            for i in xrange(num_classes):
+                I = np.where(im == i)
+                count[i] += len(I[0])
+
+        for i in xrange(num_classes):
+            self._class_weights[i] = float(count[0]) / float(count[i]) / 10.0
+            print self._classes[i], self._class_weights[i]
+
+
     def gt_roidb(self):
         """
         Return the database of ground-truth regions of interest.
@@ -135,6 +153,8 @@ class lov(datasets.imdb):
                 roidb = cPickle.load(fid)
             print '{} gt roidb loaded from {}'.format(self.name, cache_file)
             return roidb
+
+        self.compute_class_weights()
 
         gt_roidb = [self._load_lov_annotation(index)
                     for index in self.image_index]
