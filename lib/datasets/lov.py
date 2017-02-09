@@ -66,7 +66,7 @@ class lov(datasets.imdb):
         """
         Construct an depth path from the image's "index" identifier.
         """
-        depth_path = os.path.join(self._data_path, index + '-depth-align' + self._image_ext)
+        depth_path = os.path.join(self._data_path, index + '-depth' + self._image_ext)
         assert os.path.exists(depth_path), \
                 'Path does not exist: {}'.format(depth_path)
         return depth_path
