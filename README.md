@@ -41,7 +41,7 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     ```
 
 ### Running on the RGB-D Scene dataset
-1. Download the RGB-D Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VaHIxckxwbVpabFU).
+1. Download the RGB-D Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VaHIxckxwbVpabFU) (5.5G).
 
 2. Create a symlink for the RGB-D Scene dataset
     ```Shell
