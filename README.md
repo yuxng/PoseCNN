@@ -40,6 +40,22 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     python setup.py build_ext --inplace
     ```
 
+### Running on the RGB-D Scene dataset
+1. Download the RGB-D Scene dataset from here.
+
+2. Create a symlink for the RGB-D Scene dataset
+    ```Shell
+    cd $ROOT/data/RGBDScene
+    ln -s $RGB-D_scene_data data
+    ```
+
+3. Training and testing on the RGB-D Scene dataset
+    ```Shell
+    cd $ROOT
+    ./experiments/scripts/rgbd_scene_multi_rgbd.sh $GPU_ID
+
+    ```
+
 ### License
 
 DA-RNN is released under the MIT License (refer to the LICENSE file for details).

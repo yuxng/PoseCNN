@@ -5,5 +5,4 @@
 *.so
 *.o
 output/*
-data/*
 lib/icp/icp_main.cpp
