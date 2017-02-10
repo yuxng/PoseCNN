@@ -136,7 +136,7 @@ class lov(datasets.imdb):
                 count[i] += len(I[0])
 
         for i in xrange(num_classes):
-            self._class_weights[i] = float(count[0]) / float(count[i]) / 10.0
+            self._class_weights[i] = min(float(count[0]) / float(count[i]), 10.0)
             print self._classes[i], self._class_weights[i]
 
 
@@ -152,6 +152,7 @@ class lov(datasets.imdb):
             with open(cache_file, 'rb') as fid:
                 roidb = cPickle.load(fid)
             print '{} gt roidb loaded from {}'.format(self.name, cache_file)
+            print 'class weights: ', roidb[0]['class_weights']
             return roidb
 
         self.compute_class_weights()

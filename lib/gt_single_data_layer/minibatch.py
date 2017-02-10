@@ -23,10 +23,10 @@ def get_minibatch(roidb, voxelizer):
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
+    im_blob, im_depth_blob, im_normal_blob, im_scales, im_rotations = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob = _get_label_blob(roidb, voxelizer, im_rotations)
 
     # For debug visualizations
     # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob)
@@ -49,9 +49,29 @@ def _get_image_blob(roidb, scale_ind):
     processed_ims_depth = []
     processed_ims_normal = []
     im_scales = []
+    im_rotations = []
     for i in xrange(num_images):
+        # meta data
+        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
+        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+        fx = K[0, 0]
+        fy = K[1, 1]
+        cx = K[0, 2]
+        cy = K[1, 2]
+
+        if cfg.TRAIN.ROTATION:
+            # sample a scale
+            scale = np.random.uniform(0.8, 1.2)
+            # sample a rotation angle
+            angle = np.random.uniform(-45.0, 45.0)
+            # rotation matrix
+            M = cv2.getRotationMatrix2D((cx, cy), angle, scale)
+            im_rotations.append(M)
+
         # depth raw
         im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+        height = im_depth_raw.shape[0]
+        width = im_depth_raw.shape[1]
 
         # rgba
         rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
@@ -64,7 +84,7 @@ def _get_image_blob(roidb, scale_ind):
             im = rgba
 
         # chromatic transform
-        if cfg.EXP_DIR != 'lov':
+        if cfg.TRAIN.CHROMATIC:
             im = chromatic_transform(im)
 
         # mask the color image according to depth
@@ -76,11 +96,13 @@ def _get_image_blob(roidb, scale_ind):
             im = im[:, ::-1, :]
 
         im_orig = im.astype(np.float32, copy=True)
+        if cfg.TRAIN.ROTATION:
+            im_orig = cv2.warpAffine(im_orig, M, (width, height), borderValue=0)
         im_orig -= cfg.PIXEL_MEANS
         im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
-        im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        # im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         im_scales.append(im_scale)
-        processed_ims.append(im)
+        processed_ims.append(im_orig)
 
         # depth
         im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
@@ -90,17 +112,11 @@ def _get_image_blob(roidb, scale_ind):
             im_depth = im_depth[:, ::-1]
 
         im_orig = im_depth.astype(np.float32, copy=True)
+        if cfg.TRAIN.ROTATION:
+            im_orig = cv2.warpAffine(im_orig, M, (width, height), borderValue=0)
         im_orig -= cfg.PIXEL_MEANS
-        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_depth.append(im_depth)
-
-        # meta data
-        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
-        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-        fx = K[0, 0]
-        fy = K[1, 1]
-        cx = K[0, 2]
-        cy = K[1, 2]
+        # im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_depth.append(im_orig)
 
         # normals
         depth = im_depth_raw.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
@@ -112,16 +128,18 @@ def _get_image_blob(roidb, scale_ind):
             im_normal = im_normal[:, ::-1, :]
 
         im_orig = im_normal.astype(np.float32, copy=True)
+        if cfg.TRAIN.ROTATION:
+            im_orig = cv2.warpAffine(im_orig, M, (width, height), borderValue=0)
         im_orig -= cfg.PIXEL_MEANS
-        im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_normal.append(im_normal)
+        # im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_normal.append(im_orig)
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
     blob_normal = im_list_to_blob(processed_ims_normal, 3)
 
-    return blob, blob_depth, blob_normal, im_scales
+    return blob, blob_depth, blob_normal, im_scales, im_rotations
 
 
 def _process_label_image(label_image, class_colors, class_weights):
@@ -149,7 +167,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index
 
 
-def _get_label_blob(roidb, voxelizer):
+def _get_label_blob(roidb, voxelizer, im_rotations):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -164,6 +182,8 @@ def _get_label_blob(roidb, voxelizer):
 
         # read label image
         im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+        height = im.shape[0]
+        width = im.shape[1]
         # mask the label image according to depth
         if cfg.INPUT == 'DEPTH':
             I = np.where(im_depth == 0)
@@ -176,6 +196,8 @@ def _get_label_blob(roidb, voxelizer):
                 im = im[:, ::-1]
             else:
                 im = im[:, ::-1, :]
+        if cfg.TRAIN.ROTATION:
+            im = cv2.warpAffine(im, im_rotations[i], (width, height), flags=cv2.INTER_NEAREST, borderValue=0)
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
@@ -183,6 +205,8 @@ def _get_label_blob(roidb, voxelizer):
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
         depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        if cfg.TRAIN.ROTATION:
+            depth = cv2.warpAffine(depth, im_rotations[i], (width, height), borderValue=0)
         processed_depth.append(depth)
 
         # voxelization
