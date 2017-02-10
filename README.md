@@ -27,6 +27,12 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     make
     ```
 
+- Compile the Cython interface for RNN and KinectFusion
+    ```Shell
+    cd $ROOT/lib
+    python setup.py build_ext --inplace
+    ```
+
 ### License
 
 DA-RNN is released under the MIT License (refer to the LICENSE file for details).
