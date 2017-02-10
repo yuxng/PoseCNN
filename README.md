@@ -10,15 +10,20 @@ we introduce Data Associated Recurrent Neural Networks (DA-RNNs), a novel framew
 
 DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
 
-- Install [TensorFlow](https://www.tensorflow.org/get_started/os_setup). I suggest to use the Virtualenv installation.
+1. Install [TensorFlow](https://www.tensorflow.org/get_started/os_setup). I suggest to use the Virtualenv installation.
 
-- Compile the new layers under $ROOT/lib we introduce in DA-RNN.
+2. Compile the new layers under $ROOT/lib we introduce in DA-RNN.
     ```Shell
     cd $ROOT/lib
     sh make.sh
     ```
 
-- Compile KinectFusion with cmake
+3. Compile KinectFusion with cmake. Unfortunately, this step requires some effort.
+
+   Install dependencies of KinectFusion:
+   - [Pangolin](https://github.com/stevenlovegrove/Pangolin)
+   - [Eigen](https://eigen.tuxfamily.org)
+
     ```Shell
     cd $ROOT/lib/kinect_fusion
     mkdir build
@@ -27,7 +32,7 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     make
     ```
 
-- Compile the Cython interface for RNN and KinectFusion
+4. Compile the Cython interface for RNN and KinectFusion
     ```Shell
     cd $ROOT/lib
     python setup.py build_ext --inplace
