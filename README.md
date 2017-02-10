@@ -52,7 +52,12 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
 3. Training and testing on the RGB-D Scene dataset
     ```Shell
     cd $ROOT
-    ./experiments/scripts/rgbd_scene_multi_rgbd.sh $GPU_ID
+
+    # train and test RNN with different input (color, depth, normal and rgbd)
+    ./experiments/scripts/rgbd_scene_multi_*.sh $GPU_ID
+
+    # train and test FCN with different input (color, depth, normal and rgbd)
+    ./experiments/scripts/rgbd_scene_single_*.sh $GPU_ID
 
     ```
 
