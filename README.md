@@ -18,7 +18,14 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     sh make.sh
     ```
 
-- Compile KinectFusion
+- Compile KinectFusion with cmake
+    ```Shell
+    cd $ROOT/lib/kinect_fusion
+    mkdir build
+    cd build
+    cmake ..
+    make
+    ```
 
 ### License
 
