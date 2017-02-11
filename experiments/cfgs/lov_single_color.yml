@@ -14,7 +14,6 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
   USE_FLIPPED: True
   CHROMATIC: False
-  ROTATION: True
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
