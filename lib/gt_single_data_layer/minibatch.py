@@ -194,7 +194,7 @@ def _get_label_blob(roidb, voxelizer):
             vertmap = meta_data['vertmap']
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
-            vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes) 
+            vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes, roidb[i]['meta_data']) 
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
 
@@ -268,7 +268,7 @@ def _get_label_blob(roidb, voxelizer):
     return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob
 
 
-def _get_vertex_regression_labels(im_label, vertmap, num_classes):
+def _get_vertex_regression_labels(im_label, vertmap, num_classes, path):
     height = im_label.shape[0]
     width = im_label.shape[1]
     vertex_targets = np.zeros((height, width, 3 * num_classes), dtype=np.float32)
@@ -281,6 +281,12 @@ def _get_vertex_regression_labels(im_label, vertmap, num_classes):
             end = start + 3
             vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * vertmap[I[0], I[1], :]
             vertex_weights[I[0], I[1], start:end] = 1.0
+
+    if not np.all(np.isfinite(vertex_targets)):
+        print 'is not finite targets', path
+    if not np.all(np.isfinite(vertex_weights)):
+        print 'is not finite weights'
+
     return vertex_targets, vertex_weights
 
 
