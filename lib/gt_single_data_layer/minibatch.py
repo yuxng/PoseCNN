@@ -26,17 +26,19 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob)
+    # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,
              'data_image_normal': im_normal_blob,
              'data_label': label_blob,
              'data_depth': depth_blob,
-             'data_meta_data': meta_data_blob}
+             'data_meta_data': meta_data_blob,
+             'data_vertex_targets': vertex_target_blob,
+             'data_vertex_weights': vertex_weight_blob}
 
     return blobs
 
@@ -155,9 +157,13 @@ def _get_label_blob(roidb, voxelizer):
     """ build the label blob """
 
     num_images = len(roidb)
+    num_classes = voxelizer.num_classes
     processed_depth = []
     processed_label = []
     processed_meta_data = []
+    if cfg.TRAIN.VERTEX_REG:
+        processed_vertex_targets = []
+        processed_vertex_weights = []
 
     for i in xrange(num_images):
         # load meta data
@@ -182,6 +188,15 @@ def _get_label_blob(roidb, voxelizer):
                 im = im[:, ::-1, :]
         im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
+
+        # vertex regression targets and weights
+        if cfg.TRAIN.VERTEX_REG:
+            vertmap = meta_data['vertmap']
+            if roidb[i]['flipped']:
+                vertmap = vertmap[:, ::-1, :]
+            vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes) 
+            processed_vertex_targets.append(vertex_targets)
+            processed_vertex_weights.append(vertex_weights)
 
         # depth
         if roidb[i]['flipped']:
@@ -232,19 +247,44 @@ def _get_label_blob(roidb, voxelizer):
     # construct the blobs
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
-    num_classes = voxelizer.num_classes
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
+    if cfg.TRAIN.VERTEX_REG:
+        vertex_target_blob = np.zeros((num_images, height, width, 3*num_classes), dtype=np.float32)
+        vertex_weight_blob = np.zeros((num_images, height, width, 3*num_classes), dtype=np.float32)
+    else:
+        vertex_target_blob = []
+        vertex_weight_blob = []
+
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
         label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
+        if cfg.TRAIN.VERTEX_REG:
+            vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
+            vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
+    
+    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob
 
-    return depth_blob, label_blob,  meta_data_blob
+
+def _get_vertex_regression_labels(im_label, vertmap, num_classes):
+    height = im_label.shape[0]
+    width = im_label.shape[1]
+    vertex_targets = np.zeros((height, width, 3 * num_classes), dtype=np.float32)
+    vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+    
+    for i in xrange(1, num_classes):
+        I = np.where(im_label == i)
+        if len(I[0]) > 0:
+            start = 3 * i
+            end = start + 3
+            vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * vertmap[I[0], I[1], :]
+            vertex_weights[I[0], I[1], start:end] = 1.0
+    return vertex_targets, vertex_weights
 
 
-def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):
+def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -277,10 +317,20 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob):
         width = label.shape[1]
         num_classes = label.shape[2]
         l = np.zeros((height, width), dtype=np.int32)
+        if cfg.TRAIN.VERTEX_REG:
+            vertex_target = vertex_target_blob[i, :, :, :]
+            vertmap = np.zeros((height, width, 3), dtype=np.float32)
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
+            if cfg.TRAIN.VERTEX_REG and k > 0 and len(index[0]) > 0:
+                start = 3 * k
+                end = start + 3
+                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], start:end]
         fig.add_subplot(224)
-        plt.imshow(l)
+        if cfg.TRAIN.VERTEX_REG:
+            plt.imshow(vertmap)
+        else:
+            plt.imshow(l)
 
         plt.show()

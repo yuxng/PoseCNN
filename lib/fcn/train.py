@@ -92,6 +92,44 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
+    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters):
+        """Network training loop."""
+        # add summary
+        tf.summary.scalar('loss', loss)
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
+
+        # intialize variables
+        sess.run(tf.global_variables_initializer())
+        if self.pretrained_model is not None:
+            print ('Loading pretrained model '
+                   'weights from {:s}').format(self.pretrained_model)
+            self.net.load(self.pretrained_model, sess, True)
+
+        tf.get_default_graph().finalize()
+
+        last_snapshot_iter = -1
+        timer = Timer()
+        for iter in range(max_iters):
+            timer.tic()
+            summary, loss_value, loss_cls_value, loss_vertex_value, lr, _ = sess.run([merged, loss, loss_cls, loss_vertex, learning_rate, train_op])
+            train_writer.add_summary(summary, iter)
+            timer.toc()
+            
+            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, lr: %.8f, time: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, lr, timer.diff)
+
+            if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
+                print 'speed: {:.3f}s / iter'.format(timer.average_time)
+
+            if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
+                last_snapshot_iter = iter
+                self.snapshot(sess, iter)
+
+        if last_snapshot_iter != iter:
+            self.snapshot(sess, iter)
+
+
 def get_training_roidb(imdb):
     """Returns a roidb (Region of Interest database) for use in training."""
     if cfg.TRAIN.USE_FLIPPED:
@@ -125,9 +163,15 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
 
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
-                feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+                if cfg.TRAIN.VERTEX_REG:
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                else:
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
             else:
-                feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+                if cfg.TRAIN.VERTEX_REG:
+                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                else:
+                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
@@ -179,9 +223,21 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
             labels = network.gt_label_2d_queue
             loss = loss_cross_entropy_single_frame(scores, labels)
         else:
-            scores = network.get_output('prob')
-            labels = network.get_output('gt_label_2d')
-            loss = loss_cross_entropy_single_frame(scores, labels)
+            if cfg.TRAIN.VERTEX_REG:
+                scores = network.get_output('prob')
+                labels = network.get_output('gt_label_2d')
+                loss_cls = loss_cross_entropy_single_frame(scores, labels)
+
+                vertex_pred = network.get_output('vertex_pred')
+                vertex_targets = network.get_output('vertex_targets')
+                vertex_weights = network.get_output('vertex_weights')
+                loss_vertex = tf.div( tf.reduce_sum(tf.mul(vertex_weights, tf.abs(tf.sub(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
+                
+                loss = loss_cls + loss_vertex
+            else:
+                scores = network.get_output('prob')
+                labels = network.get_output('gt_label_2d')
+                loss = loss_cross_entropy_single_frame(scores, labels)
     else:
         # classification loss
         scores = network.get_output('outputs')
@@ -207,7 +263,10 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
         # load_and_enqueue(sess, network, roidb, imdb.num_classes, coord)
 
         print 'Solving...'
-        sw.train_model(sess, train_op, loss, learning_rate, max_iters)
+        if cfg.TRAIN.VERTEX_REG:
+            sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters)
+        else:
+            sw.train_model(sess, train_op, loss, learning_rate, max_iters)
         print 'done solving'
 
         sess.run(network.close_queue_op)

@@ -14,6 +14,8 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
   USE_FLIPPED: True
   CHROMATIC: False
+  VERTEX_REG: True
+  VERTEX_W: 10.0
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]

@@ -39,6 +39,8 @@ __C.NETWORK = 'VGG16'
 __C.TRAIN = edict()
 
 __C.TRAIN.SINGLE_FRAME = False
+__C.TRAIN.VERTEX_REG = False
+__C.TRAIN.VERTEX_W = 10.0
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001

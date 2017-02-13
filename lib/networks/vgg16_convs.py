@@ -2,30 +2,46 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, trainable=True):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, trainable=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
         self.num_units = num_units
         self.scale = 1 / scales[0]
+        self.vertex_reg = vertex_reg
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
             self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
+        if vertex_reg:
+            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * self.num_classes])
+            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * self.num_classes])
 
         # define a queue
         if input_format == 'RGBD':
-            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
-            data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
-            self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
+            if vertex_reg:
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
+                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+            else:
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
+                data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
+                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
-            q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
-            data, gt_label_2d, self.keep_prob_queue = q.dequeue()
-            self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
+            if vertex_reg:
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
+                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+            else:
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
+                data, gt_label_2d, self.keep_prob_queue = q.dequeue()
+                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
         self.trainable = trainable
         self.setup()
@@ -95,3 +111,7 @@ class vgg16_convs(Network):
         (self.feed('score')
              .softmax_high_dimension(self.num_classes, name='prob_normalized')
              .argmax_2d(name='label_2d'))
+
+        if self.vertex_reg:
+            (self.feed('upscore') 
+             .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', c_i=self.num_units))
