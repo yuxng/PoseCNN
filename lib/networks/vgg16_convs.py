@@ -21,7 +21,7 @@ class vgg16_convs(Network):
 
         # define a queue
         if input_format == 'RGBD':
-            if vertex_reg:
+            if vertex_reg and trainable:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
                 data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
@@ -32,7 +32,7 @@ class vgg16_convs(Network):
                 data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
-            if vertex_reg:
+            if vertex_reg and trainable:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
                 data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
@@ -113,5 +113,5 @@ class vgg16_convs(Network):
              .argmax_2d(name='label_2d'))
 
         if self.vertex_reg:
-            (self.feed('upscore') 
+            (self.feed('upscore')
              .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', c_i=self.num_units))

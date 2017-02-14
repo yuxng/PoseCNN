@@ -92,6 +92,22 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
+def _extract_vertmap(labels, vertex_pred, num_classes):
+
+    height = labels.shape[0]
+    width = labels.shape[1]
+    vertmap = np.zeros((height, width, 3), dtype=np.float32)
+
+    for i in xrange(1, num_classes):
+        index = np.where(labels == i)
+        if len(index[0]) > 0:
+            start = 3 * i
+            end = start + 3
+            vertmap[index[0], index[1], :] = vertex_pred[0, index[0], index[1], start:end]
+
+    return vertmap
+
+
 def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     """segment image
     """
@@ -125,9 +141,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     if cfg.NETWORK == 'FCN8VGG':
         labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
     else:
-        labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
+        if cfg.TEST.VERTEX_REG:
+            labels_2d, probs, vertex_pred = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')], feed_dict=feed_dict)
+        else:
+            labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
+            vertex_pred = []
 
-    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:]
+    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -216,6 +236,46 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
     labels_2d = labels_pred_2d[0]
 
     return labels_2d[0,:,:].astype(np.uint8), probs[0][0,:,:,:], state, weights, points
+
+
+def vis_segmentations_vertmaps(im, im_depth, labels, labels_gt, colors, vertex_map_gt, vertex_map):
+    """Visual debugging of detections."""
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+
+    # show image
+    ax = fig.add_subplot(231)
+    im = im[:, :, (2, 1, 0)]
+    plt.imshow(im)
+    ax.set_title('input image')
+
+    # show gt class labels
+    ax = fig.add_subplot(232)
+    plt.imshow(labels_gt)
+    ax.set_title('gt class labels')
+
+    # show gt vertmap
+    ax = fig.add_subplot(233)
+    plt.imshow(vertex_map_gt)
+    ax.set_title('gt vertex map')
+
+    # show depth
+    ax = fig.add_subplot(234)
+    plt.imshow(im_depth)
+    ax.set_title('input depth')
+
+    # show class label
+    ax = fig.add_subplot(235)
+    plt.imshow(labels)
+    ax.set_title('class labels')
+
+    # show vertex map
+    ax = fig.add_subplot(236)
+    plt.imshow(vertex_map)
+    ax.set_title('vertex map')
+
+    plt.show()
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
@@ -307,12 +367,14 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
         colors[i * 3 + 1] = imdb._class_colors[i][1]
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
-    # perm = np.random.permutation(np.arange(num_images))
+    if cfg.TEST.VISUALIZE:
+        perm = np.random.permutation(np.arange(num_images))
+    else:
+        perm = xrange(num_images)
 
     video_index = ''
     have_prediction = False
-    for i in xrange(num_images):
-    # for i in perm:
+    for i in perm:
         rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
         height = rgba.shape[0]
         width = rgba.shape[1]
@@ -420,17 +482,16 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
         _t['misc'].toc()
 
-        '''
-        # read label image
-        labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-        if len(labels_gt.shape) == 2:
-            im_label_gt = imdb.labels_to_image(im, labels_gt)
-        else:
-            im_label_gt = np.copy(labels_gt[:,:,:3])
-            im_label_gt[:,:,0] = labels_gt[:,:,2]
-            im_label_gt[:,:,2] = labels_gt[:,:,0]
-        vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
-        #'''
+        if cfg.TEST.VISUALIZE:
+            # read label image
+            labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+            if len(labels_gt.shape) == 2:
+                im_label_gt = imdb.labels_to_image(im, labels_gt)
+            else:
+                im_label_gt = np.copy(labels_gt[:,:,:3])
+                im_label_gt[:,:,0] = labels_gt[:,:,2]
+                im_label_gt[:,:,2] = labels_gt[:,:,0]
+            vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
@@ -480,12 +541,14 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         colors[i * 3 + 1] = imdb._class_colors[i][1]
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
-    # perm = np.random.permutation(np.arange(num_images))
+    if cfg.TEST.VISUALIZE:
+        perm = np.random.permutation(np.arange(num_images))
+    else:
+        perm = xrange(num_images)
 
     video_index = ''
     have_prediction = False
-    for i in xrange(num_images):
-    # for i in perm:
+    for i in perm:
 
         # parse image name
         image_index = imdb.image_index[i]
@@ -525,7 +588,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         _t['im_segment'].tic()
-        labels, probs = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        if cfg.TEST.VERTEX_REG:
+            vertmap = _extract_vertmap(labels, vertex_pred, imdb.num_classes)
         _t['im_segment'].toc()
 
         _t['misc'].tic()
@@ -568,7 +633,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
         _t['misc'].toc()
 
-        # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
+        if cfg.TEST.VISUALIZE:
+            if cfg.TEST.VERTEX_REG:
+                vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, meta_data['vertmap'], vertmap)
+            else:
+                vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 

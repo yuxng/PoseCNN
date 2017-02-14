@@ -83,6 +83,7 @@ if __name__ == '__main__':
     if cfg.NETWORK == 'FCN8VGG':
         path = osp.abspath(osp.join(cfg.ROOT_DIR, args.pretrained_model))
         cfg.TRAIN.MODEL_PATH = path
+    cfg.TRAIN.TRAINABLE = False
 
     from networks.factory import get_network
     network = get_network(args.network_name)

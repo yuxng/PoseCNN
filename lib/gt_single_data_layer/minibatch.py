@@ -29,7 +29,8 @@ def get_minibatch(roidb, voxelizer):
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
-    # _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
+    if cfg.TRAIN.VISUALIZE:
+        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,

@@ -258,9 +258,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
 
         # thread to load data
         coord = tf.train.Coordinator()
-        t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
-        t.start()
-        # load_and_enqueue(sess, network, roidb, imdb.num_classes, coord)
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, network, roidb, imdb.num_classes, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
+            t.start()
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
