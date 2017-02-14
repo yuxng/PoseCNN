@@ -306,6 +306,13 @@ class lov(datasets.imdb):
             for i in range(n_cl):
                 f.write('{:f}\n'.format(iu[i]))
 
+        filename = os.path.join(output_dir, 'confusion_matrix.txt')
+        with open(filename, 'wt') as f:
+            for i in range(n_cl):
+                for j in range(n_cl):
+                    f.write('{:f} '.format(hist[i, j]))
+                f.write('\n')
+
 
 if __name__ == '__main__':
     d = datasets.lov('train')
