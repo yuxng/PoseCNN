@@ -126,7 +126,7 @@ class lov(datasets.imdb):
 
         print 'computing class weights'
         num_classes = self.num_classes
-        count = np.zeros((num_classes,), dtype=np.int32)
+        count = np.zeros((num_classes,), dtype=np.int64)
         for index in self.image_index:
             # label path
             label_path = self.label_path_from_index(index)
