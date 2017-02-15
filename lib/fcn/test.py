@@ -103,7 +103,7 @@ def _extract_vertmap(labels, vertex_pred, num_classes):
         if len(index[0]) > 0:
             start = 3 * i
             end = start + 3
-            vertmap[index[0], index[1], :] = vertex_pred[0, index[0], index[1], start:end]
+            vertmap[index[0], index[1], :2] = vertex_pred[0, index[0], index[1], start:end]
 
     return vertmap
 

@@ -15,11 +15,11 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
   USE_FLIPPED: True
   CHROMATIC: False
-  VERTEX_REG: False
+  VERTEX_REG: True
   VERTEX_W: 10.0
   VISUALIZE: False
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
-  VERTEX_REG: False
+  VERTEX_REG: True
   VISUALIZE: False

@@ -16,8 +16,8 @@ class vgg16_convs(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
         if vertex_reg:
-            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * self.num_classes])
-            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * self.num_classes])
+            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 2 * self.num_classes])
+            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 2 * self.num_classes])
 
         # define a queue
         if input_format == 'RGBD':
@@ -114,4 +114,4 @@ class vgg16_convs(Network):
 
         if self.vertex_reg:
             (self.feed('upscore')
-             .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', c_i=self.num_units))
+             .conv(1, 1, 2 * self.num_classes, 1, 1, name='vertex_pred', c_i=self.num_units))
