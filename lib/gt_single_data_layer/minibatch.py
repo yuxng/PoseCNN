@@ -192,11 +192,10 @@ def _get_label_blob(roidb, voxelizer):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            # vertmap = meta_data['vertmap']
-            # if roidb[i]['flipped']:
-            #    vertmap = vertmap[:, ::-1, :]
-            # vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes, roidb[i]['meta_data'])
-            vertex_targets, vertex_weights = _vote_centers(im, num_classes) 
+            vertmap = meta_data['vertmap']
+            if roidb[i]['flipped']:
+                vertmap = vertmap[:, ::-1, :]
+            vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes)
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
 
@@ -253,8 +252,8 @@ def _get_label_blob(roidb, voxelizer):
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     if cfg.TRAIN.VERTEX_REG:
-        vertex_target_blob = np.zeros((num_images, height, width, 2*num_classes), dtype=np.float32)
-        vertex_weight_blob = np.zeros((num_images, height, width, 2*num_classes), dtype=np.float32)
+        vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
+        vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
     else:
         vertex_target_blob = []
         vertex_weight_blob = []
@@ -274,8 +273,8 @@ def _get_label_blob(roidb, voxelizer):
 def _vote_centers(im_label, num_classes):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 2 * num_classes), dtype=np.float32)
-    vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 2), dtype=np.float32)
+    vertex_weights = np.ones(vertex_targets.shape, dtype=np.float32)
 
     center = np.zeros((2, 1), dtype=np.float32)
     for i in xrange(1, num_classes):
@@ -289,17 +288,17 @@ def _vote_centers(im_label, num_classes):
             # normalization
             R = np.divide(R, np.tile(N, (2,1)))
             # assignment
-            vertex_targets[y, x, 2*i] = R[0,:]
-            vertex_targets[y, x, 2*i+1] = R[1,:]
-            vertex_weights[y, x, 2*i:2*i+2] = 1.0
+            vertex_targets[y, x, 0] = R[0,:]
+            vertex_targets[y, x, 1] = R[1,:]
+            vertex_weights[y, x, :] = 10.0
 
     return vertex_targets, vertex_weights
 
 
-def _get_vertex_regression_labels(im_label, vertmap, num_classes, path):
+def _get_vertex_regression_labels(im_label, vertmap, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
-    vertex_targets = np.zeros((height, width, 3 * num_classes), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
     
     for i in xrange(1, num_classes):
@@ -308,12 +307,7 @@ def _get_vertex_regression_labels(im_label, vertmap, num_classes, path):
             start = 3 * i
             end = start + 3
             vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * vertmap[I[0], I[1], :]
-            vertex_weights[I[0], I[1], start:end] = 1.0
-
-    if not np.all(np.isfinite(vertex_targets)):
-        print 'is not finite targets', path
-    if not np.all(np.isfinite(vertex_weights)):
-        print 'is not finite weights'
+            vertex_weights[I[0], I[1], start:end] = 10.0
 
     return vertex_targets, vertex_weights
 
@@ -357,10 +351,8 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
-            if cfg.TRAIN.VERTEX_REG and k > 0 and len(index[0]) > 0:
-                start = 2 * k
-                end = start + 2
-                vertmap[index[0], index[1], :2] = vertex_target[index[0], index[1], start:end]
+            if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
+                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
         fig.add_subplot(224)
         if cfg.TRAIN.VERTEX_REG:
             plt.imshow(vertmap)

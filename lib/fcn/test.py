@@ -92,22 +92,6 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
-def _extract_vertmap(labels, vertex_pred, num_classes):
-
-    height = labels.shape[0]
-    width = labels.shape[1]
-    vertmap = np.zeros((height, width, 3), dtype=np.float32)
-
-    for i in xrange(1, num_classes):
-        index = np.where(labels == i)
-        if len(index[0]) > 0:
-            start = 3 * i
-            end = start + 3
-            vertmap[index[0], index[1], :2] = vertex_pred[0, index[0], index[1], start:end]
-
-    return vertmap
-
-
 def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     """segment image
     """
@@ -506,6 +490,45 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
 
+# compute the voting label image in 2D
+def _vote_centers(im_label, num_classes):
+    width = im_label.shape[1]
+    height = im_label.shape[0]
+    vertex_targets = np.zeros((height, width, 3), dtype=np.float32)
+
+    center = np.zeros((2, 1), dtype=np.float32)
+    for i in xrange(1, num_classes):
+        y, x = np.where(im_label == i)
+        if len(x) > 0:
+            center[0] = (x.max() + x.min()) / 2
+            center[1] = (y.max() + y.min()) / 2
+            R = np.tile(center, (1, len(x))) - np.vstack((x, y))
+            # compute the norm
+            N = np.linalg.norm(R, axis=0) + 1e-10
+            # normalization
+            R = np.divide(R, np.tile(N, (2,1)))
+            # assignment
+            vertex_targets[y, x, 0] = R[0,:]
+            vertex_targets[y, x, 1] = R[1,:]
+
+    return vertex_targets
+
+
+def _extract_vertmap(im_label, vertex_pred, num_classes):
+    height = im_label.shape[0]
+    width = im_label.shape[1]
+    vertmap = np.zeros((height, width, 3), dtype=np.float32)
+
+    for i in xrange(1, num_classes):
+        I = np.where(im_label == i)
+        if len(I[0]) > 0:
+            start = 3 * i
+            end = start + 3
+            vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
+
+    return vertmap
+
+
 ###################
 # test single frame
 ###################
@@ -635,7 +658,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
-                vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, meta_data['vertmap'], vertmap)
+                vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, cfg.TRAIN.VERTEX_W * meta_data['vertmap'], vertmap)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
