@@ -28,6 +28,8 @@ class lov(datasets.imdb):
 
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
+        self._extents = self._load_object_extents()
+
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -120,6 +122,18 @@ class lov(datasets.imdb):
         Return the default path where KITTI is expected to be installed.
         """
         return os.path.join(datasets.ROOT_DIR, 'data', 'LOV')
+
+
+    def _load_object_extents(self):
+
+        extent_file = os.path.join(self._lov_path, 'extents.txt')
+        assert os.path.exists(extent_file), \
+                'Path does not exist: {}'.format(extent_file)
+
+        extents = np.zeros((self.num_classes, 3), dtype=np.float32)
+        extents[1:, :] = np.loadtxt(extent_file)
+
+        return extents
 
 
     def compute_class_weights(self):

@@ -196,8 +196,9 @@ def _get_label_blob(roidb, voxelizer):
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
             vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes)
-            processed_vertex_targets.append(vertex_targets)
-            processed_vertex_weights.append(vertex_weights)
+            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+            processed_vertex_targets.append(np.concatenate((center_targets, vertex_targets), axis=2))
+            processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
 
         # depth
         if roidb[i]['flipped']:
@@ -252,8 +253,8 @@ def _get_label_blob(roidb, voxelizer):
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     if cfg.TRAIN.VERTEX_REG:
-        vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
-        vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
+        vertex_target_blob = np.zeros((num_images, height, width, 5 * num_classes), dtype=np.float32)
+        vertex_weight_blob = np.zeros((num_images, height, width, 5 * num_classes), dtype=np.float32)
     else:
         vertex_target_blob = []
         vertex_weight_blob = []
@@ -270,27 +271,30 @@ def _get_label_blob(roidb, voxelizer):
 
 
 # compute the voting label image in 2D
-def _vote_centers(im_label, num_classes):
+def _vote_centers(im_label, cls_indexes, center, num_classes):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 2), dtype=np.float32)
-    vertex_weights = np.ones(vertex_targets.shape, dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
+    vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
 
-    center = np.zeros((2, 1), dtype=np.float32)
+    c = np.zeros((2, 1), dtype=np.float32)
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
-            center[0] = (x.max() + x.min()) / 2
-            center[1] = (y.max() + y.min()) / 2
-            R = np.tile(center, (1, len(x))) - np.vstack((x, y))
+            ind = np.where(cls_indexes == i)[0] 
+            c[0] = center[ind, 0]
+            c[1] = center[ind, 1]
+            R = np.tile(c, (1, len(x))) - np.vstack((x, y))
             # compute the norm
             N = np.linalg.norm(R, axis=0) + 1e-10
             # normalization
             R = np.divide(R, np.tile(N, (2,1)))
             # assignment
-            vertex_targets[y, x, 0] = R[0,:]
-            vertex_targets[y, x, 1] = R[1,:]
-            vertex_weights[y, x, :] = 10.0
+            start = 2 * i
+            end = start + 2
+            vertex_targets[y, x, 2*i] = R[0,:]
+            vertex_targets[y, x, 2*i+1] = R[1,:]
+            vertex_weights[y, x, start:end] = 10.0
 
     return vertex_targets, vertex_weights
 
@@ -323,12 +327,12 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im += cfg.PIXEL_MEANS
         im = im[:, :, (2, 1, 0)]
         im = im.astype(np.uint8)
-        fig.add_subplot(221)
+        fig.add_subplot(231)
         plt.imshow(im)
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
-        fig.add_subplot(222)
+        fig.add_subplot(232)
         plt.imshow(abs(depth))
 
         # show normal image
@@ -336,7 +340,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im_normal += cfg.PIXEL_MEANS
         im_normal = im_normal[:, :, (2, 1, 0)]
         im_normal = im_normal.astype(np.uint8)
-        fig.add_subplot(223)
+        fig.add_subplot(233)
         plt.imshow(im_normal)
 
         # show label
@@ -348,14 +352,20 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         if cfg.TRAIN.VERTEX_REG:
             vertex_target = vertex_target_blob[i, :, :, :]
             vertmap = np.zeros((height, width, 3), dtype=np.float32)
+            center = np.zeros((height, width, 2), dtype=np.float32)
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
-        fig.add_subplot(224)
+                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 2*num_classes+3*k:2*num_classes+3*k+3]
+                center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
+        fig.add_subplot(234)
         if cfg.TRAIN.VERTEX_REG:
             plt.imshow(vertmap)
+            fig.add_subplot(235)
+            plt.imshow(center[:,:,0])
+            fig.add_subplot(236)
+            plt.imshow(center[:,:,1])
         else:
             plt.imshow(l)
 

@@ -63,7 +63,7 @@ class KinectFusion
   pangolin::GlTexture* label_texture() { return labelTex_; };
 
   void renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer, pangolin::GlBufferCudaPtr & colorBuffer);
-void renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer);
+  void renderModel(pangolin::GlBufferCudaPtr & vertBuffer, pangolin::GlBufferCudaPtr & normBuffer, pangolin::GlBufferCudaPtr & indexBuffer);
 
  private:
 

@@ -134,7 +134,15 @@ ext_modules = [
                                      '--compiler-options',
                                      "'-fPIC'"]},
         include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
-      )
+    ),
+    Extension(
+        "pose_estimation.ransac",                                # the extension name
+        sources=['pose_estimation/ransac.pyx'],
+        language='c++',
+        extra_objects=["pose_estimation/build/libransac.so"],
+        extra_compile_args={'gcc': ["-Wno-unused-function"]},
+        include_dirs = ['pose_estimation/include']
+    )
 ]
 
 setup(
