@@ -16,8 +16,8 @@ class vgg16_convs(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
         if vertex_reg:
-            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 5 * num_classes])
-            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 5 * num_classes])
+            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
+            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
 
         # define a queue
         if input_format == 'RGBD':
@@ -104,6 +104,7 @@ class vgg16_convs(Network):
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add_score')
+             .dropout(self.keep_prob_queue, name='dropout')
              .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
@@ -114,13 +115,14 @@ class vgg16_convs(Network):
 
         if self.vertex_reg:
             (self.feed('conv5_3')
-                 .conv(1, 1, 256, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
-                 .deconv(4, 4, 256, 2, 2, name='upscore_conv5_vertex', trainable=False))
+                 .conv(1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
+                 .deconv(4, 4, 128, 2, 2, name='upscore_conv5_vertex', trainable=False))
 
             (self.feed('conv4_3')
-                 .conv(1, 1, 256, 1, 1, name='score_conv4_vertex', relu=False, c_i=512))
+                 .conv(1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512))
             
             (self.feed('score_conv4_vertex', 'upscore_conv5_vertex')
                  .add(name='add_score_vertex')
-                 .deconv(int(16*self.scale), int(16*self.scale), 256, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
-                 .conv(1, 1, 5 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=256))
+                 .dropout(self.keep_prob_queue, name='dropout_vertex')
+                 .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
+                 .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))

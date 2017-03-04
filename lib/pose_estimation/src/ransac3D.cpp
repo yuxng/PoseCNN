@@ -239,8 +239,8 @@ void Ransac3D::getVertexs(float* vertmap, std::vector<jp::img_coord_t>& vertexs,
     for(int x = 0; x < width; x++)
     for(int y = 0; y < height; y++)
     {
-      int channel = 2 * num_classes + 3 * i;
-      int offset = channel + 5 * num_classes * (y * width + x);
+      int channel = 3 * i;
+      int offset = channel + 3 * num_classes * (y * width + x);
 
       jp::coord3_t obj;
       obj(0) = vertmap[offset];

@@ -481,20 +481,21 @@ def _extract_vertmap(im_label, vertex_pred, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
     vertmap = np.zeros((height, width, 3), dtype=np.float32)
-    centermap = np.zeros((height, width, 3), dtype=np.float32)
+    # centermap = np.zeros((height, width, 3), dtype=np.float32)
 
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
         if len(I[0]) > 0:
-            start = 2*num_classes + 3 * i
-            end = 2*num_classes + 3*i + 3
+            start = 3 * i
+            end = 3 * i + 3
             vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
 
-            start = 2 * i
-            end = 2 * i + 2
-            centermap[I[0], I[1], :2] = vertex_pred[0, I[0], I[1], start:end]
+            # start = 2 * i
+            # end = 2 * i + 2
+            # centermap[I[0], I[1], :2] = vertex_pred[0, I[0], I[1], start:end]
 
-    return vertmap, centermap  
+    return vertmap
+    #return vertmap, centermap  
 
 
 def scale_vertmap(vertmap):
@@ -509,25 +510,25 @@ def scale_vertmap(vertmap):
     return a * vertmap + b
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, poses, intrinsic_matrix, centers_gt, centermap):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, poses, intrinsic_matrix):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     fig = plt.figure()
 
     # show image
-    ax = fig.add_subplot(241)
+    ax = fig.add_subplot(231)
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
 
     # show gt class labels
-    ax = fig.add_subplot(242)
+    ax = fig.add_subplot(232)
     plt.imshow(im_labels_gt)
     ax.set_title('gt class labels')
 
     # show gt vertmap
-    ax = fig.add_subplot(243)
+    ax = fig.add_subplot(233)
     plt.imshow(scale_vertmap(vertmap_gt))
     ax.set_title('gt vertex map')
 
@@ -537,22 +538,22 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     # ax.set_title('input depth')
 
     # show vertex map
-    ax = fig.add_subplot(244)
-    plt.imshow(centers_gt)
-    ax.set_title('gt centers')
+    # ax = fig.add_subplot(244)
+    # plt.imshow(centers_gt)
+    # ax.set_title('gt centers')
 
     # show class label
-    ax = fig.add_subplot(246)
+    ax = fig.add_subplot(235)
     plt.imshow(im_labels)
     ax.set_title('class labels')
 
     # show vertex map
-    ax = fig.add_subplot(247)
+    ax = fig.add_subplot(236)
     plt.imshow(scale_vertmap(vertmap))
     ax.set_title('vertex map')
 
     # show projection of the poses
-    ax = fig.add_subplot(245, aspect='equal')
+    ax = fig.add_subplot(234, aspect='equal')
     plt.imshow(im)
     ax.invert_yaxis()
     num_classes = poses.shape[2]
@@ -584,9 +585,9 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     ax.set_ylim([im.shape[0], 0])
 
     # show gt vertmap
-    ax = fig.add_subplot(248)
-    plt.imshow(centermap)
-    ax.set_title('center map')
+    # ax = fig.add_subplot(248)
+    # plt.imshow(centermap)
+    # ax.set_title('center map')
 
     plt.show()
 
@@ -620,7 +621,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         KF = kfusion.PyKinectFusion(rig_filename)
 
     # pose estimation
-    if cfg.TEST.VERTEX_REG:
+    if cfg.TEST.VERTEX_REG and cfg.TEST.VISUALIZE:
         RANSAC = ransac.PyRansac3D()
 
     # construct colors
@@ -680,7 +681,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         _t['im_segment'].tic()
         labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         if cfg.TEST.VERTEX_REG:
-            vertmap, centermap = _extract_vertmap(labels, vertex_pred, imdb.num_classes)
+            vertmap = _extract_vertmap(labels, vertex_pred, imdb.num_classes)
             if cfg.TEST.VISUALIZE:
                 # pose estimation using RANSAC
                 fx = meta_data['intrinsic_matrix'][0, 0]
@@ -741,10 +742,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
-                centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
+                # centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
                 print 'visualization'
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    cfg.TRAIN.VERTEX_W * meta_data['vertmap'], vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'], centers_gt, centermap)
+                    cfg.TRAIN.VERTEX_W * meta_data['vertmap'], vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \

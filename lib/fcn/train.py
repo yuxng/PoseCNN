@@ -108,7 +108,7 @@ class SolverWrapper(object):
 
         tf.get_default_graph().finalize()
 
-        tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
+        # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 
         last_snapshot_iter = -1
         timer = Timer()
