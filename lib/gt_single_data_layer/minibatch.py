@@ -147,11 +147,17 @@ def _process_label_image(label_image, class_colors, class_weights):
             color = class_colors[i]
             ind = color[0] + 256*color[1] + 256*256*color[2]
             I = np.where(index == ind)
-            label_index[I[0], I[1], i] = class_weights[i]
+            if cfg.TRAIN.GAN:
+                label_index[I[0], I[1], i] = 1.0
+            else:
+                label_index[I[0], I[1], i] = class_weights[i]
     else:
         for i in xrange(len(class_colors)):
             I = np.where(label_image == i)
-            label_index[I[0], I[1], i] = class_weights[i]
+            if cfg.TRAIN.GAN:
+                label_index[I[0], I[1], i] = 1.0
+            else:
+                label_index[I[0], I[1], i] = class_weights[i]
     
     return label_index
 
