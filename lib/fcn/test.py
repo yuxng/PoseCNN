@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-from pose_estimation import ransac
+#from pose_estimation import ransac
 #from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
@@ -105,6 +105,10 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     width = im_depth.shape[1]
     label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
 
+    if cfg.TEST.GAN:
+        gan_label_true_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
+        gan_label_false_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
+
     # forward pass
     if cfg.INPUT == 'RGBD':
         data_blob = im_blob
@@ -117,9 +121,17 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
+        if cfg.TEST.GAN:
+            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
+                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob}
+        else:
+            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
-        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
+        if cfg.TEST.GAN:
+            feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
+                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob}
+        else:
+            feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
 
@@ -633,7 +645,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(0, num_images, 1000)
+        perm = xrange(0, num_images, 500)
     else:
         perm = xrange(num_images)
 
@@ -740,6 +752,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
         _t['misc'].toc()
 
+        print 'im_segment {}: {:d}/{:d} {:.3f}s {:.3f}s' \
+              .format(video_index, i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
+
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
                 # centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
@@ -748,8 +763,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
                     cfg.TRAIN.VERTEX_W * meta_data['vertmap'], vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
-        print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
-              .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
     seg_file = os.path.join(output_dir, 'segmentations.pkl')
     with open(seg_file, 'wb') as f:

@@ -26,7 +26,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_label_true_blob, gan_label_false_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -39,7 +39,9 @@ def get_minibatch(roidb, voxelizer):
              'data_depth': depth_blob,
              'data_meta_data': meta_data_blob,
              'data_vertex_targets': vertex_target_blob,
-             'data_vertex_weights': vertex_weight_blob}
+             'data_vertex_weights': vertex_weight_blob,
+             'data_gan_label_true': gan_label_true_blob,
+             'data_gan_label_false': gan_label_false_blob}
 
     return blobs
 
@@ -165,6 +167,9 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         processed_vertex_targets = []
         processed_vertex_weights = []
+    if cfg.TRAIN.GAN:
+        processed_gan_label_true = []
+        processed_gan_label_false = []
 
     for i in xrange(num_images):
         # load meta data
@@ -201,6 +206,11 @@ def _get_label_blob(roidb, voxelizer):
             # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
             # processed_vertex_targets.append(np.concatenate((center_targets, vertex_targets), axis=2))
             # processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
+
+        if cfg.TRAIN.GAN:
+            labels_true, labels_false = _get_gan_labels(im)
+            processed_gan_label_true.append(labels_true)
+            processed_gan_label_false.append(labels_false)
 
         # depth
         if roidb[i]['flipped']:
@@ -261,6 +271,13 @@ def _get_label_blob(roidb, voxelizer):
         vertex_target_blob = []
         vertex_weight_blob = []
 
+    if cfg.TRAIN.GAN:
+        gan_label_true_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
+        gan_label_false_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
+    else:
+        gan_label_true_blob = []
+        gan_label_false_blob = []
+
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
         label_blob[i,:,:,:] = processed_label[i]
@@ -268,8 +285,12 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.VERTEX_REG:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
+
+        if cfg.TRAIN.GAN:
+            gan_label_true_blob[i,:,:,:] = processed_gan_label_true[i]
+            gan_label_false_blob[i,:,:,:] = processed_gan_label_false[i]
     
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob
+    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_label_true_blob, gan_label_false_blob
 
 
 # compute the voting label image in 2D
@@ -316,6 +337,18 @@ def _get_vertex_regression_labels(im_label, vertmap, num_classes):
             vertex_weights[I[0], I[1], start:end] = 10.0
 
     return vertex_targets, vertex_weights
+
+
+def _get_gan_labels(im_label):
+    height = im_label.shape[0] / 32
+    width = im_label.shape[1] / 32
+    labels_true = np.zeros((height, width, 2), dtype=np.float32)
+    labels_false = np.zeros((height, width, 2), dtype=np.float32)
+    
+    labels_false[:, :, 0] = 1.0
+    labels_true[:, :, 1] = 1.0
+
+    return labels_true, labels_false
 
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):

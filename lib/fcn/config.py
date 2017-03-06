@@ -43,6 +43,7 @@ __C.TRAIN.TRAINABLE = True
 __C.TRAIN.VERTEX_REG = False
 __C.TRAIN.VERTEX_W = 10.0
 __C.TRAIN.VISUALIZE = False
+__C.TRAIN.GAN = False
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
@@ -88,6 +89,7 @@ __C.TEST = edict()
 __C.TEST.SINGLE_FRAME = False
 __C.TEST.VERTEX_REG = False
 __C.TEST.VISUALIZE = False
+__C.TEST.GAN = False
 
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)

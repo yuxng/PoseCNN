@@ -10,7 +10,7 @@
 """Train a Fully Convolutional Network (FCN) on image segmentation database."""
 
 import _init_paths
-from fcn.train import get_training_roidb, train_net
+from fcn.train import get_training_roidb, train_net, train_gan
 from fcn.config import cfg, cfg_from_file, get_output_dir
 from datasets.factory import get_imdb
 import argparse
@@ -91,6 +91,11 @@ if __name__ == '__main__':
     network = get_network(args.network_name)
     print 'Use network `{:s}` in training'.format(args.network_name)
 
-    train_net(network, imdb, roidb, output_dir,
+    if cfg.TRAIN.GAN:
+        train_gan(network, imdb, roidb, output_dir,
+              pretrained_model=pretrained_model,
+              max_iters=args.max_iters)
+    else:
+        train_net(network, imdb, roidb, output_dir,
               pretrained_model=pretrained_model,
               max_iters=args.max_iters)
