@@ -18,8 +18,8 @@ class vgg16_gan(Network):
         if vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
-        self.gan_label_true = tf.placeholder(tf.float32, shape=[None, None, None, 2])
-        self.gan_label_false = tf.placeholder(tf.float32, shape=[None, None, None, 2])
+        self.gan_label_true = tf.placeholder(tf.float32, shape=[None, 2])
+        self.gan_label_false = tf.placeholder(tf.float32, shape=[None, 2])
 
         # define a queue
         if input_format == 'RGBD':
@@ -138,47 +138,33 @@ class vgg16_gan(Network):
         # discriminator
         # image tower
         (self.feed('data')
-             .conv(3, 3, 64, 1, 1, name='conv1_d_image', c_i=3)
-             .max_pool(2, 2, 2, 2, name='pool1_d_image')
-             .conv(3, 3, 128, 1, 1, name='conv2_d_image', c_i=64)
-             .max_pool(2, 2, 2, 2, name='pool2_d_image')
-             .conv(3, 3, 256, 1, 1, name='conv3_d_image', c_i=128)
-             .max_pool(2, 2, 2, 2, name='pool3_d_image')
-             .conv(3, 3, 512, 1, 1, name='conv4_d_image', c_i=256)
-             .max_pool(2, 2, 2, 2, name='pool4_d_image')
-             .conv(3, 3, 512, 1, 1, name='conv5_d_image', c_i=512)
-             .max_pool(2, 2, 2, 2, name='pool5_d_image'))
+             .conv(3, 3, 16, 1, 1, name='conv1_d_image', c_i=3))
        
         outputs_d = []
         for i in range(2):
+            print i
             if i == 0:
                 reuse = None
-                self.layers['input_d'] = self.layers['prob_normalized']
+                self.layers['input_d'] = 255 * self.layers['prob_normalized']
             else:
                 reuse = True
-                self.layers['input_d'] = self.layers['gt_label_2d']
+                self.layers['input_d'] = 255 * self.layers['gt_label_2d']
  
             # label tower
             (self.feed('input_d')
-                 .conv(3, 3, 64, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes)
-                 .max_pool(2, 2, 2, 2, name='pool1_d_prob')
-                 .conv(3, 3, 128, 1, 1, name='conv2_d_prob', reuse=reuse, c_i=64)
-                 .max_pool(2, 2, 2, 2, name='pool2_d_prob')
-                 .conv(3, 3, 256, 1, 1, name='conv3_d_prob', reuse=reuse, c_i=128)
-                 .max_pool(2, 2, 2, 2, name='pool3_d_prob')
-                 .conv(3, 3, 512, 1, 1, name='conv4_d_prob', reuse=reuse, c_i=256)
-                 .max_pool(2, 2, 2, 2, name='pool4_d_prob')
-                 .conv(3, 3, 512, 1, 1, name='conv5_d_prob', reuse=reuse, c_i=512)
-                 .max_pool(2, 2, 2, 2, name='pool5_d_prob'))
+                 .conv(3, 3, 16, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes))
 
             # concatenation and classification
-            (self.feed('pool5_d_image', 'pool5_d_prob')
-                 .concat(3, name='pool5_d')
-                 .conv(1, 1, self.num_units, 1, 1, name='embed_d', reuse=reuse, c_i=1024)
-                 .conv(1, 1, 2, 1, 1, name='score_d', reuse=reuse, c_i=self.num_units)
-                 .log_softmax_high_dimension(2, name='prob_d'))
+            (self.feed('conv1_d_image', 'conv1_d_prob')
+                 .concat(3, name='conv1_d')
+                 .max_pool(2, 2, 2, 2, name='pool1_d_prob')
+                 .conv(3, 3, 32, 1, 1, reuse=reuse, name='conv2_d_prob', c_i=32)
+                 .max_pool(4, 4, 4, 4, name='pool2_d_prob')
+                 .conv(3, 3, 32, 1, 1, reuse=reuse, name='conv3_d_prob', c_i=32)
+                 .max_pool(4, 4, 4, 4, name='pool3_d_prob')
+                 .fc(2, relu=False, reuse=reuse, name='score_d', height=15, width=20, channel=32))
 
             # collect outputs
-            outputs_d.append(self.get_output('prob_d'))
+            outputs_d.append(self.get_output('score_d'))
 
         self.layers['outputs_d'] = outputs_d

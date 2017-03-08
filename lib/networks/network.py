@@ -76,6 +76,24 @@ class Network(object):
                         if not ignore_missing:
                             raise
 
+            with tf.variable_scope(op_name+'_d_image', reuse=True):
+                for param_name, data in data_dict[op_name].iteritems():
+                    try:
+                        var = tf.get_variable(param_name)
+                        session.run(var.assign(data))
+                    except ValueError:
+                        if not ignore_missing:
+                            raise
+
+            with tf.variable_scope(op_name+'_d_prob', reuse=True):
+                for param_name, data in data_dict[op_name].iteritems():
+                    try:
+                        var = tf.get_variable(param_name)
+                        session.run(var.assign(data))
+                    except ValueError:
+                        if not ignore_missing:
+                            raise
+
     def feed(self, *args):
         assert len(args)!=0
         self.inputs = []
@@ -155,7 +173,6 @@ class Network(object):
             if relu:
                 output = tf.nn.relu(output, name=scope.name)    
         return output
-
 
     @layer
     def conv3d(self, input, k_d, k_h, k_w, c_i, c_o, s_d, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, trainable=True):
@@ -245,6 +262,10 @@ class Network(object):
         return tf.nn.relu(input, name=name)
 
     @layer
+    def lrelu(self, input, name, leak=0.2):
+        return tf.maximum(input, leak * input)
+
+    @layer
     def max_pool(self, input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
         self.validate_padding(padding)
         return tf.nn.max_pool(input,
@@ -284,11 +305,15 @@ class Network(object):
         return tf.nn.l2_normalize(input, dim, name=name)
 
     @layer
-    def fc(self, input, num_out, name, reuse=None, relu=True, trainable=True):
+    def fc(self, input, num_out, name, height=-1, width=-1, channel=-1, reuse=None, relu=True, trainable=True):
         with tf.variable_scope(name, reuse=reuse) as scope:
             # only use the first input
             if isinstance(input, tuple):
                 input = input[0]
+
+            if height > 0 and width > 0 and channel > 0:
+                input_shape = tf.shape(input)
+                input = tf.reshape(input, [input_shape[0], height, width, channel])
 
             input_shape = input.get_shape()
             if input_shape.ndims == 4:
@@ -321,6 +346,13 @@ class Network(object):
         if isinstance(input, tuple):
             input = input[0]
         return tf.nn.softmax(input, name)
+
+    @layer
+    def log_softmax(self, input, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        return tf.nn.log_softmax(input, name=name)
 
     @layer
     def softmax_high_dimension(self, input, num_classes, name):
@@ -357,9 +389,9 @@ class Network(object):
         return tf.sub(d, tf.log(tf.tile(s, multiples)))
 
     @layer
-    def batch_normalization(self, input, name, scale_offset=True, relu=False, trainable=False):
+    def batch_normalization(self, input, name, scale_offset=True, relu=False, reuse=None, trainable=False):
         # NOTE: Currently, only inference is supported
-        with tf.variable_scope(name) as scope:
+        with tf.variable_scope(name, reuse=reuse) as scope:
             shape = [input.get_shape()[-1]]
             if scale_offset:
                 scale = self.make_var('scale', shape=shape, trainable=trainable)

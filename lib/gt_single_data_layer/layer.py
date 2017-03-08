@@ -22,19 +22,24 @@ class GtSingleDataLayer(object):
         self._num_classes = num_classes
         self._voxelizer = Voxelizer(cfg.TRAIN.GRID_SIZE, num_classes)
         self._shuffle_roidb_inds()
+        self._count = 0
 
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
         self._perm = np.random.permutation(np.arange(len(self._roidb)))
         self._cur = 0
+        self._count = 0
 
     def _get_next_minibatch_inds(self):
         """Return the roidb indices for the next minibatch."""
-        if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
+        if self._count % 2 == 0 and self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
             self._shuffle_roidb_inds()
 
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
-        self._cur += cfg.TRAIN.IMS_PER_BATCH
+        self._count += 1
+
+        if self._count % 2 == 0:
+            self._cur += cfg.TRAIN.IMS_PER_BATCH
 
         return db_inds
 
