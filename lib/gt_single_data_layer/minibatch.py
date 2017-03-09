@@ -173,6 +173,9 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         processed_vertex_targets = []
         processed_vertex_weights = []
+    if cfg.TRAIN.GAN:
+        processed_gan_label_true = []
+        processed_gan_label_false = []
 
     for i in xrange(num_images):
         # load meta data
@@ -209,6 +212,11 @@ def _get_label_blob(roidb, voxelizer):
             # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
             # processed_vertex_targets.append(np.concatenate((center_targets, vertex_targets), axis=2))
             # processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
+
+        if cfg.TRAIN.GAN:
+            labels_true, labels_false = _get_gan_labels(im)
+            processed_gan_label_true.append(labels_true)
+            processed_gan_label_false.append(labels_false)
 
         # depth
         if roidb[i]['flipped']:
@@ -270,11 +278,8 @@ def _get_label_blob(roidb, voxelizer):
         vertex_weight_blob = []
 
     if cfg.TRAIN.GAN:
-        gan_label_true_blob = np.zeros((num_images, 2), dtype=np.float32)
-        gan_label_false_blob = np.zeros((num_images, 2), dtype=np.float32)
-
-        gan_label_true_blob[:, 1] = 1.0
-        gan_label_false_blob[:, 0] = 1.0
+        gan_label_true_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
+        gan_label_false_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
     else:
         gan_label_true_blob = []
         gan_label_false_blob = []
@@ -286,6 +291,10 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.VERTEX_REG:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
+
+        if cfg.TRAIN.GAN:
+            gan_label_true_blob[i,:,:,:] = processed_gan_label_true[i]
+            gan_label_false_blob[i,:,:,:] = processed_gan_label_false[i]
     
     return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_label_true_blob, gan_label_false_blob
 

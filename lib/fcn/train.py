@@ -116,6 +116,8 @@ class SolverWrapper(object):
             loss_value_g, loss_value_cls, lr_g, _ = sess.run([loss_g, loss_cls, learning_rate_g, train_op_g])
             timer.toc()
             
+            #print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, lr_d: %.8f, time: %.2f' %\
+            #        (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, lr_d, timer.diff)
             print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, loss_g: %.4f, loss_cls: %.4f, lr_d: %.8f, lr_g: %.8f, time: %.2f' %\
                     (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, loss_value_g, loss_value_cls, lr_d, lr_g, timer.diff)
 
@@ -334,8 +336,8 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     gan_label_true = network.get_output('gan_label_true')
     gan_label_false = network.get_output('gan_label_false')
 
-    loss_true = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=scores_d_true, labels=gan_label_true))
-    loss_false = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=scores_d_false, labels=gan_label_false))
+    loss_true = loss_cross_entropy_single_frame(scores_d_true, gan_label_true)
+    loss_false = loss_cross_entropy_single_frame(scores_d_false, gan_label_false)
     loss_d = loss_true + loss_false
 
     # loss for the generator
@@ -343,8 +345,8 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     scores = network.get_output('prob')
     labels = network.get_output('gt_label_2d')
     loss_cls = loss_cross_entropy_single_frame(scores, labels)
-    loss_adversarial = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=scores_d_false, labels=gan_label_true))
-    loss_g = loss_cls + loss_adversarial
+    loss_adversarial = loss_cross_entropy_single_frame(scores_d_false, gan_label_true)
+    loss_g = 2 * loss_cls + loss_adversarial
 
     # optimizer
     starter_learning_rate = cfg.TRAIN.LEARNING_RATE

@@ -76,16 +76,7 @@ class Network(object):
                         if not ignore_missing:
                             raise
 
-            with tf.variable_scope(op_name+'_d_image', reuse=True):
-                for param_name, data in data_dict[op_name].iteritems():
-                    try:
-                        var = tf.get_variable(param_name)
-                        session.run(var.assign(data))
-                    except ValueError:
-                        if not ignore_missing:
-                            raise
-
-            with tf.variable_scope(op_name+'_d_prob', reuse=True):
+            with tf.variable_scope(op_name+'_d', reuse=True):
                 for param_name, data in data_dict[op_name].iteritems():
                     try:
                         var = tf.get_variable(param_name)

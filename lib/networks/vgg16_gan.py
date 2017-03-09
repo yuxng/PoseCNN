@@ -18,8 +18,8 @@ class vgg16_gan(Network):
         if vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
-        self.gan_label_true = tf.placeholder(tf.float32, shape=[None, 2])
-        self.gan_label_false = tf.placeholder(tf.float32, shape=[None, 2])
+        self.gan_label_true = tf.placeholder(tf.float32, shape=[None, None, None, 2])
+        self.gan_label_false = tf.placeholder(tf.float32, shape=[None, None, None, 2])
 
         # define a queue
         if input_format == 'RGBD':
@@ -138,7 +138,7 @@ class vgg16_gan(Network):
         # discriminator
         # image tower
         (self.feed('data')
-             .conv(3, 3, 16, 1, 1, name='conv1_d_image', c_i=3))
+             .conv(3, 3, 32, 1, 1, name='conv1_d_image', c_i=3))
        
         outputs_d = []
         for i in range(2):
@@ -152,19 +152,48 @@ class vgg16_gan(Network):
  
             # label tower
             (self.feed('input_d')
-                 .conv(3, 3, 16, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes))
+                 .conv(3, 3, 32, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes))
 
             # concatenation and classification
             (self.feed('conv1_d_image', 'conv1_d_prob')
                  .concat(3, name='conv1_d')
-                 .max_pool(2, 2, 2, 2, name='pool1_d_prob')
-                 .conv(3, 3, 32, 1, 1, reuse=reuse, name='conv2_d_prob', c_i=32)
-                 .max_pool(4, 4, 4, 4, name='pool2_d_prob')
-                 .conv(3, 3, 32, 1, 1, reuse=reuse, name='conv3_d_prob', c_i=32)
-                 .max_pool(4, 4, 4, 4, name='pool3_d_prob')
-                 .fc(2, relu=False, reuse=reuse, name='score_d', height=15, width=20, channel=32))
+                 .conv(3, 3, 64, 1, 1, name='conv1_2_d', relu=False, reuse=reuse, c_i=64)
+                 .lrelu(name='lrelu1_2')
+                 .max_pool(2, 2, 2, 2, name='pool1_d')
+                 .conv(3, 3, 128, 1, 1, name='conv2_1_d', relu=False, reuse=reuse, c_i=64)
+                 .lrelu(name='lrelu2_1')
+                 .conv(3, 3, 128, 1, 1, name='conv2_2_d', relu=False, reuse=reuse, c_i=128)
+                 .lrelu(name='lrelu2_2')
+                 .max_pool(2, 2, 2, 2, name='pool2_d')
+                 .conv(3, 3, 256, 1, 1, name='conv3_1_d', relu=False, reuse=reuse, c_i=128)
+                 .lrelu(name='lrelu3_1')
+                 .conv(3, 3, 256, 1, 1, name='conv3_2_d', relu=False, reuse=reuse, c_i=256)
+                 .lrelu(name='lrelu3_2')
+                 .conv(3, 3, 256, 1, 1, name='conv3_3_d', relu=False, reuse=reuse, c_i=256)
+                 .lrelu(name='lrelu3_3')
+                 .max_pool(2, 2, 2, 2, name='pool3_d')
+                 .conv(3, 3, 512, 1, 1, name='conv4_1_d', relu=False, reuse=reuse, c_i=256)
+                 .lrelu(name='lrelu4_1')
+                 .conv(3, 3, 512, 1, 1, name='conv4_2_d', relu=False, reuse=reuse, c_i=512)
+                 .lrelu(name='lrelu4_2')
+                 .conv(3, 3, 512, 1, 1, name='conv4_3_d', relu=False, reuse=reuse, c_i=512)
+                 .lrelu(name='lrelu4_3')
+                 .max_pool(2, 2, 2, 2, name='pool4_d')
+                 .conv(3, 3, 512, 1, 1, name='conv5_1_d', relu=False, reuse=reuse, c_i=512)
+                 .lrelu(name='lrelu5_1')
+                 .conv(3, 3, 512, 1, 1, name='conv5_2_d', relu=False, reuse=reuse, c_i=512)
+                 .lrelu(name='lrelu5_2')
+                 .conv(3, 3, 512, 1, 1, name='conv5_3_d', relu=False, reuse=reuse, c_i=512)
+                 .lrelu(name='lrelu5_3')
+                 .max_pool(2, 2, 2, 2, name='pool5_d')
+                 .conv(3, 3, self.num_units, 1, 1, relu=False, reuse=reuse, name='embed_d', c_i=512)
+                 .lrelu(name='lrelu_embed')
+                 .dropout(self.keep_prob_queue, name='dropout_d')
+                 .conv(1, 1, 2, 1, 1, name='score_d', relu=False, reuse=reuse, c_i=self.num_units)
+                 .lrelu(name='lrelu_score')
+                 .log_softmax_high_dimension(2, name='prob_d'))
 
             # collect outputs
-            outputs_d.append(self.get_output('score_d'))
+            outputs_d.append(self.get_output('prob_d'))
 
         self.layers['outputs_d'] = outputs_d
