@@ -380,7 +380,7 @@ class Network(object):
         return tf.sub(d, tf.log(tf.tile(s, multiples)))
 
     @layer
-    def batch_normalization(self, input, name, scale_offset=True, relu=False, reuse=None, trainable=False):
+    def batch_normalization(self, input, name, scale_offset=False, relu=False, reuse=None, trainable=True):
         # NOTE: Currently, only inference is supported
         with tf.variable_scope(name, reuse=reuse) as scope:
             shape = [input.get_shape()[-1]]
@@ -391,8 +391,8 @@ class Network(object):
                 scale, offset = (None, None)
             output = tf.nn.batch_normalization(
                 input,
-                mean=self.make_var('mean', shape=shape, trainable=trainable),
-                variance=self.make_var('variance', shape=shape, trainable=trainable),
+                mean=self.make_var('mean', shape=shape, initializer=tf.constant_initializer(0.0), trainable=trainable),
+                variance=self.make_var('variance', shape=shape, initializer=tf.constant_initializer(1.0), trainable=trainable),
                 offset=offset,
                 scale=scale,
                 # TODO: This is the default Caffe batch norm eps
