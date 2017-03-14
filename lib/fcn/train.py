@@ -346,7 +346,7 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     labels = network.get_output('gt_label_2d')
     loss_cls = loss_cross_entropy_single_frame(scores, labels)
     loss_adversarial = loss_cross_entropy_single_frame(scores_d_false, gan_label_true)
-    loss_g = loss_cls + loss_adversarial
+    loss_g = loss_cls + 0.2 * loss_adversarial
 
     # optimizer
     starter_learning_rate = cfg.TRAIN.LEARNING_RATE

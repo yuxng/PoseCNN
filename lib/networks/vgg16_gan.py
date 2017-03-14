@@ -25,7 +25,8 @@ class vgg16_gan(Network):
         if input_format == 'RGBD':
             if vertex_reg and trainable:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.gan_label_true, self.gan_label_false])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, \
+                                             self.gan_label_true, self.gan_label_false])
                 data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, \
                                     'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
@@ -39,7 +40,8 @@ class vgg16_gan(Network):
         else:
             if vertex_reg and trainable:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.gan_label_true, self.gan_label_false])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, \
+                                             self.gan_label_true, self.gan_label_false])
                 data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
                                     'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false})
@@ -56,36 +58,23 @@ class vgg16_gan(Network):
     def setup(self):
         # generator
         (self.feed('data')
-             .conv(3, 3, 64, 1, 1, name='conv1_1', relu=False, c_i=3)
-             .batch_normalization(name='bn1_1', relu=True)
-             .conv(3, 3, 64, 1, 1, name='conv1_2', relu=False, c_i=64)
-             .batch_normalization(name='bn1_2', relu=True)
+             .conv(3, 3, 64, 1, 1, name='conv1_1', c_i=3)
+             .conv(3, 3, 64, 1, 1, name='conv1_2', c_i=64)
              .max_pool(2, 2, 2, 2, name='pool1')
-             .conv(3, 3, 128, 1, 1, name='conv2_1', relu=False, c_i=64)
-             .batch_normalization(name='bn2_1', relu=True)
-             .conv(3, 3, 128, 1, 1, name='conv2_2', relu=False, c_i=128)
-             .batch_normalization(name='bn2_2', relu=True)
+             .conv(3, 3, 128, 1, 1, name='conv2_1', c_i=64)
+             .conv(3, 3, 128, 1, 1, name='conv2_2', c_i=128)
              .max_pool(2, 2, 2, 2, name='pool2')
-             .conv(3, 3, 256, 1, 1, name='conv3_1', relu=False, c_i=128)
-             .batch_normalization(name='bn3_1', relu=True)
-             .conv(3, 3, 256, 1, 1, name='conv3_2', relu=False, c_i=256)
-             .batch_normalization(name='bn3_2', relu=True)
-             .conv(3, 3, 256, 1, 1, name='conv3_3', relu=False, c_i=256)
-             .batch_normalization(name='bn3_3', relu=True)
+             .conv(3, 3, 256, 1, 1, name='conv3_1', c_i=128)
+             .conv(3, 3, 256, 1, 1, name='conv3_2', c_i=256)
+             .conv(3, 3, 256, 1, 1, name='conv3_3', c_i=256)
              .max_pool(2, 2, 2, 2, name='pool3')
-             .conv(3, 3, 512, 1, 1, name='conv4_1', relu=False, c_i=256)
-             .batch_normalization(name='bn4_1', relu=True)
-             .conv(3, 3, 512, 1, 1, name='conv4_2', relu=False, c_i=512)
-             .batch_normalization(name='bn4_2', relu=True)
-             .conv(3, 3, 512, 1, 1, name='conv4_3', relu=False, c_i=512)
-             .batch_normalization(name='bn4_3', relu=True)
+             .conv(3, 3, 512, 1, 1, name='conv4_1', c_i=256)
+             .conv(3, 3, 512, 1, 1, name='conv4_2', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv4_3', c_i=512)
              .max_pool(2, 2, 2, 2, name='pool4')
-             .conv(3, 3, 512, 1, 1, name='conv5_1', relu=False, c_i=512)
-             .batch_normalization(name='bn5_1', relu=True)
-             .conv(3, 3, 512, 1, 1, name='conv5_2', relu=False, c_i=512)
-             .batch_normalization(name='bn5_2', relu=True)
-             .conv(3, 3, 512, 1, 1, name='conv5_3', relu=False, c_i=512)
-             .batch_normalization(name='bn5_3', relu=True))
+             .conv(3, 3, 512, 1, 1, name='conv5_1', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv5_2', c_i=512)
+             .conv(3, 3, 512, 1, 1, name='conv5_3', c_i=512))
 
         if self.input_format == 'RGBD':
             (self.feed('data_p')
@@ -116,24 +105,21 @@ class vgg16_gan(Network):
                  .concat(3, name='concat_conv4')
                  .conv(1, 1, self.num_units, 1, 1, name='score_conv4', c_i=1024))
         else:
-            (self.feed('bn5_3')
-                 .conv(1, 1, self.num_units, 1, 1, name='score_conv5', relu=False,  c_i=512)
-                 .batch_normalization(name='bn5_score', relu=True)
+            (self.feed('conv5_3')
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512)
                  .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
 
-            (self.feed('bn4_3')
-                 .conv(1, 1, self.num_units, 1, 1, name='score_conv4', relu=False, c_i=512)
-                 .batch_normalization(name='bn4_score', relu=True))
+            (self.feed('conv4_3')
+                 .conv(1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512))
 
-        (self.feed('bn4_score', 'upscore_conv5')
+        (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add_score')
              .dropout(self.keep_prob_queue, name='dropout')
              .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
-             .conv(1, 1, self.num_classes, 1, 1, name='score', relu=False, c_i=self.num_units)
-             .batch_normalization(name='bn_score', relu=True)
+             .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
 
-        (self.feed('bn_score')
+        (self.feed('score')
              .softmax_high_dimension(self.num_classes, name='prob_normalized')
              .argmax_2d(name='label_2d'))
 
@@ -154,8 +140,7 @@ class vgg16_gan(Network):
         # discriminator
         # image tower
         (self.feed('data')
-             .conv(3, 3, 32, 1, 1, name='conv1_d_image', relu=False, c_i=3)
-             .batch_normalization(name='bn1_d_image', relu=True))
+             .conv(3, 3, 32, 1, 1, name='conv1_d_image', c_i=3))
        
         outputs_d = []
         for i in range(2):
@@ -169,46 +154,31 @@ class vgg16_gan(Network):
  
             # label tower
             (self.feed('input_d')
-                 .conv(3, 3, 32, 1, 1, name='conv1_d_prob', relu=False, reuse=reuse, c_i=self.num_classes)
-                 .batch_normalization(name='bn1_d_prob', relu=True, reuse=reuse))
+                 .conv(3, 3, 32, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes))
 
             # concatenation and classification
-            (self.feed('bn1_d_image', 'bn1_d_prob')
+            (self.feed('conv1_d_image', 'conv1_d_prob')
                  .concat(3, name='conv1_d')
-                 .conv(3, 3, 64, 1, 1, name='conv1_2_d', relu=False, reuse=reuse, c_i=64)
-                 .batch_normalization(name='bn1_2_d', relu=True, reuse=reuse)
+                 .conv(3, 3, 64, 1, 1, name='conv1_2_d', reuse=reuse, c_i=64)
                  .max_pool(2, 2, 2, 2, name='pool1_d')
-                 .conv(3, 3, 128, 1, 1, name='conv2_1_d', relu=False, reuse=reuse, c_i=64)
-                 .batch_normalization(name='bn2_1_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 128, 1, 1, name='conv2_2_d', relu=False, reuse=reuse, c_i=128)
-                 .batch_normalization(name='bn2_2_d', relu=True, reuse=reuse)
+                 .conv(3, 3, 128, 1, 1, name='conv2_1_d', reuse=reuse, c_i=64)
+                 .conv(3, 3, 128, 1, 1, name='conv2_2_d', reuse=reuse, c_i=128)
                  .max_pool(2, 2, 2, 2, name='pool2_d')
-                 .conv(3, 3, 256, 1, 1, name='conv3_1_d', relu=False, reuse=reuse, c_i=128)
-                 .batch_normalization(name='bn3_1_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 256, 1, 1, name='conv3_2_d', relu=False, reuse=reuse, c_i=256)
-                 .batch_normalization(name='bn3_2_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 256, 1, 1, name='conv3_3_d', relu=False, reuse=reuse, c_i=256)
-                 .batch_normalization(name='bn3_3_d', relu=True, reuse=reuse)
+                 .conv(3, 3, 256, 1, 1, name='conv3_1_d', reuse=reuse, c_i=128)
+                 .conv(3, 3, 256, 1, 1, name='conv3_2_d', reuse=reuse, c_i=256)
+                 .conv(3, 3, 256, 1, 1, name='conv3_3_d', reuse=reuse, c_i=256)
                  .max_pool(2, 2, 2, 2, name='pool3_d')
-                 .conv(3, 3, 512, 1, 1, name='conv4_1_d', relu=False, reuse=reuse, c_i=256)
-                 .batch_normalization(name='bn4_1_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 512, 1, 1, name='conv4_2_d', relu=False, reuse=reuse, c_i=512)
-                 .batch_normalization(name='bn4_2_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 512, 1, 1, name='conv4_3_d', relu=False, reuse=reuse, c_i=512)
-                 .batch_normalization(name='bn4_3_d', relu=True, reuse=reuse)
+                 .conv(3, 3, 512, 1, 1, name='conv4_1_d', reuse=reuse, c_i=256)
+                 .conv(3, 3, 512, 1, 1, name='conv4_2_d', reuse=reuse, c_i=512)
+                 .conv(3, 3, 512, 1, 1, name='conv4_3_d', reuse=reuse, c_i=512)
                  .max_pool(2, 2, 2, 2, name='pool4_d')
-                 .conv(3, 3, 512, 1, 1, name='conv5_1_d', relu=False, reuse=reuse, c_i=512)
-                 .batch_normalization(name='bn5_1_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 512, 1, 1, name='conv5_2_d', relu=False, reuse=reuse, c_i=512)
-                 .batch_normalization(name='bn5_2_d', relu=True, reuse=reuse)
-                 .conv(3, 3, 512, 1, 1, name='conv5_3_d', relu=False, reuse=reuse, c_i=512)
-                 .batch_normalization(name='bn5_3_d', relu=True, reuse=reuse)
-                 .dropout(self.keep_prob_queue, name='dropout_1_d')
-                 .max_pool(2, 2, 2, 2, name='pool5_d')
-                 .conv(3, 3, self.num_units, 1, 1, relu=False, reuse=reuse, name='embed_d', c_i=512)
-                 .batch_normalization(name='bn_embed_d', relu=True, reuse=reuse)
+                 .conv(3, 3, 512, 1, 1, name='conv5_1_d', reuse=reuse, c_i=512)
+                 .conv(3, 3, 512, 1, 1, name='conv5_2_d', reuse=reuse, c_i=512)
+                 .conv(3, 3, 512, 1, 1, name='conv5_3_d', reuse=reuse, c_i=512)
                  .dropout(self.keep_prob_queue, name='dropout_d')
-                 .conv(1, 1, 2, 1, 1, name='score_d', relu=True, reuse=reuse, c_i=self.num_units)
+                 .max_pool(2, 2, 2, 2, name='pool5_d')
+                 .conv(3, 3, self.num_units, 1, 1, reuse=reuse, name='embed_d', c_i=512)
+                 .conv(1, 1, 2, 1, 1, name='score_d', reuse=reuse, c_i=self.num_units)
                  .log_softmax_high_dimension(2, name='prob_d'))
 
             # collect outputs
