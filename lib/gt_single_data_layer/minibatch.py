@@ -26,7 +26,8 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_label_true_blob, gan_label_false_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
+        gan_label_true_blob, gan_label_false_blob, gan_label_color_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -41,7 +42,8 @@ def get_minibatch(roidb, voxelizer):
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
              'data_gan_label_true': gan_label_true_blob,
-             'data_gan_label_false': gan_label_false_blob}
+             'data_gan_label_false': gan_label_false_blob,
+             'data_gan_label_color': gan_label_color_blob}
 
     return blobs
 
@@ -176,6 +178,7 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.GAN:
         processed_gan_label_true = []
         processed_gan_label_false = []
+        processed_gan_label_color = []
 
     for i in xrange(num_images):
         # load meta data
@@ -214,9 +217,10 @@ def _get_label_blob(roidb, voxelizer):
             # processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
 
         if cfg.TRAIN.GAN:
-            labels_true, labels_false = _get_gan_labels(im)
+            labels_true, labels_false, labels_color = _get_gan_labels(im, roidb[i]['class_colors'], num_classes)
             processed_gan_label_true.append(labels_true)
             processed_gan_label_false.append(labels_false)
+            processed_gan_label_color.append(labels_color)
 
         # depth
         if roidb[i]['flipped']:
@@ -280,9 +284,11 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.GAN:
         gan_label_true_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
         gan_label_false_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
+        gan_label_color_blob = np.zeros((num_images, 3, height, width, num_classes), dtype=np.float32)
     else:
         gan_label_true_blob = []
         gan_label_false_blob = []
+        gan_label_color_blob = []
 
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
@@ -295,8 +301,10 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.GAN:
             gan_label_true_blob[i,:,:,:] = processed_gan_label_true[i]
             gan_label_false_blob[i,:,:,:] = processed_gan_label_false[i]
+            gan_label_color_blob[i,:,:,:,:] = processed_gan_label_color[i]
     
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_label_true_blob, gan_label_false_blob
+    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, \
+           gan_label_true_blob, gan_label_false_blob, gan_label_color_blob
 
 
 # compute the voting label image in 2D
@@ -345,16 +353,25 @@ def _get_vertex_regression_labels(im_label, vertmap, num_classes):
     return vertex_targets, vertex_weights
 
 
-def _get_gan_labels(im_label):
+def _get_gan_labels(im_label, class_colors, num_classes):
     height = im_label.shape[0] / 32
     width = im_label.shape[1] / 32
     labels_true = np.zeros((height, width, 2), dtype=np.float32)
     labels_false = np.zeros((height, width, 2), dtype=np.float32)
-    
     labels_false[:, :, 0] = 1.0
     labels_true[:, :, 1] = 1.0
 
-    return labels_true, labels_false
+    # prepare color tensors
+    height = im_label.shape[0]
+    width = im_label.shape[1]
+    labels_color = np.zeros((3, height, width, num_classes), dtype=np.float32)
+
+    for i in xrange(num_classes):
+        labels_color[0, :, :, i] = class_colors[i][0]
+        labels_color[1, :, :, i] = class_colors[i][1]
+        labels_color[2, :, :, i] = class_colors[i][2]
+
+    return labels_true, labels_false, labels_color
 
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):

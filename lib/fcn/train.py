@@ -208,18 +208,22 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
                 if cfg.TRAIN.VERTEX_REG:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false']}
+                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                               net.gan_label_color: blobs['data_gan_label_color']}
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false']}
+                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                               net.gan_label_color: blobs['data_gan_label_color']}
             else:
                 if cfg.TRAIN.VERTEX_REG:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false']}
+                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                               net.gan_label_color: blobs['data_gan_label_color']}
                 else:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false']}
+                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                               net.gan_label_color: blobs['data_gan_label_color']}
         else:
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
@@ -346,7 +350,7 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     labels = network.get_output('gt_label_2d')
     loss_cls = loss_cross_entropy_single_frame(scores, labels)
     loss_adversarial = loss_cross_entropy_single_frame(scores_d_false, gan_label_true)
-    loss_g = loss_cls + 0.2 * loss_adversarial
+    loss_g = loss_cls + loss_adversarial
 
     # optimizer
     starter_learning_rate = cfg.TRAIN.LEARNING_RATE

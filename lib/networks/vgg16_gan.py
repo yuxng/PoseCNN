@@ -20,37 +20,43 @@ class vgg16_gan(Network):
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
         self.gan_label_true = tf.placeholder(tf.float32, shape=[None, None, None, 2])
         self.gan_label_false = tf.placeholder(tf.float32, shape=[None, None, None, 2])
+        self.gan_label_color = tf.placeholder(tf.float32, shape=[None, 3, None, None, num_classes])
 
         # define a queue
         if input_format == 'RGBD':
             if vertex_reg and trainable:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, \
-                                             self.gan_label_true, self.gan_label_false])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false = q.dequeue()
+                                             self.gan_label_true, self.gan_label_false, self.gan_label_color])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false, gan_label_color = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, \
                                     'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
-                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false})
+                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false, \
+                                    'gan_label_color': gan_label_color})
             else:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.gan_label_true, self.gan_label_false])
-                data, data_p, gt_label_2d, self.keep_prob_queue, gan_label_true, gan_label_false = q.dequeue()
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.gan_label_true, self.gan_label_false, \
+                                             self.gan_label_color])
+                data, data_p, gt_label_2d, self.keep_prob_queue, gan_label_true, gan_label_false, gan_label_color = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, \
-                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false})
+                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false, \
+                                    'gan_label_color': gan_label_color})
         else:
             if vertex_reg and trainable:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, \
-                                             self.gan_label_true, self.gan_label_false])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false = q.dequeue()
+                                             self.gan_label_true, self.gan_label_false, self.gan_label_color])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gan_label_true, gan_label_false, gan_label_color = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
-                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false})
+                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false, \
+                                    'gan_label_color': gan_label_color})
             else:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.gan_label_true, self.gan_label_false])
-                data, gt_label_2d, self.keep_prob_queue, gan_label_true, gan_label_false = q.dequeue()
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.gan_label_true, self.gan_label_false, self.gan_label_color])
+                data, gt_label_2d, self.keep_prob_queue, gan_label_true, gan_label_false, gan_label_color = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, \
-                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false})
+                                    'gan_label_true': gan_label_true, 'gan_label_false': gan_label_false, \
+                                    'gan_label_color': gan_label_color})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
         self.trainable = trainable
         self.setup()
@@ -138,27 +144,34 @@ class vgg16_gan(Network):
                  .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
         # discriminator
-        # image tower
-        (self.feed('data')
-             .conv(3, 3, 32, 1, 1, name='conv1_d_image', c_i=3))
-       
         outputs_d = []
         for i in range(2):
             print i
             if i == 0:
                 reuse = None
-                self.layers['input_d'] = 255 * self.layers['prob_normalized']
+                self.layers['input_d'] = self.layers['prob_normalized']
             else:
                 reuse = True
-                self.layers['input_d'] = 255 * self.layers['gt_label_2d']
- 
-            # label tower
-            (self.feed('input_d')
-                 .conv(3, 3, 32, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=self.num_classes))
+                self.layers['input_d'] = self.layers['gt_label_2d']
 
-            # concatenation and classification
-            (self.feed('conv1_d_image', 'conv1_d_prob')
-                 .concat(3, name='conv1_d')
+            input_color = tf.unpack(self.layers['gan_label_color'], num=3, axis=1)
+            self.layers['gan_label_r'] = input_color[0]
+            self.layers['gan_label_g'] = input_color[1]
+            self.layers['gan_label_b'] = input_color[2]
+
+            (self.feed('input_d', 'gan_label_r')
+                 .multiply_sum(name='input_r_d'))
+
+            (self.feed('input_d', 'gan_label_g')
+                 .multiply_sum(name='input_g_d'))
+
+            (self.feed('input_d', 'gan_label_b')
+                 .multiply_sum(name='input_b_d'))
+
+            # label tower
+            (self.feed('input_r_d', 'input_g_d', 'input_b_d', 'data')
+                 .concat(3, name='image_d')
+                 .conv(3, 3, 64, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=6)
                  .conv(3, 3, 64, 1, 1, name='conv1_2_d', reuse=reuse, c_i=64)
                  .max_pool(2, 2, 2, 2, name='pool1_d')
                  .conv(3, 3, 128, 1, 1, name='conv2_1_d', reuse=reuse, c_i=64)
@@ -173,9 +186,11 @@ class vgg16_gan(Network):
                  .conv(3, 3, 512, 1, 1, name='conv4_3_d', reuse=reuse, c_i=512)
                  .max_pool(2, 2, 2, 2, name='pool4_d')
                  .conv(3, 3, 512, 1, 1, name='conv5_1_d', reuse=reuse, c_i=512)
+                 .dropout(self.keep_prob_queue, name='dropout_conv5_1_d')
                  .conv(3, 3, 512, 1, 1, name='conv5_2_d', reuse=reuse, c_i=512)
+                 .dropout(self.keep_prob_queue, name='dropout_conv5_2_d')
                  .conv(3, 3, 512, 1, 1, name='conv5_3_d', reuse=reuse, c_i=512)
-                 .dropout(self.keep_prob_queue, name='dropout_d')
+                 .dropout(self.keep_prob_queue, name='dropout_conv5_3_d')
                  .max_pool(2, 2, 2, 2, name='pool5_d')
                  .conv(3, 3, self.num_units, 1, 1, reuse=reuse, name='embed_d', c_i=512)
                  .conv(1, 1, 2, 1, 1, name='score_d', reuse=reuse, c_i=self.num_units)
