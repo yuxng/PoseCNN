@@ -108,6 +108,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     if cfg.TEST.GAN:
         gan_label_true_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
         gan_label_false_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
+        gan_label_color_blob = np.zeros((num_classes, 3), dtype=np.float32)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
@@ -123,13 +124,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     if cfg.INPUT == 'RGBD':
         if cfg.TEST.GAN:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
-                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob}
+                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob, net.gan_label_color: gan_label_color_blob}
         else:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
         if cfg.TEST.GAN:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
-                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob}
+                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob, net.gan_label_color: gan_label_color_blob}
         else:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 

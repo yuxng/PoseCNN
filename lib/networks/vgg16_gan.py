@@ -20,7 +20,7 @@ class vgg16_gan(Network):
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
         self.gan_label_true = tf.placeholder(tf.float32, shape=[None, None, None, 2])
         self.gan_label_false = tf.placeholder(tf.float32, shape=[None, None, None, 2])
-        self.gan_label_color = tf.placeholder(tf.float32, shape=[None, 3, None, None, num_classes])
+        self.gan_label_color = tf.placeholder(tf.float32, shape=[num_classes, 3])
 
         # define a queue
         if input_format == 'RGBD':
@@ -154,24 +154,13 @@ class vgg16_gan(Network):
                 reuse = True
                 self.layers['input_d'] = self.layers['gt_label_2d']
 
-            input_color = tf.unpack(self.layers['gan_label_color'], num=3, axis=1)
-            self.layers['gan_label_r'] = input_color[0]
-            self.layers['gan_label_g'] = input_color[1]
-            self.layers['gan_label_b'] = input_color[2]
-
-            (self.feed('input_d', 'gan_label_r')
-                 .multiply_sum(name='input_r_d'))
-
-            (self.feed('input_d', 'gan_label_g')
-                 .multiply_sum(name='input_g_d'))
-
-            (self.feed('input_d', 'gan_label_b')
-                 .multiply_sum(name='input_b_d'))
+            (self.feed('input_d', 'gan_label_color')
+                 .multiply_sum(self.num_classes, name='input_color_d'))
 
             # label tower
-            (self.feed('input_r_d', 'input_g_d', 'input_b_d', 'data')
+            (self.feed('input_color_d', 'data')
                  .concat(3, name='image_d')
-                 .conv(3, 3, 64, 1, 1, name='conv1_d_prob', reuse=reuse, c_i=6)
+                 .conv(3, 3, 64, 1, 1, name='conv1_1_d', reuse=reuse, c_i=6)
                  .conv(3, 3, 64, 1, 1, name='conv1_2_d', reuse=reuse, c_i=64)
                  .max_pool(2, 2, 2, 2, name='pool1_d')
                  .conv(3, 3, 128, 1, 1, name='conv2_1_d', reuse=reuse, c_i=64)

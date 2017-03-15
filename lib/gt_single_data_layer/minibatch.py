@@ -284,7 +284,7 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.GAN:
         gan_label_true_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
         gan_label_false_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
-        gan_label_color_blob = np.zeros((num_images, 3, height, width, num_classes), dtype=np.float32)
+        gan_label_color_blob = processed_gan_label_color[0]
     else:
         gan_label_true_blob = []
         gan_label_false_blob = []
@@ -301,7 +301,6 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.GAN:
             gan_label_true_blob[i,:,:,:] = processed_gan_label_true[i]
             gan_label_false_blob[i,:,:,:] = processed_gan_label_false[i]
-            gan_label_color_blob[i,:,:,:,:] = processed_gan_label_color[i]
     
     return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, \
            gan_label_true_blob, gan_label_false_blob, gan_label_color_blob
@@ -364,12 +363,12 @@ def _get_gan_labels(im_label, class_colors, num_classes):
     # prepare color tensors
     height = im_label.shape[0]
     width = im_label.shape[1]
-    labels_color = np.zeros((3, height, width, num_classes), dtype=np.float32)
+    labels_color = np.zeros((num_classes, 3), dtype=np.float32)
 
     for i in xrange(num_classes):
-        labels_color[0, :, :, i] = class_colors[i][0]
-        labels_color[1, :, :, i] = class_colors[i][1]
-        labels_color[2, :, :, i] = class_colors[i][2]
+        labels_color[i, 0] = class_colors[i][0] - cfg.PIXEL_MEANS[0, 0, 2]
+        labels_color[i, 1] = class_colors[i][1] - cfg.PIXEL_MEANS[0, 0, 1]
+        labels_color[i, 2] = class_colors[i][2] - cfg.PIXEL_MEANS[0, 0, 0]
 
     return labels_true, labels_false, labels_color
 

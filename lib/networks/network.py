@@ -292,8 +292,11 @@ class Network(object):
         return tf.add_n(inputs, name=name)
 
     @layer
-    def multiply_sum(self, inputs, name):
-        return tf.reduce_sum(tf.multiply(inputs[0], inputs[1]), axis=3, keep_dims=True)
+    def multiply_sum(self, inputs, num_classes, name):
+        prob = tf.reshape(inputs[0], [-1, num_classes])
+        image = tf.matmul(prob, inputs[1])
+        input_shape = tf.shape(inputs[0])
+        return tf.reshape(image, [input_shape[0], input_shape[1], input_shape[2], 3])
 
     @layer
     def l2_normalize(self, input, dim, name):
