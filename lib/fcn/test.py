@@ -22,7 +22,7 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-#from pose_estimation import ransac
+from pose_estimation import ransac
 #from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
@@ -705,11 +705,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
                 poses = RANSAC.estimate_pose(im_depth, probs, vertex_pred[0,:,:,:] / cfg.TRAIN.VERTEX_W, imdb._extents, fx, fy, px, py, depth_factor)
 
                 # print gt poses
-                cls_indexes = meta_data['cls_indexes']
-                poses_gt = meta_data['poses']
-                for j in xrange(len(cls_indexes)):
-                    print 'object {}'.format(cls_indexes[j])
-                    print poses_gt[:,:,j]
+                # cls_indexes = meta_data['cls_indexes']
+                # poses_gt = meta_data['poses']
+                # for j in xrange(len(cls_indexes)):
+                #    print 'object {}'.format(cls_indexes[j])
+                #    print poses_gt[:,:,j]
 
         _t['im_segment'].toc()
 

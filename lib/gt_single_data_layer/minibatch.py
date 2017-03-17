@@ -82,7 +82,8 @@ def _get_image_blob(roidb, scale_ind):
 
         # chromatic transform
         if cfg.TRAIN.CHROMATIC:
-            im = chromatic_transform(im)
+            label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+            im = chromatic_transform(im, label)
 
         # mask the color image according to depth
         if cfg.EXP_DIR == 'rgbd_scene':
@@ -141,6 +142,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     width = label_image.shape[1]
     num_classes = len(class_colors)
     label_index = np.zeros((height, width, num_classes), dtype=np.float32)
+    labels = np.zeros((height, width), dtype=np.float32)
 
     if len(label_image.shape) == 3:
         # label image is in BGR order
@@ -153,6 +155,7 @@ def _process_label_image(label_image, class_colors, class_weights):
                 label_index[I[0], I[1], i] = 1.0
             else:
                 label_index[I[0], I[1], i] = class_weights[i]
+            labels[I[0], I[1]] = i
     else:
         for i in xrange(len(class_colors)):
             I = np.where(label_image == i)
@@ -160,8 +163,9 @@ def _process_label_image(label_image, class_colors, class_weights):
                 label_index[I[0], I[1], i] = 1.0
             else:
                 label_index[I[0], I[1], i] = class_weights[i]
+            labels[I[0], I[1]] = i
     
-    return label_index
+    return label_index, labels
 
 
 def _get_label_blob(roidb, voxelizer):
@@ -201,7 +205,7 @@ def _get_label_blob(roidb, voxelizer):
                 im = im[:, ::-1]
             else:
                 im = im[:, ::-1, :]
-        im_cls = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
+        im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # vertex regression targets and weights
@@ -209,7 +213,7 @@ def _get_label_blob(roidb, voxelizer):
             vertmap = meta_data['vertmap']
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
-            vertex_targets, vertex_weights = _get_vertex_regression_labels(im, vertmap, num_classes)
+            vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, num_classes)
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
             # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
@@ -414,7 +418,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
+                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3] / cfg.TRAIN.VERTEX_W
                 # center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
         fig.add_subplot(224)
         if cfg.TRAIN.VERTEX_REG:

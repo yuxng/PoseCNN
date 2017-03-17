@@ -71,7 +71,7 @@ def unpad_im(im, factor):
         return im[0:height-pad_height, 0:width-pad_width]
 
 
-def chromatic_transform(im, d_h=None, d_s=None, d_l=None):
+def chromatic_transform(im, label=None, d_h=None, d_s=None, d_l=None):
     """
     Given an image array, add the hue, saturation and luminosity to the image
     """
@@ -92,4 +92,8 @@ def chromatic_transform(im, d_h=None, d_s=None, d_l=None):
     # Convert the HLS to BGR
     new_hls = cv2.merge((new_h, new_l, new_s)).astype('uint8')
     new_im = cv2.cvtColor(new_hls, cv2.COLOR_HLS2BGR)
+
+    if label is not None:
+        I = np.where(label > 0)
+        new_im[I[0], I[1], :] = im[I[0], I[1], :]
     return new_im

@@ -206,24 +206,41 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
                 if cfg.TRAIN.VERTEX_REG:
-                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                               net.gan_label_color: blobs['data_gan_label_color']}
+                    if cfg.TRAIN.GAN:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
+                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                                   net.gan_label_color: blobs['data_gan_label_color']}
+                    else:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+
                 else:
-                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                               net.gan_label_color: blobs['data_gan_label_color']}
+                    if cfg.TRAIN.GAN:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                                   net.gan_label_color: blobs['data_gan_label_color']}
+                    else:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+
             else:
                 if cfg.TRAIN.VERTEX_REG:
-                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                               net.gan_label_color: blobs['data_gan_label_color']}
+                    if cfg.TRAIN.GAN:
+                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
+                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                                   net.gan_label_color: blobs['data_gan_label_color']}
+                    else:
+                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+
                 else:
-                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                               net.gan_label_color: blobs['data_gan_label_color']}
+                    if cfg.TRAIN.GAN:
+                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
+                                   net.gan_label_color: blobs['data_gan_label_color']}
+                    else:
+                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
