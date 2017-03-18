@@ -490,7 +490,7 @@ def _vote_centers(im_label, cls_indexes, centers, num_classes):
 
 
 # extract vertmap for vertex predication
-def _extract_vertmap(im_label, vertex_pred, num_classes):
+def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
     vertmap = np.zeros((height, width, 3), dtype=np.float32)
@@ -507,7 +507,7 @@ def _extract_vertmap(im_label, vertex_pred, num_classes):
             # end = 2 * i + 2
             # centermap[I[0], I[1], :2] = vertex_pred[0, I[0], I[1], start:end]
 
-    return vertmap
+    return _unscale_vertmap(vertmap, im_label, extents, num_classes)
     #return vertmap, centermap  
 
 
@@ -521,6 +521,18 @@ def scale_vertmap(vertmap):
         a = 0
         b = 0
     return a * vertmap + b
+
+
+def _unscale_vertmap(vertmap, labels, extents, num_classes):
+    for k in range(1, num_classes):
+        index = np.where(labels == k)
+        for i in range(3):
+            vmin = -extents[k, i] / 2
+            vmax = extents[k, i] / 2
+            a = 1.0 / (vmax - vmin)
+            b = -1.0 * vmin / (vmax - vmin)
+            vertmap[index[0], index[1], i] = (vertmap[index[0], index[1], i] - b) / a
+    return vertmap
 
 
 def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, poses, intrinsic_matrix):
@@ -646,7 +658,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(0, num_images, 500)
+        perm = xrange(0, num_images, 50)
     else:
         perm = xrange(num_images)
 
@@ -694,7 +706,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         _t['im_segment'].tic()
         labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         if cfg.TEST.VERTEX_REG:
-            vertmap = _extract_vertmap(labels, vertex_pred, imdb.num_classes)
+            vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
             if cfg.TEST.VISUALIZE:
                 # pose estimation using RANSAC
                 fx = meta_data['intrinsic_matrix'][0, 0]

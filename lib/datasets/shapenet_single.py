@@ -179,6 +179,7 @@ class shapenet_single(datasets.imdb):
                 'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
+                'class_extents': self._extents,
                 'flipped': False}
 
     def _process_label_image(self, label_image):

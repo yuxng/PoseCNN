@@ -213,7 +213,7 @@ def _get_label_blob(roidb, voxelizer):
             vertmap = meta_data['vertmap']
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
-            vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, num_classes)
+            vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, roidb[i]['class_extents'], num_classes)
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
             # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
@@ -339,7 +339,20 @@ def _vote_centers(im_label, cls_indexes, center, num_classes):
     return vertex_targets, vertex_weights
 
 
-def _get_vertex_regression_labels(im_label, vertmap, num_classes):
+def _scale_vertmap(vertmap, index, extents):
+    for i in range(3):
+        vmin = -extents[i] / 2
+        vmax = extents[i] / 2
+        if vmax - vmin > 0:
+            a = 1.0 / (vmax - vmin)
+            b = -1.0 * vmin / (vmax - vmin)
+        else:
+            a = 0
+            b = 0
+        vertmap[index[0], index[1], i] = a * vertmap[index[0], index[1], i] + b
+    return vertmap[index[0], index[1], :]
+
+def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
     vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
@@ -350,7 +363,7 @@ def _get_vertex_regression_labels(im_label, vertmap, num_classes):
         if len(I[0]) > 0:
             start = 3 * i
             end = start + 3
-            vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * vertmap[I[0], I[1], :]
+            vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * _scale_vertmap(vertmap, I, extents[i, :])
             vertex_weights[I[0], I[1], start:end] = 10.0
 
     return vertex_targets, vertex_weights
