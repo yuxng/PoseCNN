@@ -149,18 +149,15 @@ class vgg16_gan(Network):
             print i
             if i == 0:
                 reuse = None
-                self.layers['input_d'] = self.layers['prob_normalized']
+                self.layers['input_d'] = 255 * self.layers['vertex_pred']
             else:
                 reuse = True
-                self.layers['input_d'] = self.layers['gt_label_2d']
-
-            (self.feed('input_d', 'gan_label_color')
-                 .multiply_sum(self.num_classes, name='input_color_d'))
+                self.layers['input_d'] = 255 * self.layers['vertex_targets']
 
             # label tower
-            (self.feed('input_color_d', 'data')
+            (self.feed('input_d', 'data')
                  .concat(3, name='image_d')
-                 .conv(3, 3, 64, 1, 1, name='conv1_1_d', reuse=reuse, c_i=6)
+                 .conv(3, 3, 64, 1, 1, name='conv1_1_d', reuse=reuse, c_i=3*self.num_classes+3)
                  .conv(3, 3, 64, 1, 1, name='conv1_2_d', reuse=reuse, c_i=64)
                  .max_pool(2, 2, 2, 2, name='pool1_d')
                  .conv(3, 3, 128, 1, 1, name='conv2_1_d', reuse=reuse, c_i=64)

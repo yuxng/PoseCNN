@@ -23,17 +23,21 @@ def get_minibatch(roidb, voxelizer):
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
+    im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
-        gan_label_true_blob, gan_label_false_blob, gan_label_color_blob = _get_label_blob(roidb, voxelizer)
+        vertex_image_blob, gan_z_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
+        if cfg.TRAIN.GAN:
+            _vis_minibatch_gan(im_rescale_blob, depth_blob, label_blob, vertex_image_blob)
+        else:
+            _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
 
     blobs = {'data_image_color': im_blob,
+             'data_image_color_rescale': im_rescale_blob,
              'data_image_depth': im_depth_blob,
              'data_image_normal': im_normal_blob,
              'data_label': label_blob,
@@ -41,9 +45,8 @@ def get_minibatch(roidb, voxelizer):
              'data_meta_data': meta_data_blob,
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
-             'data_gan_label_true': gan_label_true_blob,
-             'data_gan_label_false': gan_label_false_blob,
-             'data_gan_label_color': gan_label_color_blob}
+             'data_vertex_images': vertex_image_blob,
+             'data_gan_z': gan_z_blob}
 
     return blobs
 
@@ -56,6 +59,9 @@ def _get_image_blob(roidb, scale_ind):
     processed_ims_depth = []
     processed_ims_normal = []
     im_scales = []
+    if cfg.TRAIN.GAN:
+        processed_ims_rescale = []
+
     for i in xrange(num_images):
         # meta data
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
@@ -76,7 +82,7 @@ def _get_image_blob(roidb, scale_ind):
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = 255
+            im[I[0], I[1], :] = 0
         else:
             im = rgba
 
@@ -92,6 +98,12 @@ def _get_image_blob(roidb, scale_ind):
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
+
+        if cfg.TRAIN.GAN:
+            im_orig = im.astype(np.float32, copy=True) / 127.5 - 1
+            im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
+            im_rescale = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            processed_ims_rescale.append(im_rescale)
 
         im_orig = im.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
@@ -130,8 +142,12 @@ def _get_image_blob(roidb, scale_ind):
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
     blob_normal = im_list_to_blob(processed_ims_normal, 3)
+    if cfg.TRAIN.GAN:
+        blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
+    else:
+        blob_rescale = []
 
-    return blob, blob_depth, blob_normal, im_scales
+    return blob, blob_rescale, blob_depth, blob_normal, im_scales
 
 
 def _process_label_image(label_image, class_colors, class_weights):
@@ -179,10 +195,7 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         processed_vertex_targets = []
         processed_vertex_weights = []
-    if cfg.TRAIN.GAN:
-        processed_gan_label_true = []
-        processed_gan_label_false = []
-        processed_gan_label_color = []
+        processed_vertex_images = []
 
     for i in xrange(num_images):
         # load meta data
@@ -210,21 +223,18 @@ def _get_label_blob(roidb, voxelizer):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            vertmap = meta_data['vertmap']
+            # read vertmap image
+            vertmap = pad_im(cv2.imread(roidb[i]['vertmap'], cv2.IMREAD_UNCHANGED), 16)
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
+            vertmap = vertmap.astype(np.float32) / 127.5 - 1
             vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, roidb[i]['class_extents'], num_classes)
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
+            processed_vertex_images.append(vertmap)
             # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
             # processed_vertex_targets.append(np.concatenate((center_targets, vertex_targets), axis=2))
             # processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
-
-        if cfg.TRAIN.GAN:
-            labels_true, labels_false, labels_color = _get_gan_labels(im, roidb[i]['class_colors'], num_classes)
-            processed_gan_label_true.append(labels_true)
-            processed_gan_label_false.append(labels_false)
-            processed_gan_label_color.append(labels_color)
 
         # depth
         if roidb[i]['flipped']:
@@ -281,18 +291,16 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
         vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
+        vertex_image_blob = np.zeros((num_images, height, width, 3), dtype=np.float32)
     else:
         vertex_target_blob = []
         vertex_weight_blob = []
+        vertex_image_blob = []
 
     if cfg.TRAIN.GAN:
-        gan_label_true_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
-        gan_label_false_blob = np.zeros((num_images, height / 32, width / 32, 2), dtype=np.float32)
-        gan_label_color_blob = processed_gan_label_color[0]
+        gan_z_blob = np.random.uniform(-1, 1, [num_images, 100]).astype(np.float32)
     else:
-        gan_label_true_blob = []
-        gan_label_false_blob = []
-        gan_label_color_blob = []
+        gan_z_blob = []
 
     for i in xrange(num_images):
         depth_blob[i,:,:,0] = processed_depth[i]
@@ -301,13 +309,9 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.VERTEX_REG:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
-
-        if cfg.TRAIN.GAN:
-            gan_label_true_blob[i,:,:,:] = processed_gan_label_true[i]
-            gan_label_false_blob[i,:,:,:] = processed_gan_label_false[i]
+            vertex_image_blob[i,:,:,:] = processed_vertex_images[i]
     
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, \
-           gan_label_true_blob, gan_label_false_blob, gan_label_color_blob
+    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, vertex_image_blob, gan_z_blob
 
 
 # compute the voting label image in 2D
@@ -352,6 +356,7 @@ def _scale_vertmap(vertmap, index, extents):
         vertmap[index[0], index[1], i] = a * vertmap[index[0], index[1], i] + b
     return vertmap[index[0], index[1], :]
 
+
 def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
@@ -363,7 +368,7 @@ def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
         if len(I[0]) > 0:
             start = 3 * i
             end = start + 3
-            vertex_targets[I[0], I[1], start:end] = cfg.TRAIN.VERTEX_W * _scale_vertmap(vertmap, I, extents[i, :])
+            vertex_targets[I[0], I[1], start:end] = vertmap[I[0], I[1], :]
             vertex_weights[I[0], I[1], start:end] = 10.0
 
     return vertex_targets, vertex_weights
@@ -431,7 +436,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3] / cfg.TRAIN.VERTEX_W
+                vertmap[index[0], index[1], :] = (vertex_target[index[0], index[1], 3*k:3*k+3] + 1) * 127.5
                 # center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
         fig.add_subplot(224)
         if cfg.TRAIN.VERTEX_REG:
@@ -442,5 +447,46 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
             # plt.imshow(center[:,:,1])
         else:
             plt.imshow(l)
+
+        plt.show()
+
+
+def _vis_minibatch_gan(im_blob, depth_blob, label_blob, vertex_image_blob):
+    """Visualize a mini-batch for debugging."""
+    import matplotlib.pyplot as plt
+
+    for i in xrange(im_blob.shape[0]):
+        fig = plt.figure()
+        # show image
+        im = im_blob[i, :, :, :].copy()
+        im = (im + 1) * 127.5
+        im = im[:, :, (2, 1, 0)]
+        im = im.astype(np.uint8)
+        fig.add_subplot(221)
+        plt.imshow(im)
+
+        # show depth image
+        depth = depth_blob[i, :, :, 0]
+        fig.add_subplot(222)
+        plt.imshow(abs(depth))
+
+        # show label
+        label = label_blob[i, :, :, :]
+        height = label.shape[0]
+        width = label.shape[1]
+        num_classes = label.shape[2]
+        l = np.zeros((height, width), dtype=np.int32)
+        for k in xrange(num_classes):
+            index = np.where(label[:,:,k] > 0)
+            l[index] = k
+        fig.add_subplot(223)
+        plt.imshow(l)
+
+        # show vertex image
+        im = vertex_image_blob[i, :, :, :].copy()
+        im = (im + 1) * 127.5
+        im = im.astype(np.uint8)
+        fig.add_subplot(224)
+        plt.imshow(im)
 
         plt.show()

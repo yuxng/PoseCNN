@@ -92,7 +92,7 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
-    def train_gan(self, sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_cls, learning_rate_d, learning_rate_g, max_iters):
+    def train_gan(self, sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_l1, loss_ad, max_iters):
         """Network training loop."""
 
         # intialize variables
@@ -109,17 +109,17 @@ class SolverWrapper(object):
         for iter in range(max_iters):
             timer.tic()
             # update discriminator
-            loss_value_d, loss_value_true, loss_value_false, lr_d, _ \
-                = sess.run([loss_d, loss_true, loss_false, learning_rate_d, train_op_d])
+            loss_value_d, loss_value_true, loss_value_false, _ \
+                = sess.run([loss_d, loss_true, loss_false, train_op_d])
 
             # update generator
-            loss_value_g, loss_value_cls, lr_g, _ = sess.run([loss_g, loss_cls, learning_rate_g, train_op_g])
+            loss_value_g, loss_value_l1, loss_value_ad, _ = sess.run([loss_g, loss_l1, loss_ad, train_op_g])
             timer.toc()
             
             #print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, lr_d: %.8f, time: %.2f' %\
             #        (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, lr_d, timer.diff)
-            print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, loss_g: %.4f, loss_cls: %.4f, lr_d: %.8f, lr_g: %.8f, time: %.2f' %\
-                    (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, loss_value_g, loss_value_cls, lr_d, lr_g, timer.diff)
+            print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, loss_g: %.4f, loss_l1: %.4f, loss_ad: %.4f, time: %.2f' %\
+                    (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, loss_value_g, loss_value_l1, loss_value_ad, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -206,39 +206,25 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
                 if cfg.TRAIN.VERTEX_REG:
-                    if cfg.TRAIN.GAN:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                                   net.gan_label_color: blobs['data_gan_label_color']}
-                    else:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
 
                 else:
-                    if cfg.TRAIN.GAN:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                                   net.gan_label_color: blobs['data_gan_label_color']}
-                    else:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
 
             else:
                 if cfg.TRAIN.VERTEX_REG:
                     if cfg.TRAIN.GAN:
-                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                                   net.gan_label_color: blobs['data_gan_label_color']}
+                        feed_dict={net.data: blobs['data_image_color_rescale'], net.data_gt: blobs['data_vertex_images'], net.keep_prob: 0.5, \
+                                   net.z: blobs['data_gan_z']}
                     else:
                         feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                    net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
 
                 else:
                     if cfg.TRAIN.GAN:
-                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.gan_label_true: blobs['data_gan_label_true'], net.gan_label_false: blobs['data_gan_label_false'], \
-                                   net.gan_label_color: blobs['data_gan_label_color']}
+                        feed_dict={net.data: blobs['data_image_color_rescale'], net.data_gt: blobs['data_vertex_images'], net.keep_prob: 0.5, \
+                                   net.z: blobs['data_gan_z']}
                     else:
                         feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
@@ -354,32 +340,21 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     outputs_d = network.get_output('outputs_d')
     scores_d_true = outputs_d[1]
     scores_d_false = outputs_d[0]
-    gan_label_true = network.get_output('gan_label_true')
-    gan_label_false = network.get_output('gan_label_false')
 
-    loss_true = loss_cross_entropy_single_frame(scores_d_true, gan_label_true)
-    loss_false = loss_cross_entropy_single_frame(scores_d_false, gan_label_false)
+    loss_true = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_true, tf.ones_like(scores_d_true)))
+    loss_false = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_false, tf.zeros_like(scores_d_false)))
     loss_d = loss_true + loss_false
 
     # loss for the generator
-    # classification loss for semantic segmentation
-    scores = network.get_output('prob')
-    labels = network.get_output('gt_label_2d')
-    loss_cls = loss_cross_entropy_single_frame(scores, labels)
-    loss_adversarial = loss_cross_entropy_single_frame(scores_d_false, gan_label_true)
-    loss_g = loss_cls + loss_adversarial
+    output_g = network.get_output('output_g')
+    data_gt = network.get_output('data_gt')
+    loss_l1 = tf.reduce_mean(tf.abs(tf.sub(output_g, data_gt)))
+    loss_ad = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_false, tf.ones_like(scores_d_false)))
+    loss_g = 0 * loss_l1 + 0.2 * loss_ad
 
     # optimizer
-    starter_learning_rate = cfg.TRAIN.LEARNING_RATE
-    momentum = cfg.TRAIN.MOMENTUM
-
-    global_step_d = tf.Variable(0, trainable=False)
-    learning_rate_d = tf.train.exponential_decay(starter_learning_rate, global_step_d, cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
-    train_op_d = tf.train.MomentumOptimizer(learning_rate_d, momentum).minimize(loss_d, global_step=global_step_d)
-
-    global_step_g = tf.Variable(0, trainable=False)
-    learning_rate_g = tf.train.exponential_decay(starter_learning_rate, global_step_g, cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
-    train_op_g = tf.train.MomentumOptimizer(learning_rate_g, momentum).minimize(loss_g, global_step=global_step_g)
+    train_op_d = tf.train.AdamOptimizer(cfg.TRAIN.LEARNING_RATE, cfg.TRAIN.MOMENTUM).minimize(loss_d)
+    train_op_g = tf.train.AdamOptimizer(cfg.TRAIN.LEARNING_RATE, cfg.TRAIN.MOMENTUM).minimize(loss_g)
     
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
@@ -394,7 +369,7 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
             t.start()
 
         print 'Solving...'
-        sw.train_gan(sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_cls, learning_rate_d, learning_rate_g, max_iters)
+        sw.train_gan(sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_l1, loss_ad, max_iters)
         print 'done solving'
 
         sess.run(network.close_queue_op)

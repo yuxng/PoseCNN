@@ -98,6 +98,23 @@ class shapenet_single(datasets.imdb):
                 'Path does not exist: {}'.format(metadata_path)
         return metadata_path
 
+    # vertex map
+    def vertmap_path_at(self, i):
+        """
+        Return the absolute path to vertmap i in the image sequence.
+        """
+        return self.vertmap_path_from_index(self.image_index[i])
+
+    def vertmap_path_from_index(self, index):
+        """
+        Construct an vertmap path from the image's "index" identifier.
+        """
+
+        vertmap_path = os.path.join(self._data_path, index + '_vertmap.png')
+        assert os.path.exists(vertmap_path), \
+                'Path does not exist: {}'.format(vertmap_path)
+        return vertmap_path
+
     def _load_image_set_index(self):
         """
         Load the indexes listed in this dataset's image set file.
@@ -168,6 +185,9 @@ class shapenet_single(datasets.imdb):
         # metadata path
         metadata_path = self.metadata_path_from_index(index)
 
+        # vertmap path
+        vertmap_path = self.vertmap_path_from_index(index)
+
         # parse image name
         pos = index.find('/')
         video_id = index[:pos]
@@ -176,6 +196,7 @@ class shapenet_single(datasets.imdb):
                 'depth': depth_path,
                 'label': label_path,
                 'meta_data': metadata_path,
+                'vertmap': vertmap_path,
                 'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,

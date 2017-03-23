@@ -249,6 +249,10 @@ class Network(object):
             return add2d(input[0], input[1], step, scope)
 
     @layer
+    def sigmoid(self, input, name):
+        return tf.nn.sigmoid(input, name=name)
+
+    @layer
     def relu(self, input, name):
         return tf.nn.relu(input, name=name)
 
@@ -303,7 +307,7 @@ class Network(object):
         return tf.nn.l2_normalize(input, dim, name=name)
 
     @layer
-    def fc(self, input, num_out, name, height=-1, width=-1, channel=-1, reuse=None, relu=True, trainable=True):
+    def fc(self, input, num_out, name, num_in=-1, height=-1, width=-1, channel=-1, reuse=None, relu=True, trainable=True):
         with tf.variable_scope(name, reuse=reuse) as scope:
             # only use the first input
             if isinstance(input, tuple):
@@ -320,7 +324,10 @@ class Network(object):
                     dim *= d
                 feed_in = tf.reshape(input, [-1, dim])
             else:
-                feed_in, dim = (input, int(input_shape[-1]))
+                if num_in == -1:
+                    feed_in, dim = (input, int(input_shape[-1]))
+                else:
+                    feed_in, dim = (input, int(num_in))
 
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
@@ -331,12 +338,23 @@ class Network(object):
             return fc
 
     @layer
+    def reshape(self, input, shape, name):
+        return tf.reshape(input, shape, name)
+
+    @layer
     def argmax_3d(self, input, name):
         return tf.argmax(input, 4, name)
 
     @layer
     def argmax_2d(self, input, name):
         return tf.argmax(input, 3, name)
+
+    @layer
+    def tanh(self, input, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        return tf.nn.tanh(input, name)
 
     @layer
     def softmax(self, input, name):
@@ -408,6 +426,26 @@ class Network(object):
                 name=name)
             if relu:
                 output = tf.nn.relu(output)
+            return output
+
+    @layer
+    def batch_norm(self, input, name, c_i=-1, momentum=0.9, epsilon=1e-5, is_training=True, relu=False, reuse=None):
+
+        if c_i != -1:
+            input_shape = tf.shape(input)
+            input = tf.reshape(input, [input_shape[0], input_shape[1], input_shape[2], c_i])
+
+        with tf.variable_scope(name, reuse=reuse) as scope:
+            output = tf.contrib.layers.batch_norm(input,
+                      decay=momentum, 
+                      updates_collections=None,
+                      epsilon=epsilon,
+                      scale=True,
+                      is_training=is_training,
+                      scope=scope)
+            if relu:
+                output = tf.nn.relu(output)
+
             return output
 
     @layer
