@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-class GRUCell(tf.nn.rnn_cell.RNNCell):
+class GRUCell(tf.contrib.rnn.core_rnn_cell.RNNCell):
     """Gated Recurrent Unit cell (cf. http://arxiv.org/abs/1406.1078)."""
 
     def __init__(self, num_units, channels):

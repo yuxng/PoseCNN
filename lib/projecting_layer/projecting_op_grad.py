@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.framework import ops
 import projecting_op
-
+'''
 @tf.RegisterShape("Project")
 def _project_shape(op):
   """Shape function for the Backproject op.
@@ -17,7 +17,7 @@ def _project_shape(op):
 
   output_shape = tf.TensorShape([batch_size, height, width, channels])
   return [output_shape]
-
+'''
 @ops.RegisterGradient("Project")
 def _project_grad(op, grad):
   """The gradients for `project`.

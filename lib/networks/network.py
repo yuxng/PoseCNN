@@ -191,7 +191,7 @@ class Network(object):
             h = in_shape[1] * s_h
             w = in_shape[2] * s_w
             new_shape = [in_shape[0], h, w, c_o]
-            output_shape = tf.pack(new_shape)
+            output_shape = tf.stack(new_shape)
 
             # filter
             f_shape = [k_h, k_w, c_o, c_i]
@@ -382,7 +382,7 @@ class Network(object):
 
         m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
         multiples = tf.convert_to_tensor(array, dtype=tf.int32)
-        e = tf.exp(tf.sub(input, tf.tile(m, multiples)))
+        e = tf.exp(tf.subtract(input, tf.tile(m, multiples)))
         s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
         return tf.div(e, tf.tile(s, multiples))
 
@@ -399,10 +399,10 @@ class Network(object):
 
         m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
         multiples = tf.convert_to_tensor(array, dtype=tf.int32)
-        d = tf.sub(input, tf.tile(m, multiples))
+        d = tf.subtract(input, tf.tile(m, multiples))
         e = tf.exp(d)
         s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
-        return tf.sub(d, tf.log(tf.tile(s, multiples)))
+        return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
     @layer
     def batch_normalization(self, input, name, scale_offset=False, relu=False, reuse=None, trainable=True):

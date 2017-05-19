@@ -227,7 +227,8 @@ def _get_label_blob(roidb, voxelizer):
             vertmap = pad_im(cv2.imread(roidb[i]['vertmap'], cv2.IMREAD_UNCHANGED), 16)
             if roidb[i]['flipped']:
                 vertmap = vertmap[:, ::-1, :]
-            vertmap = vertmap.astype(np.float32) / 127.5 - 1
+            vertmap = vertmap[:, :, (2, 1, 0)]
+            vertmap = vertmap.astype(np.float32) / 255.0
             vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, roidb[i]['class_extents'], num_classes)
             processed_vertex_targets.append(vertex_targets)
             processed_vertex_weights.append(vertex_weights)
@@ -289,8 +290,8 @@ def _get_label_blob(roidb, voxelizer):
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     if cfg.TRAIN.VERTEX_REG:
-        vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
-        vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
+        vertex_target_blob = np.zeros((num_images, height, width, 2 * num_classes), dtype=np.float32)
+        vertex_weight_blob = np.zeros((num_images, height, width, 2 * num_classes), dtype=np.float32)
         vertex_image_blob = np.zeros((num_images, height, width, 3), dtype=np.float32)
     else:
         vertex_target_blob = []
@@ -357,18 +358,45 @@ def _scale_vertmap(vertmap, index, extents):
     return vertmap[index[0], index[1], :]
 
 
+def _unscale_vertmap(vertmap, labels, extents, num_classes):
+    for k in range(1, num_classes):
+        index = np.where(labels == k)
+        for i in range(3):
+            vmin = -extents[k, i] / 2
+            vmax = extents[k, i] / 2
+            a = 1.0 / (vmax - vmin)
+            b = -1.0 * vmin / (vmax - vmin)
+            vertmap[index[0], index[1], i] = (vertmap[index[0], index[1], i] - b) / a
+    return vertmap
+
+
 def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
-    vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+
+    vertmap = _unscale_vertmap(vertmap, im_label, extents, num_classes)
+
+    # compute the azimuth and elevation of each 3D point
+    r = np.linalg.norm(vertmap, axis=2)
+    # sin of elevation, sin, cos of azimuth
+    elevation_sin = np.zeros_like(r)
+    index = np.where(r != 0)
+    elevation_sin[index[0], index[1]] = np.sin(np.pi/2 - np.arccos(np.divide(vertmap[index[0],index[1],2], r[index[0], index[1]])))
+    azimuth_sin = np.sin(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
+    azimuth_cos = np.cos(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
     
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
         if len(I[0]) > 0:
-            start = 3 * i
-            end = start + 3
-            vertex_targets[I[0], I[1], start:end] = vertmap[I[0], I[1], :]
+            start = 2 * i
+            end = start + 2
+            vertex_targets[I[0], I[1], start] = r[I[0], I[1]]
+            vertex_targets[I[0], I[1], start+1] = elevation_sin[I[0], I[1]]
+            # vertex_targets[I[0], I[1], start+2] = azimuth_sin[I[0], I[1]]
+            # vertex_targets[I[0], I[1], start+3] = azimuth_cos[I[0], I[1]]
+
             vertex_weights[I[0], I[1], start:end] = 10.0
 
     return vertex_targets, vertex_weights
@@ -436,7 +464,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                vertmap[index[0], index[1], :] = (vertex_target[index[0], index[1], 3*k:3*k+3] + 1) * 127.5
+                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 4*k+1:4*k+4]
                 # center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
         fig.add_subplot(224)
         if cfg.TRAIN.VERTEX_REG:

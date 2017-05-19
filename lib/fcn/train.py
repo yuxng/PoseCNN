@@ -286,7 +286,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
                 vertex_pred = network.get_output('vertex_pred')
                 vertex_targets = network.get_output('vertex_targets')
                 vertex_weights = network.get_output('vertex_weights')
-                loss_vertex = tf.div( tf.reduce_sum(tf.mul(vertex_weights, tf.abs(tf.sub(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
+                loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
                 
                 loss = loss_cls + loss_vertex
             else:
