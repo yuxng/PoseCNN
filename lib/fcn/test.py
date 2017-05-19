@@ -548,65 +548,43 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     fig = plt.figure()
 
     # show image
-    ax = fig.add_subplot(231)
+    ax = fig.add_subplot(241)
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
 
     # show gt class labels
-    # ax = fig.add_subplot(232)
-    # plt.imshow(im_labels_gt)
-    # ax.set_title('gt class labels')
-
-    # compute the azimuth and elevation of each 3D point
-    r = np.linalg.norm(vertmap_gt, axis=2)
-    # sin of elevation, sin, cos of azimuth
-    elevation_sin = np.zeros_like(r)
-    index = np.where(r != 0)
-    elevation_sin[index[0], index[1]] = np.sin(np.pi/2 - np.arccos(np.divide(vertmap_gt[index[0],index[1],2], r[index[0], index[1]])))
-    azimuth_sin = np.sin(np.arctan2(vertmap_gt[:, :, 1], vertmap_gt[:, :, 0]))
-    azimuth_cos = np.cos(np.arctan2(vertmap_gt[:, :, 1], vertmap_gt[:, :, 0]))
-
-    # show gt vertmap
-    ax = fig.add_subplot(232)
-    plt.imshow(r)
-    ax.set_title('vertex distance gt')
-
-    ax = fig.add_subplot(233)
-    plt.imshow(elevation_sin)
-    ax.set_title('vertex elevation gt')
+    ax = fig.add_subplot(242)
+    plt.imshow(im_labels_gt)
+    ax.set_title('gt class labels')
 
     # show depth
-    # ax = fig.add_subplot(244)
-    # plt.imshow(im_depth)
-    # ax.set_title('input depth')
+    ax = fig.add_subplot(245)
+    plt.imshow(im_depth)
+    ax.set_title('input depth')
 
-    # show vertex map
-    # ax = fig.add_subplot(244)
-    # plt.imshow(centers_gt)
-    # ax.set_title('gt centers')
+    # show gt vertex map
+    ax = fig.add_subplot(243)
+    plt.imshow(vertmap_gt[:,:,0])
+    ax.set_title('gt centers x')
+
+    ax = fig.add_subplot(244)
+    plt.imshow(vertmap_gt[:,:,1])
+    ax.set_title('gt centers y')
 
     # show class label
-    ax = fig.add_subplot(234)
+    ax = fig.add_subplot(246)
     plt.imshow(im_labels)
     ax.set_title('class labels')
 
     # show vertex map
-    ax = fig.add_subplot(235)
+    ax = fig.add_subplot(247)
     plt.imshow(vertmap[:,:,0])
-    ax.set_title('vertex distance')
+    ax.set_title('centers x')
 
-    ax = fig.add_subplot(236)
+    ax = fig.add_subplot(248)
     plt.imshow(vertmap[:,:,1])
-    ax.set_title('vertex elevation')
-
-    #ax = fig.add_subplot(247)
-    #plt.imshow(vertmap[:,:,2])
-    #ax.set_title('vertex azimuth sin')
-
-    #ax = fig.add_subplot(248)
-    #plt.imshow(vertmap[:,:,0])
-    #ax.set_title('vertex azimuth cos')
+    ax.set_title('centers y')
 
     # show projection of the poses
     if cfg.TEST.RANSAC:
@@ -640,11 +618,6 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-
-    # show gt vertmap
-    # ax = fig.add_subplot(248)
-    # plt.imshow(centermap)
-    # ax.set_title('center map')
 
     plt.show()
 
@@ -804,14 +777,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
-                # centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
-                vertmap_gt = pad_im(cv2.imread(imdb.vertmap_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-                vertmap_gt = vertmap_gt[:, :, (2, 1, 0)]
-                vertmap_gt = vertmap_gt.astype(np.float32) / 255.0
-                vertmap_gt = _unscale_vertmap(vertmap_gt, imdb._process_label_image(labels_gt), imdb._extents, imdb.num_classes)
+                centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
                 print 'visualization'
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    vertmap_gt, vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'])
+                    centers_gt, vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

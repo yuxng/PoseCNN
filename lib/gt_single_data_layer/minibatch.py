@@ -27,7 +27,7 @@ def get_minibatch(roidb, voxelizer):
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
-        vertex_image_blob, gan_z_blob = _get_label_blob(roidb, voxelizer)
+        gan_z_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -45,7 +45,6 @@ def get_minibatch(roidb, voxelizer):
              'data_meta_data': meta_data_blob,
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
-             'data_vertex_images': vertex_image_blob,
              'data_gan_z': gan_z_blob}
 
     return blobs
@@ -195,7 +194,6 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         processed_vertex_targets = []
         processed_vertex_weights = []
-        processed_vertex_images = []
 
     for i in xrange(num_images):
         # load meta data
@@ -223,19 +221,9 @@ def _get_label_blob(roidb, voxelizer):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            # read vertmap image
-            vertmap = pad_im(cv2.imread(roidb[i]['vertmap'], cv2.IMREAD_UNCHANGED), 16)
-            if roidb[i]['flipped']:
-                vertmap = vertmap[:, ::-1, :]
-            vertmap = vertmap[:, :, (2, 1, 0)]
-            vertmap = vertmap.astype(np.float32) / 255.0
-            vertex_targets, vertex_weights = _get_vertex_regression_labels(im_labels, vertmap, roidb[i]['class_extents'], num_classes)
-            processed_vertex_targets.append(vertex_targets)
-            processed_vertex_weights.append(vertex_weights)
-            processed_vertex_images.append(vertmap)
-            # center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
-            # processed_vertex_targets.append(np.concatenate((center_targets, vertex_targets), axis=2))
-            # processed_vertex_weights.append(np.concatenate((center_weights, vertex_weights), axis=2))
+            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+            processed_vertex_targets.append(center_targets)
+            processed_vertex_weights.append(center_weights)
 
         # depth
         if roidb[i]['flipped']:
@@ -292,11 +280,9 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         vertex_target_blob = np.zeros((num_images, height, width, 2 * num_classes), dtype=np.float32)
         vertex_weight_blob = np.zeros((num_images, height, width, 2 * num_classes), dtype=np.float32)
-        vertex_image_blob = np.zeros((num_images, height, width, 3), dtype=np.float32)
     else:
         vertex_target_blob = []
         vertex_weight_blob = []
-        vertex_image_blob = []
 
     if cfg.TRAIN.GAN:
         gan_z_blob = np.random.uniform(-1, 1, [num_images, 100]).astype(np.float32)
@@ -310,9 +296,8 @@ def _get_label_blob(roidb, voxelizer):
         if cfg.TRAIN.VERTEX_REG:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
-            vertex_image_blob[i,:,:,:] = processed_vertex_images[i]
     
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, vertex_image_blob, gan_z_blob
+    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_z_blob
 
 
 # compute the voting label image in 2D
@@ -434,12 +419,12 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im += cfg.PIXEL_MEANS
         im = im[:, :, (2, 1, 0)]
         im = im.astype(np.uint8)
-        fig.add_subplot(221)
+        fig.add_subplot(231)
         plt.imshow(im)
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
-        fig.add_subplot(222)
+        fig.add_subplot(232)
         plt.imshow(abs(depth))
 
         # show normal image
@@ -447,7 +432,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im_normal += cfg.PIXEL_MEANS
         im_normal = im_normal[:, :, (2, 1, 0)]
         im_normal = im_normal.astype(np.uint8)
-        fig.add_subplot(223)
+        fig.add_subplot(233)
         plt.imshow(im_normal)
 
         # show label
@@ -458,21 +443,19 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         l = np.zeros((height, width), dtype=np.int32)
         if cfg.TRAIN.VERTEX_REG:
             vertex_target = vertex_target_blob[i, :, :, :]
-            vertmap = np.zeros((height, width, 3), dtype=np.float32)
-            # center = np.zeros((height, width, 2), dtype=np.float32)
+            center = np.zeros((height, width, 2), dtype=np.float32)
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 4*k+1:4*k+4]
-                # center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
-        fig.add_subplot(224)
+                center[index[0], index[1], :] = vertex_target[index[0], index[1], 2*k:2*k+2]
+        fig.add_subplot(234)
         if cfg.TRAIN.VERTEX_REG:
-            plt.imshow(vertmap)
-            # fig.add_subplot(235)
-            # plt.imshow(center[:,:,0])
-            # fig.add_subplot(236)
-            # plt.imshow(center[:,:,1])
+            plt.imshow(l)
+            fig.add_subplot(235)
+            plt.imshow(center[:,:,0])
+            fig.add_subplot(236)
+            plt.imshow(center[:,:,1])
         else:
             plt.imshow(l)
 
