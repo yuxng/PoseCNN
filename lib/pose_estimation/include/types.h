@@ -41,6 +41,7 @@ namespace jp
 
     // object coordinates 
     typedef float coord1_t; // one dimension
+    typedef cv::Vec<coord1_t, 2> coord2_t; // two dimensions
     typedef cv::Vec<coord1_t, 3> coord3_t; // three dimensions
 
     // label types
@@ -54,6 +55,7 @@ namespace jp
 
     // image types
     typedef cv::Mat_<coord3_t> img_coord_t; // object coodinate images
+    typedef cv::Mat_<coord2_t> img_center_t; // center coodinate images
     typedef cv::Mat_<bgr_t> img_bgr_t; // color images
     typedef cv::Mat_<depth_t> img_depth_t; // depth images
     typedef cv::Mat_<label_t> img_label_t; // label images (quantized object coordinates + object ID)

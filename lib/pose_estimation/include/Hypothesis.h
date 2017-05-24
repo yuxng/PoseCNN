@@ -50,6 +50,8 @@ public:
          * @brief Creates and identity transformation.
          */
         Hypothesis();
+
+        Hypothesis(cv::Point2d center);
 	
 	/**
 	 * @brief Create a pose from a rotation matrix and a translation vector.
@@ -74,6 +76,8 @@ public:
 	 * @param points Correspondences.
 	 */
 	Hypothesis(std::vector<std::pair<cv::Point3d,cv::Point3d>> points);
+
+        Hypothesis(std::vector<std::pair<cv::Point2d, cv::Point2d>> points);
 	
 	/**
 	 * @brief Create a pose from a Rodrigues vector and a translation vector.
@@ -106,6 +110,9 @@ public:
 	 * @return void
 	 */
 	void refine(cv::Mat& coV,cv::Point3d pointsA,cv::Point3d pointsB);
+
+
+        cv::Point2d calcCenter(std::vector<std::pair<cv::Point2d, cv::Point2d>> points);
 	
 	/**
 	 * @brief Returns the translation vector.
@@ -113,6 +120,9 @@ public:
 	 * @return cv::Point3d Translation vector.
 	 */
 	cv::Point3d getTranslation() const;
+
+
+        cv::Point2d getCenter() const;
 	
 	/**
 	 * @brief Returns the 3x3 double rotation matrix.
@@ -232,6 +242,9 @@ private:
 	cv::Mat invRotation;
 	cv::Point3d translation;
 	std::vector<std::pair<cv::Point3d,cv::Point3d>> points; // point correspondences used to calculated this pose, stored for refinement later
+
+	cv::Point2d center;
+	std::vector<std::pair<cv::Point2d,cv::Point2d>> points2D; // point correspondences used to calculated this pose, stored for refinement later
 	
 	/**
 	 * @brief Calculates a pose from 3D-3D point correspondences using the Kabsch algorithm.

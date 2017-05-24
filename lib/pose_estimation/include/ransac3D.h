@@ -48,13 +48,17 @@ namespace jp {
     {
 	TransHyp() {}
 	TransHyp(jp::id_t objID, jp::cv_trans_t pose) : pose(pose), objID(objID), inliers(0), maxPixels(0), effPixels(0), refSteps(0), likelihood(0) {}
+        TransHyp(jp::id_t objID, cv::Point2d center) : center(center), objID(objID), inliers(0), maxPixels(0), effPixels(0), refSteps(0), likelihood(0) {}
       
 	jp::id_t objID; // ID of the object this hypothesis belongs to
 	jp::cv_trans_t pose; // the actual transformation
+
+        cv::Point2d center; // object center
 	
 	cv::Rect bb; // 2D bounding box of the object under this pose hypothesis
 	
 	std::vector<std::pair<cv::Point3d, cv::Point3d> > inlierPts; // list of object coordinate - camera coordinate correspondences that support this hypothesis
+	std::vector<std::pair<cv::Point2d, cv::Point2d> > inlierPts2D; // list of object coordinate - camera coordinate correspondences that support this hypothesis
 	
 	int maxPixels; // how many pixels should be maximally drawn to score this hyp
 	int effPixels; // how many pixels habe effectively drawn (bounded by projection size)
@@ -97,7 +101,11 @@ public:
 
     inline void filterInliers(TransHyp& hyp, int maxInliers);
 
+    inline void filterInliers2D(TransHyp& hyp, int maxInliers);
+
     inline void updateHyp3D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
+
+    inline void updateHyp2D(TransHyp& hyp, int maxPixels);
     
     void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_stat_t>& probs, int imageWidth, int imageHeight);
     
@@ -110,6 +118,10 @@ public:
         float* probability, float* vertmap, float* extents,
         int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
 
+    float estimateCenter(
+        float* probability, float* vertmap,
+        int width, int height, int num_classes, float* output);
+
     void getEye(unsigned char* rawdepth, jp::img_coord_t& img, jp::img_depth_t& img_depth, int width, int height, float fx, float fy, float px, float py, float depth_factor);
     jp::coord3_t pxToEye(int x, int y, jp::depth_t depth, float fx, float fy, float px, float py, float depth_factor);
 
@@ -118,6 +130,8 @@ public:
     void getLabels(float* probability, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 
     void getVertexs(float* vertmap, std::vector<jp::img_coord_t>& vertexs, int width, int height, int num_classes);
+
+    void getCenters(float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes);
 
     void getBb3Ds(float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
     
@@ -130,11 +144,24 @@ private:
       float inlierThreshold,
       int minArea,
       int pixelBatch);
+
+    inline void countInliers2D(
+      TransHyp& hyp,
+      const std::vector<jp::img_center_t>& vertexs,
+      const std::vector<std::vector<int>>& labels,
+      float inlierThreshold,
+      int width,
+      int pixelBatch);
   
     inline cv::Point3f getMode(
 	jp::id_t objID,
 	const cv::Point2f& pt, 
 	const std::vector<jp::img_coord_t>& vertexs);
+
+    inline cv::Point2f getMode2D(
+	jp::id_t objID,
+	const cv::Point2f& pt, 
+	const std::vector<jp::img_center_t>& vertexs);
 
     template<class T>
     inline double getMinDist(const std::vector<T>& pointSet, const T& point);
@@ -146,6 +173,8 @@ private:
 	const cv::Point3f& pt1, 
 	const cv::Point3f& pt2, 
 	const cv::Point3f& pt3);
+
+    inline float point2line(cv::Point2d p, cv::Point2f n, cv::Point2f x);
     
     inline bool samplePoint(
 	jp::id_t objID,
@@ -155,6 +184,13 @@ private:
 	const std::vector<jp::img_coord_t>& vertexs,
 	const jp::img_coord_t& eyeData,
 	float minDist3D);
+
+    inline bool samplePoint2D(
+        jp::id_t objID,
+        std::vector<cv::Point2f>& eyePts, 
+        std::vector<cv::Point2f>& objPts, 
+        const cv::Point2f& pt2D,
+        const std::vector<jp::img_center_t>& vertexs);
     
 public:
     std::map<jp::id_t, TransHyp> poses; // Poses that have been estimated. At most one per object. Run estimatePose to fill this member.

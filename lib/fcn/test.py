@@ -541,7 +541,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, poses, intrinsic_matrix):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, centers, intrinsic_matrix):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -576,6 +576,10 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     ax = fig.add_subplot(246)
     plt.imshow(im_labels)
     ax.set_title('class labels')
+
+    # show centers
+    index = np.where(np.isfinite(centers[:, 0]))[0]
+    plt.plot(centers[index, 0], centers[index, 1], 'ro')
 
     # show vertex map
     ax = fig.add_subplot(247)
@@ -651,7 +655,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         KF = kfusion.PyKinectFusion(rig_filename)
 
     # pose estimation
-    if cfg.TEST.VERTEX_REG and cfg.TEST.RANSAC:
+    if cfg.TEST.VERTEX_REG:
         RANSAC = ransac.PyRansac3D()
 
     # construct colors
@@ -662,8 +666,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(0, num_images, 5)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(0, num_images, 5)
     else:
         perm = xrange(num_images)
 
@@ -712,6 +716,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
         labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
+            centers = RANSAC.estimate_center(probs, vertex_pred[0,:,:,:])
+            print centers
             if cfg.TEST.RANSAC:
                 # pose estimation using RANSAC
                 fx = meta_data['intrinsic_matrix'][0, 0]
@@ -780,7 +786,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
                 centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
                 print 'visualization'
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_gt, vertmap, labels, labels_gt, poses, meta_data['intrinsic_matrix'])
+                    centers_gt, vertmap, labels, labels_gt, centers, meta_data['intrinsic_matrix'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

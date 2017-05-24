@@ -14,6 +14,7 @@ cdef extern from "ransac.hpp" namespace "jp":
     cdef cppclass Ransac3D:
         Ransac3D() except +
         void estimatePose(unsigned char*, float*, float*, float*, int, int, int, float, float, float, float, float, float*)
+        void estimateCenter(float*, float*, int, int, int, float*)
 
 cdef class PyRansac3D:
     cdef Ransac3D *ransac3d     # hold a C++ instance which we're wrapping
@@ -37,3 +38,15 @@ cdef class PyRansac3D:
         self.ransac3d.estimatePose(depth_buff, &probs[0, 0, 0], &vertexs[0, 0, 0], &extents[0, 0], width, height, num_classes, fx, fy, px, py, depth_factor, &poses[0, 0, 0])
 
         return poses
+
+    def estimate_center(self, np.ndarray[np.float32_t, ndim=3] probs, np.ndarray[np.float32_t, ndim=3] vertexs):
+
+        cdef int height = probs.shape[0]
+        cdef int width = probs.shape[1]
+        cdef int num_classes = probs.shape[2]
+
+        cdef np.ndarray[np.float32_t, ndim=2] centers = np.inf * np.ones((num_classes, 2), dtype=np.float32)
+
+        self.ransac3d.estimateCenter(&probs[0, 0, 0], &vertexs[0, 0, 0], width, height, num_classes, &centers[0, 0])
+
+        return centers

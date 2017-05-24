@@ -29,9 +29,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Hypothesis::Hypothesis() 
 {
+    this->center = cv::Point2d(0, 0);
     this->translation = cv::Point3d(0, 0, 0);
     this->rotation = cv::Mat::eye(3, 3, CV_64F);
     this->invRotation = cv::Mat::eye(3, 3, CV_64F);
+}
+
+Hypothesis::Hypothesis(cv::Point2d center)
+{
+    this->center = center;
 }
 
 Hypothesis::Hypothesis(cv::Mat rot,cv::Point3d trans)
@@ -76,6 +82,43 @@ Hypothesis::Hypothesis(std::vector<std::pair<cv::Point3d, cv::Point3d>> points)
 {
     refine(points);
 }
+
+
+Hypothesis::Hypothesis(std::vector<std::pair<cv::Point2d, cv::Point2d>> points) 
+{
+    this->points2D.insert(this->points2D.end(), points.begin(), points.end());
+
+    this->center = calcCenter(points);
+}
+
+
+
+cv::Point2d Hypothesis::calcCenter(std::vector<std::pair<cv::Point2d, cv::Point2d>> points) 
+{
+    cv::Mat pointsA(points.size(), 2, CV_64F);
+    cv::Mat pointsB(points.size(), 1, CV_64F);
+    cv::Mat output(2, 1, CV_64F);
+    std::cout << "poinst size " << points.size() << std::endl; 
+
+    int i = 0;
+    for(auto it = points.begin(); it != points.end(); ++it) 
+    {
+        double m1 = -it->first.y;
+        double n1 = it->first.x;
+        double a1 = it->second.x;
+        double b1 = it->second.y;
+
+        pointsA.at<double>(i, 0) = m1;
+        pointsA.at<double>(i, 1) = n1;
+        pointsB.at<double>(i, 0) = m1 * a1 + n1 * b1;
+        i++;
+    }
+    cv::solve(pointsA, pointsB, output, cv::DECOMP_SVD);
+
+    return cv::Point2d(output.at<double>(0, 0), output.at<double>(1, 0));
+}
+
+
 
 Hypothesis::Hypothesis(std::vector<double> rodVecAndTrans ) 
 {
@@ -214,6 +257,12 @@ void Hypothesis::refine(cv::Mat& coV, cv::Point3d pointsA, cv::Point3d pointsB)
     this->translation = estimates.second;
     this->invRotation = this->rotation.inv();
 }
+
+cv::Point2d Hypothesis::getCenter() const 
+{
+    return this->center;
+}
+
 
 cv::Point3d Hypothesis::getTranslation() const 
 {
