@@ -54,6 +54,8 @@ namespace jp {
 	jp::cv_trans_t pose; // the actual transformation
 
         cv::Point2d center; // object center
+        float width_;
+        float height_;
 	
 	cv::Rect bb; // 2D bounding box of the object under this pose hypothesis
 	
@@ -87,7 +89,24 @@ namespace jp {
 	 * 
 	 * @return bool True if this hypothesis' score is bigger.
 	 */
-	bool operator < (const TransHyp& hyp) const { return (getScore() > hyp.getScore()); } 
+	bool operator < (const TransHyp& hyp) const { return (getScore() > hyp.getScore()); }
+
+        void compute_width_height()
+        {
+          float w = -1;
+          float h = -1;
+          for(int i = 0; i < inliers; i++)
+          {
+            float x = fabs(inlierPts2D[i].second.x - center.x);
+            float y = fabs(inlierPts2D[i].second.y - center.y);
+            if (x > w)
+              w = x;
+            if (y > h)
+              h = y;
+          }
+          width_ = 2 * w;
+          height_ = 2 * h;
+        }
     };
 
 

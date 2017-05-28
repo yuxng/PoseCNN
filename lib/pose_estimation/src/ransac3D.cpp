@@ -969,10 +969,10 @@ float Ransac3D::estimateCenter(
   getLabels(probability, labels, object_ids, width, height, num_classes, minArea);
   std::cout << "read labels done" << std::endl;
 		
-  float inlierThreshold3D = 0.01;
+  float inlierThreshold3D = 0.5;
   int ransacIterations = gp->tP.ransacIterations;  // 256
   int preemptiveBatch = gp->tP.ransacBatchSize;  // 1000
-  int maxPixels = gp->tP.ransacMaxInliers;  // 1000
+  int maxPixels = 2 * gp->tP.ransacMaxInliers;  // 1000
   int minPixels = gp->tP.ransacMinInliers;  // 10
   int refIt = gp->tP.ransacCoarseRefinementIterations;  // 8
 	
@@ -1104,14 +1104,18 @@ float Ransac3D::estimateCenter(
     std::cout << BLUETEXT("Estimated Hypothesis for Object " << (int) it->second[h].objID << ":") << std::endl;
 
     cv::Point2d center = it->second[h].center;
-    int offset = 2 * it->second[h].objID;
+    it->second[h].compute_width_height();
+    int offset = 4 * it->second[h].objID;
     output[offset] = center.x;
     output[offset+1] = center.y;
+    output[offset+2] = it->second[h].width_;
+    output[offset+3] = it->second[h].height_;
     
     std::cout << "Inliers: " << it->second[h].inliers;
     std::printf(" (Rate: %.1f\%)\n", it->second[h].getInlierRate() * 100);
     std::cout << "Refined " << it->second[h].refSteps << " times. " << std::endl;
     std::cout << "Center " << center << std::endl;
+    std::cout << "Width: " << it->second[h].width_ << " Height: " << it->second[h].height_ << std::endl;
     std::cout << "---------------------------------------------------" << std::endl;
   }
   std::cout << std::endl;

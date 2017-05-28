@@ -581,6 +581,15 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     index = np.where(np.isfinite(centers[:, 0]))[0]
     plt.plot(centers[index, 0], centers[index, 1], 'ro')
 
+    # show boxes
+    for i in xrange(len(index)):
+        roi = centers[index[i], :]
+        plt.gca().add_patch(
+            plt.Rectangle((roi[0] - roi[2]/2, roi[1] - roi[3]/2), roi[2],
+                          roi[3], fill=False,
+                          edgecolor='g', linewidth=3)
+            )
+
     # show vertex map
     ax = fig.add_subplot(247)
     plt.imshow(vertmap[:,:,0])

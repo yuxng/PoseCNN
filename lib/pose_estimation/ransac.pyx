@@ -45,7 +45,7 @@ cdef class PyRansac3D:
         cdef int width = probs.shape[1]
         cdef int num_classes = probs.shape[2]
 
-        cdef np.ndarray[np.float32_t, ndim=2] centers = np.inf * np.ones((num_classes, 2), dtype=np.float32)
+        cdef np.ndarray[np.float32_t, ndim=2] centers = np.inf * np.ones((num_classes, 4), dtype=np.float32)
 
         self.ransac3d.estimateCenter(&probs[0, 0, 0], &vertexs[0, 0, 0], width, height, num_classes, &centers[0, 0])
 
