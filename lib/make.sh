@@ -3,6 +3,16 @@ echo $TF_INC
 
 CUDA_PATH=/usr/local/cuda
 
+DF_PATH=/var/Projects/FCN/lib/kinect_fusion/include
+
+cd matching_loss
+
+g++ -std=c++11 -shared -o matching_loss.so matching_loss_op.cc \
+	-I $TF_INC -I $DF_PATH -I $CUDA_PATH/include -fPIC -lcudart -L $CUDA_PATH/lib64 -D_GLIBCXX_USE_CXX11_ABI=0
+
+cd ..
+echo 'build matching loss'
+
 cd triplet_loss
 
 nvcc -std=c++11 -c -o triplet_loss_op.cu.o triplet_loss_op_gpu.cu.cc \

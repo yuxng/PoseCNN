@@ -10,6 +10,7 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
+import hough_voting_layer.hough_voting_op as hough_voting_op
 from gru2d import GRU2DCell
 from gru2d_original import GRUCell
 from gru3d import GRU3DCell
@@ -217,6 +218,10 @@ class Network(object):
     @layer
     def compute_label(self, input, name):
         return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
+
+    @layer
+    def hough_voting(self, input, name):
+        return hough_voting_op.hough_voting(input[0], input[1], name=name)
 
     @layer
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):

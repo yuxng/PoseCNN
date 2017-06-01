@@ -145,12 +145,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
     else:
         if cfg.TEST.VERTEX_REG:
-            labels_2d, probs, vertex_pred = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')], feed_dict=feed_dict)
+            labels_2d, probs, vertex_pred, rois = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois')], feed_dict=feed_dict)
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
             vertex_pred = []
+            rois = []
 
-    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred
+    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred, rois
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -541,7 +542,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, centers, intrinsic_matrix):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, vertmap_gt, vertmap, labels, labels_gt, rois, intrinsic_matrix):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -578,15 +579,15 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     ax.set_title('class labels')
 
     # show centers
-    index = np.where(np.isfinite(centers[:, 0]))[0]
-    plt.plot(centers[index, 0], centers[index, 1], 'ro')
+    centers_x = (rois[:, 2] + rois[:, 4]) / 2
+    centers_y = (rois[:, 3] + rois[:, 5]) / 2
+    plt.plot(centers_x, centers_y, 'ro')
 
     # show boxes
-    for i in xrange(len(index)):
-        roi = centers[index[i], :]
+    for i in xrange(rois.shape[0]):
         plt.gca().add_patch(
-            plt.Rectangle((roi[0] - roi[2]/2, roi[1] - roi[3]/2), roi[2],
-                          roi[3], fill=False,
+            plt.Rectangle((rois[i, 2], rois[i, 3]), rois[i, 4] - rois[i, 2],
+                          rois[i, 5] - rois[i, 3], fill=False,
                           edgecolor='g', linewidth=3)
             )
 
@@ -722,11 +723,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         _t['im_segment'].tic()
-        labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        labels, probs, vertex_pred, rois = im_segment_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
-            centers = RANSAC.estimate_center(probs, vertex_pred[0,:,:,:])
-            print centers
+            # centers = RANSAC.estimate_center(probs, vertex_pred[0,:,:,:])
+            # print centers
             if cfg.TEST.RANSAC:
                 # pose estimation using RANSAC
                 fx = meta_data['intrinsic_matrix'][0, 0]
@@ -795,7 +796,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
                 centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
                 print 'visualization'
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_gt, vertmap, labels, labels_gt, centers, meta_data['intrinsic_matrix'])
+                    centers_gt, vertmap, labels, labels_gt, rois, meta_data['intrinsic_matrix'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
