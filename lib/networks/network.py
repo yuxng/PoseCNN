@@ -11,6 +11,8 @@ import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
 import hough_voting_layer.hough_voting_op as hough_voting_op
+import roi_pooling_layer.roi_pooling_op as roi_pool_op
+import roi_pooling_layer.roi_pooling_op_grad
 from gru2d import GRU2DCell
 from gru2d_original import GRUCell
 from gru3d import GRU3DCell
@@ -281,6 +283,18 @@ class Network(object):
                               ksize=[1, k_h, k_w, 1],
                               strides=[1, s_h, s_w, 1],
                               padding=padding,
+                              name=name)
+
+    @layer
+    def roi_pool(self, input, pooled_height, pooled_width, spatial_scale, name):
+        # only use the first input
+        if isinstance(input[0], tuple):
+            input[0] = input[0][0]
+
+        return roi_pool_op.roi_pool(input[0], input[1],
+                              pooled_height,
+                              pooled_width,
+                              spatial_scale,
                               name=name)
 
     @layer

@@ -129,3 +129,7 @@ class vgg16_convs(Network):
 
             (self.feed('prob_normalized', 'vertex_pred')
                  .hough_voting(name='rois'))
+
+            # roi pooling
+            (self.feed('conv5_3', 'rois')
+                 .roi_pool(6, 6, 1.0/16, name='pool5'))

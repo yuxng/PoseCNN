@@ -145,7 +145,9 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
     else:
         if cfg.TEST.VERTEX_REG:
-            labels_2d, probs, vertex_pred, rois = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois')], feed_dict=feed_dict)
+            labels_2d, probs, vertex_pred, rois = \
+                sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois')], feed_dict=feed_dict)
+            print rois
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
             vertex_pred = []

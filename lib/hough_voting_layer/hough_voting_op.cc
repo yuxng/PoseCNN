@@ -514,10 +514,10 @@ void estimateCenter(const float* probability, const float* vertmap, int batch, i
     jp::coord6_t roi;
     roi(0) = batch;
     roi(1) = it->second[h].objID;
-    roi(2) = center.x - it->second[h].width_ / 2;
-    roi(3) = center.y - it->second[h].height_ / 2;
-    roi(4) = center.x + it->second[h].width_ / 2;
-    roi(5) = center.y + it->second[h].height_ / 2;
+    roi(2) = std::max(center.x - it->second[h].width_ / 2, 0.0);
+    roi(3) = std::max(center.y - it->second[h].height_ / 2, 0.0);
+    roi(4) = std::min(center.x + it->second[h].width_ / 2, double(width));
+    roi(5) = std::min(center.y + it->second[h].height_ / 2, double(height));
 
     outputs.push_back(roi);
     
