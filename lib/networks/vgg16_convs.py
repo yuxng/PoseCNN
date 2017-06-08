@@ -2,13 +2,15 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, trainable=True):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, trainable=True, filename_camera='', filename_model=''):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
         self.num_units = num_units
         self.scale = 1 / scales[0]
         self.vertex_reg = vertex_reg
+        self.filename_camera = filename_camera
+        self.filename_model = filename_model
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
@@ -18,14 +20,15 @@ class vgg16_convs(Network):
         if vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 2 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 2 * num_classes])
+            self.poses = tf.placeholder(tf.float32, shape=[None, 13])
 
         # define a queue
         if input_format == 'RGBD':
             if vertex_reg and trainable:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
-                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses = q.dequeue()
+                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 'poses': poses})
             else:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
@@ -33,10 +36,10 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if vertex_reg and trainable:
-                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
-                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+                q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses = q.dequeue()
+                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 'poses': poses})
             else:
                 q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
@@ -132,4 +135,13 @@ class vgg16_convs(Network):
 
             # roi pooling
             (self.feed('conv5_3', 'rois')
-                 .roi_pool(6, 6, 1.0/16, name='pool5'))
+                 .roi_pool(6, 6, 1.0/16, name='pool5')
+                 .fc(256, num_in=6*6*512, name='fc6')
+                 .dropout(self.keep_prob_queue, name='drop6')
+                 .fc(256, num_in=256, name='fc7')
+                 .dropout(self.keep_prob_queue, name='drop7')
+                 .fc(7, relu=False, name='poses_pred'))
+
+            # matching loss
+            (self.feed('poses_pred', 'poses')
+                 .matching_loss(self.filename_camera, self.filename_model, name='matching_loss'))

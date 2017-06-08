@@ -10,7 +10,7 @@ template <typename T>
 class CameraBase {
 public:
 
-    CameraBase(const pangolin::json::value & cameraSpec);
+    CameraBase(const picojson::value & cameraSpec);
 
     inline unsigned int width() const { return width_; }
 
@@ -33,7 +33,7 @@ template <template <typename> class ModelT, typename T>
 class Camera : public CameraBase<T> {
 public:
 
-    Camera(const pangolin::json::value & cameraSpec)
+    Camera(const picojson::value & cameraSpec)
         : CameraBase<T>(cameraSpec), model_(cameraSpec) { }
 
     inline const T * params() const {

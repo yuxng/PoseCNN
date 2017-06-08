@@ -19,12 +19,12 @@ void KinectFusion::setup_cameras(std::string rig_specification_file)
 
   // camera configuration
   std::ifstream rig_stream(rig_specification_file);
-  pangolin::json::value val;
+  picojson::value val;
   rig_stream >> val;
   if (!val.contains("rig")) 
     throw std::runtime_error("could not find rig");
 
-  pangolin::json::value rig_val = val["rig"];
+  picojson::value rig_val = val["rig"];
   if (!rig_val.contains("camera")) 
     throw std::runtime_error("could not find camera");
 

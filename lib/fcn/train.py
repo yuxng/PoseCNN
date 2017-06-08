@@ -135,9 +135,9 @@ class SolverWrapper(object):
     def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters):
         """Network training loop."""
         # add summary
-        tf.summary.scalar('loss', loss)
-        merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
+        # tf.summary.scalar('loss', loss)
+        # merged = tf.summary.merge_all()
+        # train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
 
         # intialize variables
         sess.run(tf.global_variables_initializer())
@@ -154,8 +154,8 @@ class SolverWrapper(object):
         timer = Timer()
         for iter in range(max_iters):
             timer.tic()
-            summary, loss_value, loss_cls_value, loss_vertex_value, lr, _ = sess.run([merged, loss, loss_cls, loss_vertex, learning_rate, train_op])
-            train_writer.add_summary(summary, iter)
+            loss_value, loss_cls_value, loss_vertex_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, learning_rate, train_op])
+            # train_writer.add_summary(summary, iter)
             timer.toc()
             
             print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, lr: %.8f, time: %.2f' %\
@@ -207,7 +207,7 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
             if cfg.INPUT == 'RGBD':
                 if cfg.TRAIN.VERTEX_REG:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], net.poses: blobs['data_pose']}
 
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
@@ -219,7 +219,7 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
                                    net.z: blobs['data_gan_z']}
                     else:
                         feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], net.poses: blobs['data_pose']}
 
                 else:
                     if cfg.TRAIN.GAN:
@@ -287,8 +287,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
                 vertex_targets = network.get_output('vertex_targets')
                 vertex_weights = network.get_output('vertex_weights')
                 loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
+
+                loss_matching = network.get_output('matching_loss')[0]
+                print loss_matching
                 
-                loss = loss_cls + loss_vertex
+                loss = loss_cls + loss_vertex + loss_matching
             else:
                 scores = network.get_output('prob')
                 labels = network.get_output('gt_label_2d')
@@ -307,7 +310,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
 

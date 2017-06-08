@@ -23,7 +23,7 @@ template <typename Scalar>
 class Poly3CameraModel : public CameraModel<Poly3CameraModel, Scalar> {
 public:
 
-    Poly3CameraModel(const pangolin::json::value & cameraSpec)
+    Poly3CameraModel(const picojson::value & cameraSpec)
         : CameraModel<Poly3CameraModel,Scalar>(cameraSpec) { }
 
     template <typename T2>

@@ -10,7 +10,10 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
+import matching_loss.matching_loss_op as matching_loss_op
+import matching_loss.matching_loss_op_grad
 import hough_voting_layer.hough_voting_op as hough_voting_op
+import hough_voting_layer.hough_voting_op_grad
 import roi_pooling_layer.roi_pooling_op as roi_pool_op
 import roi_pooling_layer.roi_pooling_op_grad
 from gru2d import GRU2DCell
@@ -214,6 +217,10 @@ class Network(object):
         return triplet_loss_op.triplet_loss(input[0], input[1], tf.cast(input[2], tf.int32), margin, name=name)
 
     @layer
+    def matching_loss(self, input, filename_model, filename_camera, name):
+        return matching_loss_op.matching_loss(input[0], input[1], filename_model, filename_camera, name=name)
+
+    @layer
     def project(self, input, kernel_size, threshold, name):
         return project_op.project(input[0], input[1], input[2], kernel_size, threshold, name=name)
 
@@ -308,7 +315,7 @@ class Network(object):
 
     @layer
     def concat(self, inputs, axis, name):
-        return tf.concat(concat_dim=axis, values=inputs, name=name)
+        return tf.concat(axis=axis, values=inputs, name=name)
 
     @layer
     def add(self, inputs, name):

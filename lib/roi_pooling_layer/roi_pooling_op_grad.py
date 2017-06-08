@@ -2,8 +2,7 @@ import tensorflow as tf
 from tensorflow.python.framework import ops
 import roi_pooling_op
 
-'''
-@tf.RegisterShape("RoiPool")
+@ops.RegisterShape("RoiPool")
 def _roi_pool_shape(op):
   """Shape function for the RoiPool op.
 
@@ -19,7 +18,6 @@ def _roi_pool_shape(op):
 
   output_shape = tf.TensorShape([num_rois, pooled_height, pooled_width, channels])
   return [output_shape, output_shape]
-'''
 
 @ops.RegisterGradient("RoiPool")
 def _roi_pool_grad(op, grad, _):

@@ -16,6 +16,8 @@ from utils.blob import im_list_to_blob, pad_im, chromatic_transform
 from utils.se3 import *
 import scipy.io
 from normals import gpu_normals
+from transforms3d.quaternions import mat2quat
+
 
 def get_minibatch(roidb, voxelizer):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -26,7 +28,7 @@ def get_minibatch(roidb, voxelizer):
     im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
         gan_z_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
@@ -45,6 +47,7 @@ def get_minibatch(roidb, voxelizer):
              'data_meta_data': meta_data_blob,
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
+             'data_pose': pose_blob,
              'data_gan_z': gan_z_blob}
 
     return blobs
@@ -194,6 +197,9 @@ def _get_label_blob(roidb, voxelizer):
     if cfg.TRAIN.VERTEX_REG:
         processed_vertex_targets = []
         processed_vertex_weights = []
+        pose_blob = np.zeros((0, 13), dtype=np.float32)
+    else:
+        pose_blob = []
 
     for i in xrange(num_images):
         # load meta data
@@ -224,6 +230,21 @@ def _get_label_blob(roidb, voxelizer):
             center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
             processed_vertex_targets.append(center_targets)
             processed_vertex_weights.append(center_weights)
+
+            poses = meta_data['poses']
+            num = poses.shape[2]
+            qt = np.zeros((num, 13), dtype=np.float32)
+            for j in xrange(num):
+                R = poses[:, :3, j]
+                T = poses[:, 3, j]
+
+                qt[j, 0] = i
+                qt[j, 1] = roidb[i]['gt_classes'][j]
+                qt[j, 2:6] = roidb[i]['boxes'][j, :]
+                qt[j, 6:10] = mat2quat(R)
+                qt[j, 10:] = T
+
+            pose_blob = np.concatenate((pose_blob, qt), axis=0)
 
         # depth
         if roidb[i]['flipped']:
@@ -297,7 +318,7 @@ def _get_label_blob(roidb, voxelizer):
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
     
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_z_blob
+    return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gan_z_blob
 
 
 # compute the voting label image in 2D

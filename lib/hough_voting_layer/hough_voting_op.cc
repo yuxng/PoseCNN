@@ -38,6 +38,14 @@ REGISTER_OP("Houghvoting")
     .Input("bottom_vertex: T")
     .Output("top_box: T");
 
+REGISTER_OP("HoughvotingGrad")
+    .Attr("T: {float, double}")
+    .Input("bottom_prob: T")
+    .Input("bottom_vertex: T")
+    .Input("grad: T")
+    .Output("output_prob: T")
+    .Output("output_vertex: T");
+
 void getProbs(const float* probability, std::vector<jp::img_stat_t>& probs, int width, int height, int num_classes);
 void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes);
 void getLabels(const float* probability, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
@@ -113,6 +121,53 @@ class HoughvotingOp : public OpKernel {
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvoting").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotingOp<CPUDevice, float>);
+
+
+// compute gradient
+template <class Device, class T>
+class HoughvotingGradOp : public OpKernel {
+ public:
+  explicit HoughvotingGradOp(OpKernelConstruction* context) : OpKernel(context) {
+  }
+
+  void Compute(OpKernelContext* context) override 
+  {
+    // Grab the input tensor
+    const Tensor& bottom_prob = context->input(0);
+    const Tensor& bottom_vertex = context->input(1);
+
+    // data should have 5 dimensions.
+    OP_REQUIRES(context, bottom_prob.dims() == 4,
+                errors::InvalidArgument("prob must be 4-dimensional"));
+
+    OP_REQUIRES(context, bottom_vertex.dims() == 4,
+                errors::InvalidArgument("vertex must be 4-dimensional"));
+
+    // batch size
+    int batch_size = bottom_prob.dim_size(0);
+    // height
+    int height = bottom_prob.dim_size(1);
+    // width
+    int width = bottom_prob.dim_size(2);
+    // num of classes
+    int num_classes = bottom_prob.dim_size(3);
+
+    // construct the output shape
+    TensorShape output_shape = bottom_prob.shape();
+    Tensor* top_prob_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_prob_tensor));
+    T* top_prob = top_prob_tensor->template flat<T>().data();
+    memset(top_prob, 0, batch_size * height * width * num_classes *sizeof(T));
+
+    TensorShape output_shape_1 = bottom_vertex.shape();
+    Tensor* top_vertex_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(1, output_shape_1, &top_vertex_tensor));
+    T* top_vertex = top_vertex_tensor->template flat<T>().data();
+    memset(top_vertex, 0, batch_size * height * width * 2 * num_classes *sizeof(T));
+  }
+};
+
+REGISTER_KERNEL_BUILDER(Name("HoughvotingGrad").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotingGradOp<CPUDevice, float>);
 
 
 // get probs
@@ -529,4 +584,5 @@ void estimateCenter(const float* probability, const float* vertmap, int batch, i
     std::cout << "---------------------------------------------------" << std::endl;
   }
   std::cout << std::endl;
+  std::cout << outputs.size() << " objects detected" << std::endl;
 }

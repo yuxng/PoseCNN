@@ -45,6 +45,12 @@ def parse_args():
     parser.add_argument('--network', dest='network_name',
                         help='name of the network',
                         default=None, type=str)
+    parser.add_argument('--rig', dest='rig_name',
+                        help='name of the camera rig file',
+                        default=None, type=str)
+    parser.add_argument('--cad', dest='cad_name',
+                        help='name of the CAD file',
+                        default=None, type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -86,6 +92,9 @@ if __name__ == '__main__':
         pretrained_model = None
     else:
         pretrained_model = args.pretrained_model
+
+    cfg.RIG = args.rig_name
+    cfg.CAD = args.cad_name
 
     from networks.factory import get_network
     network = get_network(args.network_name)

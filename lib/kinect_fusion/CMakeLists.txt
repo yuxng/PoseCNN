@@ -8,6 +8,7 @@ endif()
 add_definitions(-std=c++11)
 add_definitions(-Wall)
 add_definitions(-fPIC)
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 # supply compile-time directory to code
 set(compileDirectory \"${PROJECT_SOURCE_DIR}\")
@@ -30,7 +31,7 @@ endif()
 
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
-find_package(Eigen3 REQUIRED)
+#find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(nanoflann nanoflann REQUIRED)
@@ -38,20 +39,21 @@ pkg_check_modules(nanoflann nanoflann REQUIRED)
 # TODO:
 set(SUITESPARSE_INCLUDE_DIRS "/usr/include/suitesparse" CACHE PATH "suitesparse include directory")
 set(SUITESPARSE_LIBRARIES "cholmod;metis")
+#set(EIGEN_DIR "/home/yuxiang/tensorflow/local/lib/python2.7/site-packages/tensorflow/include")
 
 # suitesparse libraries /usr/lib/x86_64-linux-gnu/libspqr.so;/usr/lib/x86_64-linux-gnu/libcholmod.so;/usr/lib/x86_64-linux-gnu/libccolamd.so;/usr/lib/x86_64-linux-gnu/libcamd.so;/usr/lib/x86_64-linux-gnu/libcolamd.so;/usr/lib/x86_64-linux-gnu/libamd.so;/usr/lib/liblapack.so;/usr/lib/libf77blas.so;/usr/lib/libatlas.so;/usr/lib/libf77blas.so;/usr/lib/libatlas.so;/usr/lib/x86_64-linux-gnu/libsuitesparseconfig.so;/usr/lib/x86_64-linux-gnu/librt.so;/usr/lib/x86_64-linux-gnu/libmetis.so
 
 
 include_directories(${PROJECT_SOURCE_DIR}/include
                     ${Pangolin_INCLUDE_DIRS}
-                    ${EIGEN3_INCLUDE_DIR}
+#                    ${EIGEN3_INCLUDE_DIR}
                     ${SUITESPARSE_INCLUDE_DIRS}
                     ${nanoflann_INCLUDE_DIRS})
 
 link_directories(${Pangolin_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
-               ${SUITESPARSE_LIBRARIES})
+               ${SUITESPARSE_LIBRARIES} "-lutil")
 
 file( GLOB DF_HEADERS
   "./include/df/*/*.h"
@@ -71,8 +73,10 @@ file( GLOB SHADER_SOURCES
 )
 
 #set(CUDA_SEPARABLE_COMPILATION ON)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-arch=sm_52;--expt-extended-lambda;--verbose;-Xcompiler -fPIC;")
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-arch=sm_61;--expt-extended-lambda;--verbose;-Xcompiler -fPIC;")
 #set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-gencode arch=compute_61,code=sm_61;--expt-extended-lambda;--verbose;")
+
+message(STATUS "pangolin: ${Pangolin_INCLUDE_DIRS}")
 
 cuda_add_library(
   kfusion

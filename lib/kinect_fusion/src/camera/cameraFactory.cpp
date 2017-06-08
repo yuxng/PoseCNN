@@ -9,7 +9,7 @@ CameraFactory<T> & CameraFactory<T>::instance() {
 }
 
 template <typename T>
-CameraBase<T> * CameraFactory<T>::createCamera(const pangolin::json::value & cameraSpec) {
+CameraBase<T> * CameraFactory<T>::createCamera(const picojson::value & cameraSpec) {
 
     std::cout << cameraSpec << std::endl;
     std::cout << cameraSpec["type"] << std::endl;

@@ -169,7 +169,7 @@ class lov(datasets.imdb):
             print 'class weights: ', roidb[0]['class_weights']
             return roidb
 
-        self.compute_class_weights()
+        # self.compute_class_weights()
 
         gt_roidb = [self._load_lov_annotation(index)
                     for index in self.image_index]
@@ -200,6 +200,23 @@ class lov(datasets.imdb):
         # parse image name
         pos = index.find('/')
         video_id = index[:pos]
+
+        # read boxes
+        filename = os.path.join(self._data_path, index + '-box.txt')
+        lines = []
+        with open(filename) as f:
+            for line in f:
+                lines.append(line)
+
+        num_objs = len(lines)
+        boxes = np.zeros((num_objs, 4), dtype=np.float32)
+        gt_classes = np.zeros((num_objs), dtype=np.int32)
+
+        for ix, line in enumerate(lines):
+            words = line.split()
+            cls = self._class_to_ind[words[0]]
+            boxes[ix, :] = [float(n) for n in words[1:5]]
+            gt_classes[ix] = cls
         
         return {'image': image_path,
                 'depth': depth_path,
@@ -208,6 +225,8 @@ class lov(datasets.imdb):
                 'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
+                'boxes': boxes,
+                'gt_classes': gt_classes,
                 'flipped': False}
 
     def _process_label_image(self, label_image):

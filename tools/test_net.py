@@ -47,6 +47,9 @@ def parse_args():
     parser.add_argument('--rig', dest='rig_name',
                         help='name of the camera rig file',
                         default=None, type=str)
+    parser.add_argument('--cad', dest='cad_name',
+                        help='name of the CAD file',
+                        default=None, type=str)
     parser.add_argument('--kfusion', dest='kfusion',
                         help='run kinect fusion or not',
                         default=False, type=bool)
@@ -84,6 +87,9 @@ if __name__ == '__main__':
         path = osp.abspath(osp.join(cfg.ROOT_DIR, args.pretrained_model))
         cfg.TRAIN.MODEL_PATH = path
     cfg.TRAIN.TRAINABLE = False
+
+    cfg.RIG = args.rig_name
+    cfg.CAD = args.cad_name
 
     from networks.factory import get_network
     network = get_network(args.network_name)

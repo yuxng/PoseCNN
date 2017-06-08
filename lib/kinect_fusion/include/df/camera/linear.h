@@ -23,7 +23,7 @@ template <typename T>
 class LinearCameraModel : public CameraModel<LinearCameraModel, T> {
 public:
 
-    LinearCameraModel(const pangolin::json::value & cameraSpec)
+    LinearCameraModel(const picojson::value & cameraSpec)
         : CameraModel<LinearCameraModel,T>(cameraSpec) { }
 
     template <typename T2>
