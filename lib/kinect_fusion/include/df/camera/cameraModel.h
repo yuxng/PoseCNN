@@ -19,7 +19,7 @@ template <template <typename> class ModelT, typename Scalar>
 class CameraModel {
 public:
 
-    CameraModel(const pangolin::json::value & cameraSpec) {
+    CameraModel(const picojson::value & cameraSpec) {
 
         if (cameraSpec["params"].size() != numParams()) {
             throw std::runtime_error("wrong number of parameters for specifiec model (" +

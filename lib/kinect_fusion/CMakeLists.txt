@@ -8,6 +8,7 @@ endif()
 add_definitions(-std=c++11)
 add_definitions(-Wall)
 add_definitions(-fPIC)
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 # supply compile-time directory to code
 set(compileDirectory \"${PROJECT_SOURCE_DIR}\")
@@ -51,7 +52,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include
 link_directories(${Pangolin_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
-               ${SUITESPARSE_LIBRARIES})
+               ${SUITESPARSE_LIBRARIES} "-lutil")
 
 file( GLOB DF_HEADERS
   "./include/df/*/*.h"

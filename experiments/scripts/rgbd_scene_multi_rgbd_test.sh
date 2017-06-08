@@ -19,8 +19,8 @@ fi
 # test FCN for multiple frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16 \
-  --model data/fcn_models/rgbd_scene/rgbd/vgg16_fcn_rgbd_multi_frame_rgbd_scene_iter_40000.ckpt \
+  --model data/fcn_models/rgbd_scene/vgg16_fcn_rgbd_multi_frame_rgbd_scene_iter_40000.ckpt \
   --imdb rgbd_scene_val \
   --cfg experiments/cfgs/rgbd_scene_multi_rgbd.yml \
   --rig data/RGBDScene/camera.json \
-#  --kfusion 1
+  --kfusion 1

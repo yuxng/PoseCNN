@@ -5,7 +5,7 @@
 namespace df {
 
 template <typename T>
-inline Sophus::SE3Group<T> poseFromJson(const pangolin::json::value & poseSpec) {
+inline Sophus::SE3Group<T> poseFromJson(const picojson::value & poseSpec) {
 
     std::cout << "pose: " << poseSpec.serialize(true) << std::endl;
 
@@ -15,7 +15,7 @@ inline Sophus::SE3Group<T> poseFromJson(const pangolin::json::value & poseSpec) 
 
     Eigen::Matrix<T,4,4> M = Eigen::Matrix<T,4,4>::Identity();
     for (int r = 0; r < 3; ++r) {
-        const pangolin::json::value & rowSpec = poseSpec[r];
+        const picojson::value & rowSpec = poseSpec[r];
         if (rowSpec.size() != 4) {
             throw std::runtime_error("each row in pose spec must have 4 values");
         }
@@ -29,9 +29,9 @@ inline Sophus::SE3Group<T> poseFromJson(const pangolin::json::value & poseSpec) 
 }
 
 template <typename T>
-Rig<T>::Rig(const pangolin::json::value & rigSpec) {
+Rig<T>::Rig(const picojson::value & rigSpec) {
 
-    const pangolin::json::value & camsSpec = rigSpec["camera"];
+    const picojson::value & camsSpec = rigSpec["camera"];
 
     const std::size_t nCameras = camsSpec.size();
 
@@ -42,7 +42,7 @@ Rig<T>::Rig(const pangolin::json::value & rigSpec) {
 
     for (std::size_t i = 0; i < nCameras; ++i) {
 
-        const pangolin::json::value & camSpec = camsSpec[i];
+        const picojson::value & camSpec = camsSpec[i];
         if (!camSpec.contains("camera_model")) {
             throw std::runtime_error("camera spec does not contain a camera model");
         }

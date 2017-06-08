@@ -12,7 +12,7 @@ template <typename T>
 class Rig {
 public:
 
-    Rig(const pangolin::json::value & rigSpec);
+    Rig(const picojson::value & rigSpec);
 
     const std::size_t numCameras() const {
         return cameras_.size();

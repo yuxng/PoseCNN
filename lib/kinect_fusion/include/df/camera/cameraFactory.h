@@ -15,9 +15,9 @@ public:
 
     static CameraFactory & instance();
 
-    typedef std::function<CameraBase<T> *(const pangolin::json::value &)> CameraCreator;
+    typedef std::function<CameraBase<T> *(const picojson::value &)> CameraCreator;
 
-    CameraBase<T> * createCamera(const pangolin::json::value & cameraSpec);
+    CameraBase<T> * createCamera(const picojson::value & cameraSpec);
 
     void registerCameraCreator(const std::string name, CameraCreator creator);
 
@@ -45,7 +45,7 @@ CameraModelRegistration(const std::string name,
 
 #define REGISTER_CAMERA_MODEL(name)                                                                                        \
     template <typename T>                                                                                                  \
-    CameraBase<T> * create##name##CameraModel(const pangolin::json::value & cameraSpec) {                                  \
+    CameraBase<T> * create##name##CameraModel(const picojson::value & cameraSpec) {                                  \
         return new Camera<name##CameraModel,T>(cameraSpec);                                                                \
     }                                                                                                                      \
     static internal::CameraModelRegistration<float> name##CameraRegistration_f(#name, create##name##CameraModel<float>);   \

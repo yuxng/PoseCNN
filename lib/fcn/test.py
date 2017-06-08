@@ -23,7 +23,7 @@ import scipy.io
 import time
 from normals import gpu_normals
 from pose_estimation import ransac
-#from kinect_fusion import kfusion
+from kinect_fusion import kfusion
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -431,7 +431,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
             im_label_kfusion = imdb.labels_to_image(im, labels_kfusion)
             KF.render()
             filename = os.path.join(output_dir, 'images', '{:04d}'.format(i))
-            KF.draw(filename, 1)
+            KF.draw(filename, 0)
         have_prediction = True
 
         # compute the delta transformation between frames

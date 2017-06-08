@@ -39,12 +39,12 @@ class vgg16(Network):
         self.setup()
 
     def setup(self):
-        input_data = tf.unpack(self.data_queue, self.num_steps)
+        input_data = tf.unstack(self.data_queue, self.num_steps)
         if self.input_format == 'RGBD':
-            input_data_p = tf.unpack(self.data_p_queue, self.num_steps)
-        input_label_2d = tf.unpack(self.gt_label_2d_queue, self.num_steps)
-        input_depth = tf.unpack(self.depth_queue, self.num_steps)
-        input_meta_data = tf.unpack(self.meta_data_queue, self.num_steps)
+            input_data_p = tf.unstack(self.data_p_queue, self.num_steps)
+        input_label_2d = tf.unstack(self.gt_label_2d_queue, self.num_steps)
+        input_depth = tf.unstack(self.depth_queue, self.num_steps)
+        input_meta_data = tf.unstack(self.meta_data_queue, self.num_steps)
         input_state = self.state_queue
         input_weights = self.weights_queue
         input_points = self.points_queue

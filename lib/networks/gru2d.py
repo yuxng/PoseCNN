@@ -27,7 +27,7 @@ class GRU2DCell(tf.contrib.rnn.core_rnn_cell.RNNCell):
 
             with tf.variable_scope("Gates"):  # Reset gate and update gate.
                 # concat inputs and state
-                inputs_state = tf.concat(3, [inputs, state])
+                inputs_state = tf.concat(axis=3, values=[inputs, state])
 
                 # define the variables
                 init_kernel = tf.constant_initializer(0.0)
