@@ -43,13 +43,15 @@ void Render::setup_cameras(std::string rig_specification_file)
 // create window
 void Render::create_window()
 {
-  pangolin::CreateWindowAndBind("Render", 640*2, 480);
+  pangolin::CreateWindowAndBind("Render", 640, 480);
 
   gtView_ = &pangolin::Display("gt").SetAspect(640.0/480.);
   poseView_ = &pangolin::Display("pose").SetAspect(640.0/480.);
 
-  pangolin::Display("multi").AddDisplay(*gtView_).AddDisplay(*poseView_)
-            .SetLayout(pangolin::LayoutEqual);
+  pangolin::Display("multi")
+      .SetLayout(pangolin::LayoutEqual)
+      .AddDisplay(*gtView_)
+      .AddDisplay(*poseView_);
 
   // create render
   renderer_ = new df::GLRenderer<ForegroundRenderType>(color_camera_->width(), color_camera_->height());
@@ -185,6 +187,12 @@ void Render::render()
 
   // df::ManagedHostTensor2<Eigen::Matrix<char,3,1> > objectMask({image_width_, image_height_});
   // renderer_->texture(0).Download(objectMask.data(), GL_RGB, GL_UNSIGNED_BYTE);
+
+
+  glColor3ub(255,255,255);
+  // glClearColor(0,1,0,1);
+  poseView_->ActivateScissorAndClear();
+
   pangolin::FinishFrame();
 
   destroy_window();

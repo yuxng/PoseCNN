@@ -23,16 +23,17 @@ class SolverWrapper(object):
     use to unnormalize the learned bounding-box regression weights.
     """
 
-    def __init__(self, sess, network, imdb, roidb, output_dir, pretrained_model=None):
+    def __init__(self, sess, network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None):
         """Initialize the SolverWrapper."""
         self.net = network
         self.imdb = imdb
         self.roidb = roidb
         self.output_dir = output_dir
         self.pretrained_model = pretrained_model
+        self.pretrained_ckpt = pretrained_ckpt
 
         # For checkpoint
-        self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
 
 
     def snapshot(self, sess, iter):
@@ -53,6 +54,40 @@ class SolverWrapper(object):
         self.saver.save(sess, filename)
         print 'Wrote snapshot to: {:s}'.format(filename)
 
+    def restore(self, session, save_file):
+        reader = tf.train.NewCheckpointReader(save_file)
+        saved_shapes = reader.get_variable_to_shape_map()
+        var_names = sorted([(var.name, var.name.split(':')[0]) for var in tf.global_variables()
+                if var.name.split(':')[0] in saved_shapes])
+
+        var_name_to_var = {var.name : var for var in tf.global_variables()}
+        restore_vars = []
+        restored_var_names = set()
+        print('Restoring:')
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            for var_name, saved_var_name in var_names:
+                if 'global_step' in var_name:
+                    continue
+                curr_var = var_name_to_var[var_name]
+                var_shape = curr_var.get_shape().as_list()
+                if var_shape == saved_shapes[saved_var_name]:
+                    restore_vars.append(curr_var)
+                    print(str(saved_var_name))
+                    restored_var_names.add(saved_var_name)
+                else:
+                    print('Shape mismatch for var', saved_var_name, 'expected', var_shape, 'got', saved_shapes[saved_var_name])
+        ignored_var_names = sorted(list(set(saved_shapes.keys()) - restored_var_names))
+        print('\n')
+        if len(ignored_var_names) == 0:
+            print('Restored all variables')
+        else:
+            print('Did not restore:' + '\n\t'.join(ignored_var_names))
+
+        if len(restore_vars) > 0:
+            saver = tf.train.Saver(restore_vars)
+            saver.restore(session, save_file)
+        print('Restored %s' % save_file)
+
 
     def train_model(self, sess, train_op, loss, learning_rate, max_iters):
         """Network training loop."""
@@ -67,6 +102,12 @@ class SolverWrapper(object):
             print ('Loading pretrained model '
                    'weights from {:s}').format(self.pretrained_model)
             self.net.load(self.pretrained_model, sess, True)
+
+        print self.pretrained_ckpt
+        if self.pretrained_ckpt is not None:
+            print ('Loading pretrained ckpt '
+                   'weights from {:s}').format(self.pretrained_ckpt)
+            self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
 
@@ -92,46 +133,6 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
-    def train_gan(self, sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_l1, loss_ad, max_iters):
-        """Network training loop."""
-
-        # intialize variables
-        sess.run(tf.global_variables_initializer())
-        if self.pretrained_model is not None:
-            print ('Loading pretrained model '
-                   'weights from {:s}').format(self.pretrained_model)
-            self.net.load(self.pretrained_model, sess, True)
-
-        tf.get_default_graph().finalize()
-
-        last_snapshot_iter = -1
-        timer = Timer()
-        for iter in range(max_iters):
-            timer.tic()
-            # update discriminator
-            loss_value_d, loss_value_true, loss_value_false, _ \
-                = sess.run([loss_d, loss_true, loss_false, train_op_d])
-
-            # update generator
-            loss_value_g, loss_value_l1, loss_value_ad, _ = sess.run([loss_g, loss_l1, loss_ad, train_op_g])
-            timer.toc()
-            
-            #print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, lr_d: %.8f, time: %.2f' %\
-            #        (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, lr_d, timer.diff)
-            print 'iter: %d / %d, loss_d: %.4f, loss_true: %.4f, loss_false: %.4f, loss_g: %.4f, loss_l1: %.4f, loss_ad: %.4f, time: %.2f' %\
-                    (iter+1, max_iters, loss_value_d, loss_value_true, loss_value_false, loss_value_g, loss_value_l1, loss_value_ad, timer.diff)
-
-            if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
-                print 'speed: {:.3f}s / iter'.format(timer.average_time)
-
-            if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
-                last_snapshot_iter = iter
-                self.snapshot(sess, iter)
-
-        if last_snapshot_iter != iter:
-            self.snapshot(sess, iter)
-
-
     def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters):
         """Network training loop."""
         # add summary
@@ -145,6 +146,11 @@ class SolverWrapper(object):
             print ('Loading pretrained model '
                    'weights from {:s}').format(self.pretrained_model)
             self.net.load(self.pretrained_model, sess, True)
+
+        if self.pretrained_ckpt is not None:
+            print ('Loading pretrained ckpt '
+                   'weights from {:s}').format(self.pretrained_ckpt)
+            self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
 
@@ -206,27 +212,25 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
                 if cfg.TRAIN.VERTEX_REG:
-                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], net.poses: blobs['data_pose']}
-
+                    if cfg.TRAIN.POSE_REG:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], net.poses: blobs['data_pose']}
+                    else:
+                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
 
             else:
                 if cfg.TRAIN.VERTEX_REG:
-                    if cfg.TRAIN.GAN:
-                        feed_dict={net.data: blobs['data_image_color_rescale'], net.data_gt: blobs['data_vertex_images'], net.keep_prob: 0.5, \
-                                   net.z: blobs['data_gan_z']}
-                    else:
+                    if cfg.TRAIN.POSE_REG:
                         feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                    net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], net.poses: blobs['data_pose']}
-
-                else:
-                    if cfg.TRAIN.GAN:
-                        feed_dict={net.data: blobs['data_image_color_rescale'], net.data_gt: blobs['data_vertex_images'], net.keep_prob: 0.5, \
-                                   net.z: blobs['data_gan_z']}
                     else:
-                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+                        feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                else:
+                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
@@ -268,7 +272,7 @@ def loss_cross_entropy_single_frame(scores, labels):
     return loss
 
 
-def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
+def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
     if cfg.TRAIN.SINGLE_FRAME:
@@ -288,10 +292,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
                 vertex_weights = network.get_output('vertex_weights')
                 loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
 
-                loss_matching = network.get_output('matching_loss')[0]
-                print loss_matching
-                
-                loss = loss_cls + loss_vertex + loss_matching
+                if cfg.TRAIN.POSE_REG:
+                    loss_matching = network.get_output('matching_loss')[0]
+                    loss = loss_cls + loss_vertex + loss_matching
+                else:
+                    loss = loss_cls + loss_vertex
             else:
                 scores = network.get_output('prob')
                 labels = network.get_output('gt_label_2d')
@@ -313,7 +318,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
 
-        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
 
         # thread to load data
         coord = tf.train.Coordinator()

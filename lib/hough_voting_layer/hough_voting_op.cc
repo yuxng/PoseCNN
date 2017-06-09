@@ -248,8 +248,8 @@ void getLabels(const float* probability, std::vector<std::vector<int>>& labels, 
     if (labels[i].size() > minArea)
     {
       object_ids.push_back(i);
-      std::cout << "class " << i << ", " << labels[i].size() << " pixels" << std::endl;
     }
+    std::cout << "class " << i << ", " << labels[i].size() << " pixels" << std::endl;
   }
 }
 
@@ -444,6 +444,9 @@ void estimateCenter(const float* probability, const float* vertmap, int batch, i
   std::vector<int> object_ids;
   getLabels(probability, labels, object_ids, width, height, num_classes, minArea);
   std::cout << "read labels done" << std::endl;
+
+  if (object_ids.size() == 0)
+    return;
 	
   int imageWidth = width;
   int imageHeight = height;
