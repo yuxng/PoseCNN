@@ -152,8 +152,8 @@ class Network(object):
             if group==1:
                 output = convolve(input, kernel)
             else:
-                input_groups = tf.split(3, group, input)
-                kernel_groups = tf.split(3, group, kernel)
+                input_groups = tf.split(3, group, input)  # tf.split is called with incorrect arguments, this will crash
+                kernel_groups = tf.split(3, group, kernel)  # tf.split is called with incorrect arguments
                 output_groups = [convolve(i, k) for i,k in zip(input_groups, kernel_groups)]
                 output = tf.concat(3, output_groups)
             # Add the biases
@@ -289,7 +289,7 @@ class Network(object):
 
     @layer
     def concat(self, inputs, axis, name):
-        return tf.concat(concat_dim=axis, values=inputs, name=name)
+        return tf.concat(axis=axis, values=inputs, name=name)
 
     @layer
     def add(self, inputs, name):

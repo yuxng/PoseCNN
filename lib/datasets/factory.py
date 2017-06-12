@@ -14,6 +14,8 @@ import datasets.shapenet_single
 import datasets.gmu_scene
 import datasets.rgbd_scene
 import datasets.lov
+import datasets.linemod_ape
+import datasets.sintel_albedo
 import numpy as np
 
 # shapenet dataset
@@ -49,6 +51,21 @@ for split in ['train', 'val']:
     print name
     __sets[name] = (lambda split=split:
             datasets.lov(split))
+
+# linemod dataset
+for split in ['train', 'val']:
+    name = 'linemod_ape_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.linemod_ape(split))
+
+# sintel dataset
+for split in ['train', 'val']:
+    name = 'sintel_albedo_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.sintel_albedo(split))
+
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

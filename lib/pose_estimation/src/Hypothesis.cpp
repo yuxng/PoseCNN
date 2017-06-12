@@ -98,7 +98,7 @@ cv::Point2d Hypothesis::calcCenter(std::vector<std::pair<cv::Point2d, cv::Point2
     cv::Mat pointsA(points.size(), 2, CV_64F);
     cv::Mat pointsB(points.size(), 1, CV_64F);
     cv::Mat output(2, 1, CV_64F);
-    std::cout << "poinst size " << points.size() << std::endl; 
+//    std::cout << "poinst size " << points.size() << std::endl;
 
     int i = 0;
     for(auto it = points.begin(); it != points.end(); ++it) 

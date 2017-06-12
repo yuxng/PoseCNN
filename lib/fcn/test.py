@@ -252,20 +252,24 @@ def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
+    ax.autoscale()
 
     # show depth
     ax = fig.add_subplot(222)
     plt.imshow(im_depth)
     ax.set_title('input depth')
+    ax.autoscale()
 
     # show class label
     ax = fig.add_subplot(223)
     plt.imshow(labels)
     ax.set_title('class labels')
+    ax.autoscale()
 
     ax = fig.add_subplot(224)
     plt.imshow(labels_gt)
     ax.set_title('gt class labels')
+    ax.autoscale()
 
     # show the 3D points
     '''
@@ -288,6 +292,8 @@ def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     ax.set_zlabel('Z')
     set_axes_equal(ax)
     '''
+
+    fig.tight_layout()
     plt.show()
 
 ##################
@@ -552,30 +558,36 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
+    ax.autoscale()
 
     # show gt class labels
     ax = fig.add_subplot(242)
     plt.imshow(im_labels_gt)
     ax.set_title('gt class labels')
+    ax.autoscale()
 
     # show depth
     ax = fig.add_subplot(245)
     plt.imshow(im_depth)
     ax.set_title('input depth')
+    ax.autoscale()
 
     # show gt vertex map
     ax = fig.add_subplot(243)
     plt.imshow(vertmap_gt[:,:,0])
     ax.set_title('gt centers x')
+    ax.autoscale()
 
     ax = fig.add_subplot(244)
     plt.imshow(vertmap_gt[:,:,1])
     ax.set_title('gt centers y')
+    ax.autoscale()
 
     # show class label
     ax = fig.add_subplot(246)
     plt.imshow(im_labels)
     ax.set_title('class labels')
+    ax.autoscale()
 
     # show centers
     index = np.where(np.isfinite(centers[:, 0]))[0]
@@ -594,10 +606,12 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
     ax = fig.add_subplot(247)
     plt.imshow(vertmap[:,:,0])
     ax.set_title('centers x')
+    ax.autoscale()
 
     ax = fig.add_subplot(248)
     plt.imshow(vertmap[:,:,1])
     ax.set_title('centers y')
+    ax.autoscale()
 
     # show projection of the poses
     if cfg.TEST.RANSAC:
@@ -632,6 +646,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ve
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
 
+    plt.tight_layout()
     plt.show()
 
 

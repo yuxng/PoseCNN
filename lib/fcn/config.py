@@ -78,6 +78,7 @@ __C.TRAIN.SNAPSHOT_PREFIX = 'caffenet_fast_rcnn'
 __C.TRAIN.SNAPSHOT_INFIX = ''
 
 __C.TRAIN.DISPLAY = 20
+__C.TRAIN.OPTICAL_FLOW = False
 
 
 #

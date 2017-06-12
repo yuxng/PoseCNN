@@ -11,6 +11,8 @@ from .shapenet_single import shapenet_single
 from .gmu_scene import gmu_scene
 from .rgbd_scene import rgbd_scene
 from .lov import lov
+from .linemod_ape import linemod_ape
+from .sintel_albedo import sintel_albedo
 from . import factory
 
 import os.path as osp

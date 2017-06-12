@@ -1,32 +1,27 @@
-__author__ = 'yuxiang'
+__author__ = 'yuxiang, davidmichelman'
 
 import os
 import datasets
-import datasets.lov
+import datasets.linemod_ape
 import datasets.imdb
 import cPickle
 import numpy as np
 import cv2
 
-class lov(datasets.imdb):
-    def __init__(self, image_set, lov_path = None):
-        datasets.imdb.__init__(self, 'lov_' + image_set)
+
+class linemod_ape(datasets.imdb):
+    def __init__(self, image_set, linemod_path=None):
+        datasets.imdb.__init__(self, 'linemod_ape_' + image_set)
         self._image_set = image_set
-        self._lov_path = self._get_default_path() if lov_path is None \
-                            else lov_path
-        self._data_path = os.path.join(self._lov_path, 'data')
+        self._linemod_path = self._get_default_path() if linemod_path is None \
+            else linemod_path
+        self._data_path = os.path.join(self._linemod_path, 'data')
 
-        self._classes = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
-                         '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
-                         '021_bleach_cleanser', '024_bowl', '025_mug', '035_power_drill', '036_wood_block', '037_scissors', '040_large_marker', \
-                         '051_large_clamp', '052_extra_large_clamp', '061_foam_brick')
+        self._classes = ('__background__', '001_ape')
 
-        self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), \
-                              (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
-                              (64, 0, 0), (0, 64, 0), (0, 0, 64), (64, 64, 0), (64, 0, 64), (0, 64, 64), 
-                              (192, 0, 0), (0, 192, 0), (0, 0, 192)]
+        self._class_colors = [(255, 255, 255), (255, 0, 0)]
 
-        self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        self._class_weights = [1, 100]
 
         self._extents = self._load_object_extents()
 
@@ -35,10 +30,10 @@ class lov(datasets.imdb):
         self._image_index = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
 
-        assert os.path.exists(self._lov_path), \
-                'lov path does not exist: {}'.format(self._lov_path)
+        assert os.path.exists(self._linemod_path), \
+            'linemod ape path does not exist: {}'.format(self._linemod_path)
         assert os.path.exists(self._data_path), \
-                'Data path does not exist: {}'.format(self._data_path)
+            'Data path does not exist: {}'.format(self._data_path)
 
     # image
     def image_path_at(self, i):
@@ -54,7 +49,7 @@ class lov(datasets.imdb):
 
         image_path = os.path.join(self._data_path, index + '-color' + self._image_ext)
         assert os.path.exists(image_path), \
-                'Path does not exist: {}'.format(image_path)
+            'Path does not exist: {}'.format(image_path)
         return image_path
 
     # depth
@@ -70,7 +65,7 @@ class lov(datasets.imdb):
         """
         depth_path = os.path.join(self._data_path, index + '-depth' + self._image_ext)
         assert os.path.exists(depth_path), \
-                'Path does not exist: {}'.format(depth_path)
+            'Path does not exist: {}'.format(depth_path)
         return depth_path
 
     # label
@@ -84,9 +79,9 @@ class lov(datasets.imdb):
         """
         Construct an metadata path from the image's "index" identifier.
         """
-        label_path = os.path.join(self._data_path, index + '-label' + self._image_ext)
+        label_path = os.path.join(self._data_path, index + '-mask' + self._image_ext)
         assert os.path.exists(label_path), \
-                'Path does not exist: {}'.format(label_path)
+            'Path does not exist: {}'.format(label_path)
         return label_path
 
     # camera pose
@@ -102,16 +97,16 @@ class lov(datasets.imdb):
         """
         metadata_path = os.path.join(self._data_path, index + '-meta.mat')
         assert os.path.exists(metadata_path), \
-                'Path does not exist: {}'.format(metadata_path)
+            'Path does not exist: {}'.format(metadata_path)
         return metadata_path
 
     def _load_image_set_index(self):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        image_set_file = os.path.join(self._lov_path, self._image_set + '.txt')
+        image_set_file = os.path.join(self._linemod_path, self._image_set + '.txt')
         assert os.path.exists(image_set_file), \
-                'Path does not exist: {}'.format(image_set_file)
+            'Path does not exist: {}'.format(image_set_file)
 
         with open(image_set_file) as f:
             image_index = [x.rstrip('\n') for x in f.readlines()]
@@ -121,23 +116,20 @@ class lov(datasets.imdb):
         """
         Return the default path where KITTI is expected to be installed.
         """
-        return os.path.join(datasets.ROOT_DIR, 'data', 'LOV')
-
+        return os.path.join(datasets.ROOT_DIR, 'data', 'linemod', 'ape')
 
     def _load_object_extents(self):
 
-        extent_file = os.path.join(self._lov_path, 'extents.txt')
-        assert os.path.exists(extent_file), \
-                'Path does not exist: {}'.format(extent_file)
-
+        # extent_file = os.path.join(self._linemod_path, 'extents.txt')
+        # assert os.path.exists(extent_file), \
+        #     'Path does not exist: {}'.format(extent_file)
+        #TODO: fix this?
         extents = np.zeros((self.num_classes, 3), dtype=np.float32)
-        extents[1:, :] = np.loadtxt(extent_file)
+        # extents[1:, :] = np.loadtxt(extent_file)
 
         return extents
 
-
     def compute_class_weights(self):
-
         print 'computing class weights'
         num_classes = self.num_classes
         count = np.zeros((num_classes,), dtype=np.int64)
@@ -153,7 +145,6 @@ class lov(datasets.imdb):
             self._class_weights[i] = min(float(count[0]) / float(count[i]), 10.0)
             print self._classes[i], self._class_weights[i]
 
-
     def gt_roidb(self):
         """
         Return the database of ground-truth regions of interest.
@@ -162,16 +153,16 @@ class lov(datasets.imdb):
         """
 
         cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as fid:
-                roidb = cPickle.load(fid)
-            print '{} gt roidb loaded from {}'.format(self.name, cache_file)
-            print 'class weights: ', roidb[0]['class_weights']
-            return roidb
+        # if os.path.exists(cache_file):
+        #     with open(cache_file, 'rb') as fid:
+        #         roidb = cPickle.load(fid)
+        #     print '{} gt roidb loaded from {}'.format(self.name, cache_file)
+        #     print 'class weights: ', roidb[0]['class_weights']
+        #     return roidb
 
         # self.compute_class_weights()
 
-        gt_roidb = [self._load_lov_annotation(index)
+        gt_roidb = [self._load_linemod_annotation(index)
                     for index in self.image_index]
 
         with open(cache_file, 'wb') as fid:
@@ -180,8 +171,7 @@ class lov(datasets.imdb):
 
         return gt_roidb
 
-
-    def _load_lov_annotation(self, index):
+    def _load_linemod_annotation(self, index):
         """
         Load class name and meta data
         """
@@ -200,7 +190,7 @@ class lov(datasets.imdb):
         # parse image name
         pos = index.find('/')
         video_id = index[:pos]
-        
+
         return {'image': image_path,
                 'depth': depth_path,
                 'label': label_path,
@@ -220,15 +210,14 @@ class lov(datasets.imdb):
         label_index = np.zeros((height, width), dtype=np.float32)
 
         # label image is in BGR order
-        index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
+        index = label_image[:, :, 2] + 256 * label_image[:, :, 1] + 256 * 256 * label_image[:, :, 0]
         for i in xrange(len(class_colors)):
             color = class_colors[i]
-            ind = color[0] + 256*color[1] + 256*256*color[2]
+            ind = color[0] + 256 * color[1] + 256 * 256 * color[2]
             I = np.where(index == ind)
             label_index[I] = i
 
         return label_index
-
 
     def labels_to_image(self, im, labels):
         class_colors = self._class_colors
@@ -248,7 +237,6 @@ class lov(datasets.imdb):
         image = np.stack((image_r, image_g, image_b), axis=-1)
 
         return image.astype(np.uint8)
-
 
     def evaluate_segmentations(self, segmentations, output_dir):
         print 'evaluating segmentations'
@@ -329,6 +317,8 @@ class lov(datasets.imdb):
 
 
 if __name__ == '__main__':
-    d = datasets.lov('train')
+    d = datasets.linemod_ape('train')
     res = d.roidb
-    from IPython import embed; embed()
+    from IPython import embed
+
+    embed()

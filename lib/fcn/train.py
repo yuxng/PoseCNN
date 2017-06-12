@@ -10,6 +10,7 @@
 from fcn.config import cfg
 from gt_data_layer.layer import GtDataLayer
 from gt_single_data_layer.layer import GtSingleDataLayer
+from gt_flow_data_layer.layer import GtFlowDataLayer
 from utils.timer import Timer
 import numpy as np
 import os
@@ -186,6 +187,9 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
     if cfg.TRAIN.SINGLE_FRAME:
         # data layer
         data_layer = GtSingleDataLayer(roidb, num_classes)
+    elif cfg.TRAIN.OPTICAL_FLOW:
+        # data layer
+        data_layer = GtFlowDataLayer(roidb, num_classes)
     else:
         # data layer
         data_layer = GtDataLayer(roidb, num_classes)
@@ -202,6 +206,10 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
             data_blob = blobs['data_image_depth']
         elif cfg.INPUT == 'NORMAL':
             data_blob = blobs['data_image_normal']
+        elif cfg.INPUT == 'LEFT_RIGHT_FLOW':
+            left_blob = blobs['left_image']
+            right_blob = blobs['right_image']
+            flow_blob = blobs['flow']
 
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
@@ -211,6 +219,9 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
 
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+
+            elif cfg.INPUT == 'LEFT_RIGHT_FLOW':
+                feed_dict = {net.data_left: left_blob, net.data_right: right_blob, net.gt_flow: flow_blob, net.keep_prob: 0.5}
 
             else:
                 if cfg.TRAIN.VERTEX_REG:
@@ -370,6 +381,63 @@ def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters
 
         print 'Solving...'
         sw.train_gan(sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_l1, loss_ad, max_iters)
+        print 'done solving'
+
+        sess.run(network.close_queue_op)
+        coord.request_stop()
+        coord.join([t])
+
+
+def train_flow(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
+    """Train a Fast R-CNN network."""
+
+    # classification loss
+    # if cfg.NETWORK == 'FCN8VGG':
+    #     scores = network.prob
+    #     labels = network.gt_label_2d_queue
+    #     loss = loss_cross_entropy_single_frame(scores, labels)
+    # else:
+    #     if cfg.TRAIN.VERTEX_REG:
+    #         scores = network.get_output('prob')
+    #         labels = network.get_output('gt_label_2d')
+    #         loss_cls = loss_cross_entropy_single_frame(scores, labels)
+    #
+    #         vertex_pred = network.get_output('vertex_pred')
+    #         vertex_targets = network.get_output('vertex_targets')
+    #         vertex_weights = network.get_output('vertex_weights')
+    #         loss_vertex = tf.abs(tf.subtract(vertex_pred, vertex_targets))
+    #
+    #         loss = loss_cls + loss_vertex
+    #     else:
+    predicted_flow = network.get_output('predicted_flow')
+    gt_flow = network.get_output('gt_flow')
+    loss = tf.abs(tf.subtract(predicted_flow, gt_flow))
+
+    # optimizer
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = cfg.TRAIN.LEARNING_RATE
+    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+                                               cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+    momentum = cfg.TRAIN.MOMENTUM
+    train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
+
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+
+        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+
+        # thread to load data
+        coord = tf.train.Coordinator()
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, network, roidb, imdb.num_classes, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
+            t.start()
+
+        print 'Solving...'
+        # if cfg.TRAIN.VERTEX_REG:
+        #     sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters)
+        # else:
+        sw.train_model(sess, train_op, loss, learning_rate, max_iters)
         print 'done solving'
 
         sess.run(network.close_queue_op)
