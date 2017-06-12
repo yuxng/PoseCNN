@@ -34,6 +34,9 @@ REGISTER_OP("Matching")
     .Attr("filename_model: string")
     .Input("bottom_pose: T")
     .Input("bottom_gt: T")
+    .Input("bottom_data: T")
+    .Input("bottom_rois: T")
+    .Input("bottom_labels: int32")
     .Output("loss: T")
     .Output("bottom_diff: T");
 
@@ -73,7 +76,6 @@ class MatchingOp : public OpKernel {
   // bottom_gt: (batch_size, 7)
   void Compute(OpKernelContext* context) override 
   {
-    render_.render();
 
     // Grab the input tensor
     const Tensor& bottom_pose = context->input(0);
@@ -81,6 +83,15 @@ class MatchingOp : public OpKernel {
 
     const Tensor& bottom_gt = context->input(1);
     const T* gt = bottom_gt.flat<T>().data();
+    
+    const Tensor& bottom_data = context->input(2);
+    const T* data = bottom_data.flat<T>().data();
+
+    const Tensor& bottom_rois = context->input(3);
+    const T* rois = bottom_rois.flat<T>().data();
+
+    const Tensor& bottom_labels = context->input(4);
+    const int* labels = bottom_labels.flat<int>().data();
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_pose.dims() == 2,
@@ -95,6 +106,13 @@ class MatchingOp : public OpKernel {
     int num_channels = bottom_pose.dim_size(1);
     // gt size
     int gt_size = bottom_gt.dim_size(0);
+
+    int num_images = bottom_data.dim_size(0);
+    int height = bottom_data.dim_size(1);
+    int width = bottom_data.dim_size(2);
+    int num_rois = bottom_rois.dim_size(0);
+
+    render_.render(data, labels, rois, num_rois);
 
     // Create output loss tensor
     int dim = 1;
@@ -128,8 +146,6 @@ class MatchingOp : public OpKernel {
 };
 
 REGISTER_KERNEL_BUILDER(Name("Matching").Device(DEVICE_CPU).TypeConstraint<float>("T"), MatchingOp<CPUDevice, float>);
-REGISTER_KERNEL_BUILDER(Name("Matching").Device(DEVICE_CPU).TypeConstraint<double>("T"), MatchingOp<CPUDevice, double>);
-
 
 // compute gradient
 template <class Device, class T>

@@ -20,4 +20,4 @@ def _matching_grad(op, grad, _):
   # compute gradient
   data_grad = matching_loss_op.matching_loss_grad(diff, grad)
 
-  return [data_grad, None]  # List of one Tensor, since we have three input
+  return [data_grad, None, None, None, None]  # List of one Tensor, since we have three input

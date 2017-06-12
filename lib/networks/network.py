@@ -218,7 +218,7 @@ class Network(object):
 
     @layer
     def matching_loss(self, input, filename_model, filename_camera, name):
-        return matching_loss_op.matching_loss(input[0], input[1], filename_model, filename_camera, name=name)
+        return matching_loss_op.matching_loss(input[0], input[1], input[2], input[3], input[4], filename_model, filename_camera, name=name)
 
     @layer
     def project(self, input, kernel_size, threshold, name):
@@ -373,7 +373,7 @@ class Network(object):
 
     @layer
     def argmax_2d(self, input, name):
-        return tf.argmax(input, 3, name)
+        return tf.to_int32(tf.argmax(input, 3, name))
 
     @layer
     def tanh(self, input, name):

@@ -47,11 +47,15 @@ void Render::create_window()
 
   gtView_ = &pangolin::Display("gt").SetAspect(640.0/480.);
   poseView_ = &pangolin::Display("pose").SetAspect(640.0/480.);
+  colorView_ = &pangolin::Display("color").SetAspect(640.0/480.);
+  labelView_ = &pangolin::Display("label").SetAspect(640.0/480.);
 
   pangolin::Display("multi")
       .SetLayout(pangolin::LayoutEqual)
       .AddDisplay(*gtView_)
-      .AddDisplay(*poseView_);
+      .AddDisplay(*poseView_)
+      .AddDisplay(*colorView_)
+      .AddDisplay(*labelView_);
 
   // create render
   renderer_ = new df::GLRenderer<ForegroundRenderType>(color_camera_->width(), color_camera_->height());
@@ -162,7 +166,50 @@ void Render::initializeBuffers(aiMesh* assimpMesh, pangolin::GlBuffer & vertices
 }
 
 
-void Render::render()
+// feed data
+void Render::feed_data(const float* data, const int* labels, pangolin::GlTexture & colorTex, pangolin::GlTexture & labelTex)
+{
+  int width = color_camera_->width();
+  int height = color_camera_->height();
+
+  // convert depth values
+  unsigned char* p = (unsigned char*)malloc(sizeof(unsigned char) * width * height * 3);
+
+  for (int i = 0; i < width * height * 3; i++)
+  {
+    switch(i % 3)
+    {
+      case 0:
+        p[i] = (unsigned char)(data[i] + 102.9801);
+        break;
+      case 1:
+        p[i] = (unsigned char)(data[i] + 115.9465);
+        break;
+      case 2:
+        p[i] = (unsigned char)(data[i] + 122.7717);
+        break;
+    }
+  }
+
+  colorTex.Upload(p, GL_BGR, GL_UNSIGNED_BYTE);
+  free(p);
+
+  // process labels
+  p = (unsigned char*)malloc(sizeof(unsigned char) * width * height * 3);
+  for (int i = 0; i < width * height; i++)
+  {
+    int label = labels[i];
+    p[3 * i] = class_colors[label][0];
+    p[3 * i + 1] = class_colors[label][1];
+    p[3 * i + 2] = class_colors[label][2];
+  }
+
+  labelTex.Upload(p, GL_RGB, GL_UNSIGNED_BYTE);
+  free(p);
+}
+
+
+void Render::render(const float* data, const int* labels, const float* rois, int num_rois)
 {
   create_window();
 
@@ -171,6 +218,38 @@ void Render::render()
   pangolin::GlBuffer texturedIndices_;
   initializeBuffers(assimpMeshes_[0], texturedVertices_, texturedIndices_);
 
+  pangolin::GlTexture colorTex(color_camera_->width(), color_camera_->height());
+  pangolin::GlTexture labelTex(color_camera_->width(), color_camera_->height());
+  feed_data(data, labels, colorTex, labelTex);
+
+  // show image
+  colorView_->ActivateScissorAndClear();
+  colorTex.RenderToViewportFlipY();
+  glColor3ub(0, 255, 0);
+
+  // draw rois
+  int width = color_camera_->width();
+  int height = color_camera_->height();
+  for (int i = 0; i < num_rois; i++)
+  {
+    float x1 = 2 * rois[6 * i + 2] / width - 1;
+    float y1 = -1 * (2 * rois[6 * i + 3] / height - 1);
+    float x2 = 2 * rois[6 * i + 4] / width - 1;
+    float y2 = -1 * (2 * rois[6 * i + 5] / height - 1);
+    glBegin(GL_LINE_LOOP);
+      glVertex2f(x1,y1);
+      glVertex2f(x2,y1);
+      glVertex2f(x2,y2);
+      glVertex2f(x1,y2);
+    glEnd();
+  }
+
+  // show label
+  glColor3ub(255,255,255);
+  labelView_->ActivateScissorAndClear();
+  labelTex.RenderToViewportFlipY();
+
+  // show gt pose
   Eigen::Quaterniond quaternion(5.43034673e-01, 8.05942714e-01, 1.70454860e-01,-1.62833780e-01);
   Sophus::SE3d::Point translation(-9.21968296e-02, -6.99419007e-02, 9.75155234e-01);
 
@@ -195,6 +274,7 @@ void Render::render()
 
   pangolin::FinishFrame();
 
+  usleep( 2000 * 1000 );
   destroy_window();
 }
 
@@ -204,5 +284,5 @@ int main(int argc, char** argv)
   render.setup(argv[1], argv[2]);
 
   //while (!pangolin::ShouldQuit()) 
-  render.render();
+  render.render(NULL, NULL, NULL, 0);
 }

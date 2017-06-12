@@ -20,7 +20,7 @@ time ./tools/train_net.py --gpu 0 \
   --cfg experiments/cfgs/lov_single_color.yml \
   --rig data/LOV/camera.json \
   --cad data/LOV/models_debug.txt \
-  --iters 10
+  --iters 40000
 
 if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_lov_iter_40000/segmentations.pkl ]
 then

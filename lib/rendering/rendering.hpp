@@ -4,7 +4,7 @@
 #include <vector>
 #include <ctime>
 #include <cstdlib>
-
+#include <unistd.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -65,6 +65,11 @@ struct ForegroundRenderType {
     }
 };
 
+unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 0}, {255, 0, 255}, {0, 255, 255},
+                              {128, 0, 0}, {0, 128, 0}, {0, 0, 128}, {128, 128, 0}, {128, 0, 128}, {0, 128, 128},
+                              {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
+                              {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
+
 
 class Render
 {
@@ -78,10 +83,11 @@ class Render
   void setup_cameras(std::string rig_specification_file);
   void create_window();
   void destroy_window();
-  void render();
+  void render(const float* data, const int* labels, const float* rois, int num_rois);
   void loadModels(std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename);
   void initializeBuffers(aiMesh* assimpMesh, pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices);
+  void feed_data(const float* data, const int* labels, pangolin::GlTexture & colorTex, pangolin::GlTexture & labelTex);
 
  private:
   df::Rig<double>* rig_;
@@ -98,4 +104,6 @@ class Render
   // pangoline views
   pangolin::View* gtView_;
   pangolin::View* poseView_;
+  pangolin::View* colorView_;
+  pangolin::View* labelView_;
 };
