@@ -1,0 +1,41 @@
+FILE(REMOVE_RECURSE
+  "CMakeFiles/kfusion.dir/./src/fusion/./kfusion_generated_fusion.cu.o"
+  "CMakeFiles/kfusion.dir/./src/transform/./kfusion_generated_nonrigid.cu.o"
+  "CMakeFiles/kfusion.dir/./src/optimization/./kfusion_generated_icp.cu.o"
+  "CMakeFiles/kfusion.dir/./src/optimization/./kfusion_generated_nonrigidIcp.cu.o"
+  "CMakeFiles/kfusion.dir/./src/optimization/./kfusion_generated_deformationGraphRegularization.cu.o"
+  "CMakeFiles/kfusion.dir/./src/prediction/./kfusion_generated_raycast.cu.o"
+  "CMakeFiles/kfusion.dir/./src/voxel/./kfusion_generated_voxelGrid.cu.o"
+  "CMakeFiles/kfusion.dir/./src/surface/./kfusion_generated_decimation.cu.o"
+  "CMakeFiles/kfusion.dir/./src/surface/./kfusion_generated_marchingCubes.cu.o"
+  "CMakeFiles/kfusion.dir/./src/surface/./kfusion_generated_marchingCubesTables.cu.o"
+  "CMakeFiles/kfusion.dir/./src/surface/./kfusion_generated_color.cu.o"
+  "CMakeFiles/kfusion.dir/./src/surface/./kfusion_generated_normals.cu.o"
+  "CMakeFiles/kfusion.dir/./src/image/./kfusion_generated_bilateralFilter.cu.o"
+  "CMakeFiles/kfusion.dir/./src/image/./kfusion_generated_backprojection.cu.o"
+  "CMakeFiles/kfusion.dir/./src/image/./kfusion_generated_subsample.cu.o"
+  "CMakeFiles/kfusion.dir/kinect_fusion.cpp.o"
+  "CMakeFiles/kfusion.dir/src/transform/nonrigid.cpp.o"
+  "CMakeFiles/kfusion.dir/src/util/fileHelpers.cpp.o"
+  "CMakeFiles/kfusion.dir/src/util/args.cpp.o"
+  "CMakeFiles/kfusion.dir/src/util/pangolinHelpers.cpp.o"
+  "CMakeFiles/kfusion.dir/src/optimization/deformationGraphRegularization.cpp.o"
+  "CMakeFiles/kfusion.dir/src/optimization/icp.cpp.o"
+  "CMakeFiles/kfusion.dir/src/optimization/nonrigidIcp.cpp.o"
+  "CMakeFiles/kfusion.dir/src/camera/rig.cpp.o"
+  "CMakeFiles/kfusion.dir/src/camera/linear.cpp.o"
+  "CMakeFiles/kfusion.dir/src/camera/cameraFactory.cpp.o"
+  "CMakeFiles/kfusion.dir/src/camera/camera.cpp.o"
+  "CMakeFiles/kfusion.dir/src/camera/poly3.cpp.o"
+  "CMakeFiles/kfusion.dir/src/surface/decimation.cpp.o"
+  "CMakeFiles/kfusion.dir/src/surface/marchingCubesTables.cpp.o"
+  "CMakeFiles/kfusion.dir/src/image/backprojection.cpp.o"
+  "CMakeFiles/kfusion.dir/src/image/imagePyramid.cpp.o"
+  "libkfusion.pdb"
+  "libkfusion.so"
+)
+
+# Per-language clean rules from dependency scanning.
+FOREACH(lang CXX)
+  INCLUDE(CMakeFiles/kfusion.dir/cmake_clean_${lang}.cmake OPTIONAL)
+ENDFOREACH(lang)

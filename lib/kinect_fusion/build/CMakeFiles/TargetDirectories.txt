@@ -1,0 +1,2 @@
+/home/davidm/DA-RNN/DA-RNN/lib/kinect_fusion/build/CMakeFiles/kfusion.dir
+/home/davidm/DA-RNN/DA-RNN/lib/kinect_fusion/build/CMakeFiles/kinectFusion.dir

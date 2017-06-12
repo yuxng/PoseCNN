@@ -9,7 +9,6 @@ lib/icp/icp_main.cpp
 data/LOV/*
 data/RGBDScene/*
 data/cache/*
-data/linemod/*.png
-data/linemod/*.jpg
-data/sintel/*.png
-data/sintel/*.flo
+data/linemod/*
+data/sintel/*
+data/*

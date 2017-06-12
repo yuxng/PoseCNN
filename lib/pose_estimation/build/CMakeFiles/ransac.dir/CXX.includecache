@@ -1,0 +1,38 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/Hypothesis.h
+iostream
+-
+opencv2/opencv.hpp
+-
+vector
+-
+opencv2/highgui/highgui.hpp
+-
+properties.h
+../include/properties.h
+types.h
+../include/types.h
+
+../include/properties.h
+types.h
+../include/types.h
+string
+-
+vector
+-
+
+../include/types.h
+opencv2/opencv.hpp
+../include/opencv2/opencv.hpp
+
+/home/davidm/DA-RNN/DA-RNN/lib/pose_estimation/src/Hypothesis.cpp
+Hypothesis.h
+/home/davidm/DA-RNN/DA-RNN/lib/pose_estimation/src/Hypothesis.h
+
