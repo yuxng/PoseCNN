@@ -33,6 +33,7 @@ REGISTER_OP("Matching")
     .Attr("filename_camera: string")
     .Attr("filename_model: string")
     .Input("bottom_pose: T")
+    .Input("bottom_init: T")
     .Input("bottom_gt: T")
     .Input("bottom_data: T")
     .Input("bottom_rois: T")
@@ -72,8 +73,8 @@ class MatchingOp : public OpKernel {
     render_.setup(filename_camera_, filename_model_);
   }
 
-  // bottom_pose: (batch_size, 7)
-  // bottom_gt: (batch_size, 7)
+  // bottom_pose: (batch_size, 4 * num_classes)
+  // bottom_gt: (batch_size, 13)
   void Compute(OpKernelContext* context) override 
   {
 
@@ -81,16 +82,19 @@ class MatchingOp : public OpKernel {
     const Tensor& bottom_pose = context->input(0);
     const T* pose = bottom_pose.flat<T>().data();
 
-    const Tensor& bottom_gt = context->input(1);
+    const Tensor& bottom_init = context->input(1);
+    const T* init = bottom_init.flat<T>().data();
+
+    const Tensor& bottom_gt = context->input(2);
     const T* gt = bottom_gt.flat<T>().data();
     
-    const Tensor& bottom_data = context->input(2);
+    const Tensor& bottom_data = context->input(3);
     const T* data = bottom_data.flat<T>().data();
 
-    const Tensor& bottom_rois = context->input(3);
+    const Tensor& bottom_rois = context->input(4);
     const T* rois = bottom_rois.flat<T>().data();
 
-    const Tensor& bottom_labels = context->input(4);
+    const Tensor& bottom_labels = context->input(5);
     const int* labels = bottom_labels.flat<int>().data();
 
     // data should have 4 dimensions.
@@ -104,6 +108,7 @@ class MatchingOp : public OpKernel {
     int batch_size = bottom_pose.dim_size(0);
     // number of channels
     int num_channels = bottom_pose.dim_size(1);
+    int num_classes = num_channels / 4;
     // gt size
     int gt_size = bottom_gt.dim_size(0);
 
@@ -111,8 +116,6 @@ class MatchingOp : public OpKernel {
     int height = bottom_data.dim_size(1);
     int width = bottom_data.dim_size(2);
     int num_rois = bottom_rois.dim_size(0);
-
-    render_.render(data, labels, rois, num_rois);
 
     // Create output loss tensor
     int dim = 1;
@@ -131,12 +134,8 @@ class MatchingOp : public OpKernel {
     memset(bottom_diff, 0, batch_size * num_channels *sizeof(T));
 
     // rendering to compute the loss
-    for (int n = 0; n < 1; n++)
-    {
-      // render_.render();
-    }
+    T loss = render_.render(data, labels, rois, num_rois, gt_size, num_classes, gt, pose, init, bottom_diff);
 
-    T loss = 0.0;
     top_data(0) = loss;
   }
  private:

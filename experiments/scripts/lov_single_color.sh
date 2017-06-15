@@ -17,10 +17,10 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --ckpt output/lov/lov_train/vgg16_fcn_color_single_frame_lov_iter_40000.ckpt \
   --imdb lov_train \
-  --cfg experiments/cfgs/lov_single_color.yml \
+  --cfg experiments/cfgs/lov_single_color_pose.yml \
   --rig data/LOV/camera.json \
-  --cad data/LOV/models_debug.txt \
-  --iters 40000
+  --cad data/LOV/models.txt \
+  --iters 20000
 
 if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_lov_iter_40000/segmentations.pkl ]
 then

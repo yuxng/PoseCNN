@@ -8,8 +8,10 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstddef> 
 
 #include <pangolin/pangolin.h>
+#include "opencv2/opencv.hpp"
 
 #include <Eigen/Sparse>
 
@@ -83,10 +85,12 @@ class Render
   void setup_cameras(std::string rig_specification_file);
   void create_window();
   void destroy_window();
-  void render(const float* data, const int* labels, const float* rois, int num_rois);
+  float render(const float* data, const int* labels, const float* rois, int num_rois, int num_gt, int num_classes, 
+               const float* poses_gt, const float* poses_pred, const float* poses_init, float* bottom_diff);
   void loadModels(std::string filename);
-  aiMesh* loadTexturedMesh(const std::string filename);
-  void initializeBuffers(aiMesh* assimpMesh, pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices);
+  aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
+  void initializeBuffers(aiMesh* assimpMesh, std::string textureName, 
+    pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
   void feed_data(const float* data, const int* labels, pangolin::GlTexture & colorTex, pangolin::GlTexture & labelTex);
 
  private:
@@ -96,6 +100,7 @@ class Render
 
   // 3D models
   std::vector<aiMesh*> assimpMeshes_;
+  std::vector<std::string> texture_names_;
 
   // render
   df::GLRenderer<ForegroundRenderType>* renderer_;
@@ -106,4 +111,5 @@ class Render
   pangolin::View* poseView_;
   pangolin::View* colorView_;
   pangolin::View* labelView_;
+  pangolin::View* multiView_;
 };

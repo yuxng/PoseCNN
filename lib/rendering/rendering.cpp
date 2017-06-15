@@ -50,7 +50,7 @@ void Render::create_window()
   colorView_ = &pangolin::Display("color").SetAspect(640.0/480.);
   labelView_ = &pangolin::Display("label").SetAspect(640.0/480.);
 
-  pangolin::Display("multi")
+  multiView_ = &pangolin::Display("multi")
       .SetLayout(pangolin::LayoutEqual)
       .AddDisplay(*gtView_)
       .AddDisplay(*poseView_)
@@ -91,12 +91,16 @@ void Render::loadModels(const std::string filename)
   // load meshes
   const int num_models = model_names.size();
   assimpMeshes_.resize(num_models);
+  texture_names_.resize(num_models);
 
   for (int m = 0; m < num_models; ++m)
-    assimpMeshes_[m] = loadTexturedMesh(model_names[m]);
+  {
+    assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names_[m]);
+    std::cout << texture_names_[m] << std::endl;
+  }
 }
 
-aiMesh* Render::loadTexturedMesh(const std::string filename)
+aiMesh* Render::loadTexturedMesh(const std::string filename, std::string & texture_name)
 {
     const struct aiScene * scene = aiImportFile(filename.c_str(),0); //aiProcess_JoinIdenticalVertices);
     if (scene == 0) {
@@ -140,18 +144,20 @@ aiMesh* Render::loadTexturedMesh(const std::string filename)
         throw std::runtime_error("mesh does not have texture coordinates");
     }
 
+    texture_name = textureName;
     return assimpMesh;
 }
 
 
-void Render::initializeBuffers(aiMesh* assimpMesh, pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices)
+void Render::initializeBuffers(aiMesh* assimpMesh, std::string textureName, 
+  pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
 {
-    std::cout << "loading vertices..." << std::endl;
-    std::cout << assimpMesh->mNumVertices << std::endl;
+    // std::cout << "loading vertices..." << std::endl;
+    // std::cout << assimpMesh->mNumVertices << std::endl;
     vertices.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
     vertices.Upload(assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float)*3);
 
-    std::cout << "loading normals..." << std::endl;
+    // std::cout << "loading normals..." << std::endl;
     std::vector<uint3> faces3(assimpMesh->mNumFaces);
     for (std::size_t i = 0; i < assimpMesh->mNumFaces; ++i) {
         aiFace & face = assimpMesh->mFaces[i];
@@ -163,6 +169,21 @@ void Render::initializeBuffers(aiMesh* assimpMesh, pangolin::GlBuffer & vertices
 
     indices.Reinitialise(pangolin::GlElementArrayBuffer,assimpMesh->mNumFaces*3,GL_UNSIGNED_INT,3,GL_STATIC_DRAW);
     indices.Upload(faces3.data(),assimpMesh->mNumFaces*sizeof(int)*3);
+
+    if (is_textured)
+    {
+      std::cout << "loading texture from " << textureName << std::endl;
+      texture.LoadFromFile(textureName);
+
+      std::cout << "loading tex coords..." << std::endl;
+      texCoords.Reinitialise(pangolin::GlArrayBuffer,assimpMesh->mNumVertices,GL_FLOAT,2,GL_STATIC_DRAW);
+
+      std::vector<float2> texCoords2(assimpMesh->mNumVertices);
+      for (std::size_t i = 0; i < assimpMesh->mNumVertices; ++i) {
+          texCoords2[i] = make_float2(assimpMesh->mTextureCoords[0][i].x,1.0 - assimpMesh->mTextureCoords[0][i].y);
+      }
+      texCoords.Upload(texCoords2.data(),assimpMesh->mNumVertices*sizeof(float)*2);
+    }
 }
 
 
@@ -209,14 +230,17 @@ void Render::feed_data(const float* data, const int* labels, pangolin::GlTexture
 }
 
 
-void Render::render(const float* data, const int* labels, const float* rois, int num_rois)
+float Render::render(const float* data, const int* labels, const float* rois, int num_rois, int num_gt, int num_classes,
+                    const float* poses_gt, const float* poses_pred, const float* poses_init, float* bottom_diff)
 {
+  bool is_textured = false;
   create_window();
 
   // initialize buffers
   pangolin::GlBuffer texturedVertices_;
   pangolin::GlBuffer texturedIndices_;
-  initializeBuffers(assimpMeshes_[0], texturedVertices_, texturedIndices_);
+  pangolin::GlBuffer texturedCoords_;
+  pangolin::GlTexture texturedTextures_;
 
   pangolin::GlTexture colorTex(color_camera_->width(), color_camera_->height());
   pangolin::GlTexture labelTex(color_camera_->width(), color_camera_->height());
@@ -225,9 +249,9 @@ void Render::render(const float* data, const int* labels, const float* rois, int
   // show image
   colorView_->ActivateScissorAndClear();
   colorTex.RenderToViewportFlipY();
-  glColor3ub(0, 255, 0);
 
   // draw rois
+  glColor3ub(0, 255, 0);
   int width = color_camera_->width();
   int height = color_camera_->height();
   for (int i = 0; i < num_rois; i++)
@@ -250,32 +274,225 @@ void Render::render(const float* data, const int* labels, const float* rois, int
   labelTex.RenderToViewportFlipY();
 
   // show gt pose
-  Eigen::Quaterniond quaternion(5.43034673e-01, 8.05942714e-01, 1.70454860e-01,-1.62833780e-01);
-  Sophus::SE3d::Point translation(-9.21968296e-02, -6.99419007e-02, 9.75155234e-01);
+  if (is_textured)
+  {
+    glEnable(GL_DEPTH_TEST);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
-  const Sophus::SE3d T_co(quaternion, translation);
-  std::cout << T_co.matrix3x4() << std::endl;
+    glColor3ub(255,255,255);
+    gtView_->ActivateScissorAndClear();
+    pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(color_camera_->width(), color_camera_->height(),
+                                                                                        color_camera_->params()[0], color_camera_->params()[1],
+                                                                                        color_camera_->params()[2]+0.5,
+                                                                                        color_camera_->params()[3]+0.5,
+                                                                                        0.25,6.0);
 
-  renderer_->setModelViewMatrix(T_co.cast<float>().matrix());
-  renderer_->render( { &texturedVertices_ }, texturedIndices_ );
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+  }
 
-  glColor3ub(255,255,255);
-  glClearColor(1,0,0,1);
-  gtView_->ActivateScissorAndClear();
-  renderer_->texture(0).RenderToViewportFlipY();
+  std::vector<cv::Mat*> gt_masks(num_gt);
+  for (int n = 0; n < num_gt; n++)
+  {
+    int class_id = int(poses_gt[n * 13 + 1]);
 
-  // df::ManagedHostTensor2<Eigen::Matrix<char,3,1> > objectMask({image_width_, image_height_});
-  // renderer_->texture(0).Download(objectMask.data(), GL_RGB, GL_UNSIGNED_BYTE);
+    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+    Eigen::Quaterniond quaternion(poses_gt[n * 13 + 6], poses_gt[n * 13 + 7], poses_gt[n * 13 + 8], poses_gt[n * 13 + 9]);
+    Sophus::SE3d::Point translation(poses_gt[n * 13 + 10], poses_gt[n * 13 + 11], poses_gt[n * 13 + 12]);
+    const Sophus::SE3d T_co(quaternion, translation);
 
+    if (is_textured)
+    {
+      Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+      pangolin::OpenGlMatrix mvMatrix(mv);
 
-  glColor3ub(255,255,255);
-  // glClearColor(0,1,0,1);
-  poseView_->ActivateScissorAndClear();
+      mvMatrix.Load();
 
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_.Bind();
+      texturedVertices_.Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_.Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_.Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_.Unbind();
+      texturedTextures_.Unbind();
+      texturedVertices_.Unbind();
+      texturedCoords_.Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      renderer_->setModelViewMatrix(T_co.cast<float>().matrix());
+      renderer_->render( { &texturedVertices_ }, texturedIndices_ );
+      glColor3ub(255,255,255);
+      gtView_->ActivateScissorAndClear();
+      renderer_->texture(0).RenderToViewportFlipY();
+
+      // download the mask
+      gt_masks[n] = new cv::Mat(color_camera_->height(), color_camera_->width(), CV_8UC3);
+      renderer_->texture(0).Download(gt_masks[n]->data, GL_RGB, GL_UNSIGNED_BYTE);
+    }
+  }
+
+  // show predicted pose
+  if (is_textured)
+  {
+    glColor3ub(255,255,255);
+    poseView_->ActivateScissorAndClear();
+    pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(color_camera_->width(), color_camera_->height(),
+                                                                                        color_camera_->params()[0], color_camera_->params()[1],
+                                                                                        color_camera_->params()[2]+0.5,
+                                                                                        color_camera_->params()[3]+0.5,
+                                                                                        0.25,6.0);
+
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+  }
+
+  cv::Mat dst1;
+  cv::Mat dst2;
+  double delta = 0.001;
+  float loss = 0;
+  for (int n = 0; n < num_rois; n++)
+  {
+    int class_id = int(rois[n * 6 + 1]);
+
+    // find the gt index
+    int gt_ind = -1;
+    for (int i = 0; i < num_gt; i++)
+    {
+      int gt_id = int(poses_gt[i * 13 + 1]);
+      if(class_id == gt_id)
+      {
+        gt_ind = i;
+        break;
+      }
+    }
+
+    if (gt_ind == -1)
+    {
+      std::cout << "detection " << n << " does not match any gt" << std::endl;
+      continue;
+    }
+
+    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+
+    // render mulitple times
+    int num = 5;
+    std::vector<double> IoUs(num);
+    for (int i = 0; i < num; i++)
+    {
+      double w, x, y, z;
+      if (i == 0)
+      {
+        w = poses_pred[n * 4 * num_classes + 4 * class_id + 0];
+        x = poses_pred[n * 4 * num_classes + 4 * class_id + 1];
+        y = poses_pred[n * 4 * num_classes + 4 * class_id + 2];
+        z = poses_pred[n * 4 * num_classes + 4 * class_id + 3];
+      }
+      else if(i == 1)
+      {
+        w = poses_pred[n * 4 * num_classes + 4 * class_id + 0] + delta;
+        x = poses_pred[n * 4 * num_classes + 4 * class_id + 1];
+        y = poses_pred[n * 4 * num_classes + 4 * class_id + 2];
+        z = poses_pred[n * 4 * num_classes + 4 * class_id + 3];
+      }
+      else if(i == 2)
+      {
+        w = poses_pred[n * 4 * num_classes + 4 * class_id + 0];
+        x = poses_pred[n * 4 * num_classes + 4 * class_id + 1] + delta;
+        y = poses_pred[n * 4 * num_classes + 4 * class_id + 2];
+        z = poses_pred[n * 4 * num_classes + 4 * class_id + 3];
+      }
+      else if(i == 3)
+      {
+        w = poses_pred[n * 4 * num_classes + 4 * class_id + 0];
+        x = poses_pred[n * 4 * num_classes + 4 * class_id + 1];
+        y = poses_pred[n * 4 * num_classes + 4 * class_id + 2] + delta;
+        z = poses_pred[n * 4 * num_classes + 4 * class_id + 3];
+      }
+      else
+      {
+        w = poses_pred[n * 4 * num_classes + 4 * class_id + 0];
+        x = poses_pred[n * 4 * num_classes + 4 * class_id + 1];
+        y = poses_pred[n * 4 * num_classes + 4 * class_id + 2];
+        z = poses_pred[n * 4 * num_classes + 4 * class_id + 3] + delta;
+      }
+
+      Eigen::Quaterniond quaternion_pred(w, x, y, z);
+      Sophus::SE3d::Point translation_pred(poses_init[n * 7 + 4], poses_init[n * 7 + 5], poses_init[n * 7 + 6]);
+      const Sophus::SE3d T_co_pred(quaternion_pred, translation_pred);
+
+      if (is_textured)
+      {
+        Eigen::Matrix4f mv = T_co_pred.cast<float>().matrix();
+        pangolin::OpenGlMatrix mvMatrix(mv);
+
+        mvMatrix.Load();
+
+        glEnable(GL_TEXTURE_2D);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        texturedTextures_.Bind();
+        texturedVertices_.Bind();
+        glVertexPointer(3,GL_FLOAT,0,0);
+        texturedCoords_.Bind();
+        glTexCoordPointer(2,GL_FLOAT,0,0);
+        texturedIndices_.Bind();
+        glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
+        texturedIndices_.Unbind();
+        texturedTextures_.Unbind();
+        texturedVertices_.Unbind();
+        texturedCoords_.Unbind();
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisable(GL_TEXTURE_2D);
+      }
+      else
+      {
+        renderer_->setModelViewMatrix(T_co_pred.cast<float>().matrix());
+        renderer_->render( { &texturedVertices_ }, texturedIndices_ );
+        poseView_->ActivateScissorAndClear();
+        renderer_->texture(0).RenderToViewportFlipY();
+
+        // download the mask
+        cv::Mat mask(color_camera_->height(), color_camera_->width(), CV_8UC3);
+        renderer_->texture(0).Download(mask.data, GL_RGB, GL_UNSIGNED_BYTE);
+
+        // compute the overlap between masks
+        cv::bitwise_and(mask, *gt_masks[gt_ind], dst1);
+        cv::bitwise_or(mask, *gt_masks[gt_ind], dst2);
+        IoUs[i] = cv::sum(dst1)[0] / cv::sum(dst2)[0];
+      }
+    }  // end rendering
+
+    // compute loss and gradient
+    loss += (1.0 - IoUs[0]) / num_rois;
+
+    bottom_diff[n * 4 * num_classes + 4 * class_id + 0] = (IoUs[0] - IoUs[1]) / delta / num_rois;
+    bottom_diff[n * 4 * num_classes + 4 * class_id + 1] = (IoUs[0] - IoUs[2]) / delta / num_rois;
+    bottom_diff[n * 4 * num_classes + 4 * class_id + 2] = (IoUs[0] - IoUs[3]) / delta / num_rois;
+    bottom_diff[n * 4 * num_classes + 4 * class_id + 3] = (IoUs[0] - IoUs[4]) / delta / num_rois;
+  }
+
+  // pangolin::SaveWindowOnRender("window");
   pangolin::FinishFrame();
 
-  usleep( 2000 * 1000 );
+  // usleep( 2000 * 1000 );
   destroy_window();
+
+  for (int n = 0; n < num_gt; n++)
+    delete gt_masks[n];
+
+  return loss;
 }
 
 int main(int argc, char** argv) 
@@ -284,5 +501,5 @@ int main(int argc, char** argv)
   render.setup(argv[1], argv[2]);
 
   //while (!pangolin::ShouldQuit()) 
-  render.render(NULL, NULL, NULL, 0);
+  render.render(NULL, NULL, NULL, 0, 0, 0, NULL, NULL, NULL, NULL);
 }

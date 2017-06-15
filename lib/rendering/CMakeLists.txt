@@ -16,6 +16,7 @@ find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(OpenCV REQUIRED)
 pkg_check_modules(OpenEXR REQUIRED OpenEXR)
 
 set(xFusion_ROOT "/var/Projects/FCN/lib/kinect_fusion")
@@ -35,6 +36,7 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${EIGEN3_INCLUDE_DIR}
                     ${OpenEXR_INCLUDE_DIRS}
                     ${SUITESPARSE_INCLUDE_DIRS}
+                    ${OpenCV_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
 
@@ -47,6 +49,7 @@ link_libraries(${Pangolin_LIBRARIES}
                ${DEPTHSENSE_LIBRARIES}
                ${SUITESPARSE_LIBRARIES}
                ${OpenEXR_LIBRARIES}
+               ${OpenCV_LIBS}
                assimp)
 
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-arch=sm_61;--expt-extended-lambda;--verbose;")

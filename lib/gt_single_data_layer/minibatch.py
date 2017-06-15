@@ -19,7 +19,7 @@ from normals import gpu_normals
 from transforms3d.quaternions import mat2quat
 
 
-def get_minibatch(roidb, voxelizer):
+def get_minibatch(roidb, voxelizer, extents):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
 
@@ -48,7 +48,8 @@ def get_minibatch(roidb, voxelizer):
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
              'data_pose': pose_blob,
-             'data_gan_z': gan_z_blob}
+             'data_gan_z': gan_z_blob,
+             'data_extents': extents}
 
     return blobs
 
