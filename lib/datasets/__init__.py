@@ -13,6 +13,7 @@ from .rgbd_scene import rgbd_scene
 from .lov import lov
 from .linemod_ape import linemod_ape
 from .sintel_albedo import sintel_albedo
+from .sintel_clean import sintel_clean
 from . import factory
 
 import os.path as osp

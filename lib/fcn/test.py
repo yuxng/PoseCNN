@@ -22,8 +22,13 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-from pose_estimation import ransac
+# from pose_estimation import ransac
 #from kinect_fusion import kfusion
+from utils import sintel_utils
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+import matplotlib.image as mpimg
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -98,6 +103,9 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
+######################
+# test single frame(?)
+######################
 def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     """segment image
     """
@@ -220,20 +228,26 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
         data_p_blob = im_depth_blob
     elif cfg.INPUT == 'COLOR':
         data_blob = im_blob
+        data_p_blob = None
     elif cfg.INPUT == 'DEPTH':
         data_blob = im_depth_blob
+        data_p_blob = None
     elif cfg.INPUT == 'NORMAL':
         data_blob = im_normal_blob
+        data_p_blob = None
+    else:
+        data_blob = None
+        data_p_blob = None
 
     if cfg.INPUT == 'RGBD':
         feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
                      net.meta_data: meta_data_blob, net.points: points, net.keep_prob: 1.0}
     else:
-        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob, \
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.state: state, net.weights: weights, net.depth: depth_blob,
                      net.meta_data: meta_data_blob, net.points: points, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
-    labels_pred_2d, probs, state, weights, points = sess.run([net.get_output('labels_pred_2d'), net.get_output('probs'), \
+    labels_pred_2d, probs, state, weights, points = sess.run([net.get_output('labels_pred_2d'), net.get_output('probs'),
         net.get_output('output_state'), net.get_output('output_weights'), net.get_output('output_points')], feed_dict=feed_dict)
 
     labels_2d = labels_pred_2d[0]
@@ -295,6 +309,208 @@ def vis_segmentations(im, im_depth, labels, labels_gt, colors):
 
     fig.tight_layout()
     plt.show()
+
+
+###################
+# test flow
+###################
+def test_flow_net(sess, net, imdb, weights_filename, n_images = None, save_image=False, training_iter='',
+                  calculate_EPE_all_data=False):
+
+    if weights_filename is not None:
+        output_dir = get_output_dir(imdb, weights_filename)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+    np.random.seed(10)
+    roidb_ordering = np.random.permutation(np.arange(len(imdb.roidb)))
+    if n_images is None:
+        n_images = len(imdb.roidb)
+    roidb_ordering = roidb_ordering[0:n_images]
+    EPE_list = list()
+
+    for i in range(n_images):
+        index = roidb_ordering[i]
+        images = imdb.roidb[index]
+        predicted_flow = siphon_flow_single_frame(sess, net, images['image_left'], images['image_right'])['flow']
+        gt_flow = sintel_utils.read_flow_file_with_path(images['flow']).transpose([1, 0, 2])
+        gt_flow = cv2.resize(gt_flow, None, None, fx=cfg.TRAIN.SCALES_BASE[0], fy=cfg.TRAIN.SCALES_BASE[0],
+                             interpolation=cv2.INTER_LINEAR)
+        predicted_flow = np.squeeze(predicted_flow[0])[0:gt_flow.shape[0], 0:gt_flow.shape[1], :]
+
+        average_EPE = calculate_EPE(gt_flow, predicted_flow)
+        zero_prediction_EPE = calculate_EPE(gt_flow, np.zeros(gt_flow.shape))
+
+        if calculate_EPE_all_data:
+            path_segments = str(images['image_left']).split("/")
+
+            print "EPE is " + str(average_EPE) + " for " + \
+                  path_segments[-3] + "/" + path_segments[-2] + "/" + path_segments[-1]
+            EPE_list.append(average_EPE)
+        else:
+            predicted_flow_im = sintel_utils.sintel_compute_color(predicted_flow)
+            gt_flow_im = sintel_utils.sintel_compute_color(gt_flow)
+            fig = plt.figure()
+            # show left
+            im_left = mpimg.imread(images['image_left'])
+            ax1 = fig.add_subplot(321)
+            ax1.imshow(im_left)
+            ax1.set_title("left image")
+
+            # show right
+            im_right = mpimg.imread(images['image_right'])
+            ax2 = fig.add_subplot(322)
+            ax2.imshow(im_right)
+            ax2.set_title("right image")
+
+            # gt_flow
+            ax3 = fig.add_subplot(323)
+            ax3.imshow(gt_flow_im)
+            ax3.set_title("gt flow")
+
+            # show predicted flow
+            ax4 = fig.add_subplot(324)
+            ax4.imshow(predicted_flow_im)
+            ax4.set_title("predicted flow")
+
+            # show flow differences
+            gt_components = np.split(gt_flow, 2, axis=2)
+            pred_components = np.split(predicted_flow, 2, axis=2)
+            gt_angle = np.arctan2(gt_components[1], gt_components[0])
+            pred_angle = np.arctan2(pred_components[1], pred_components[0])
+            gt_mag = np.sqrt(np.power(gt_components[0], 2)+ np.power(gt_components[1], 2))
+            pred_mag = np.sqrt(np.power(pred_components[0], 2) + np.power(pred_components[1], 2))
+
+            angle_dif = np.mod((gt_angle - pred_angle) + np.pi, np.pi * 2) - np.pi
+
+            ax5 = fig.add_subplot(325)
+            ax5.imshow(np.abs(angle_dif.squeeze()) / np.pi, cmap='Greys')
+            ax5.set_title("direction difference")
+            ax5.set_xlabel("white = no error, black = large error")
+            ax6 = fig.add_subplot(326)
+            ax6.imshow(np.abs(gt_mag - pred_mag).squeeze() / np.max(gt_mag), cmap='Greys')
+            ax6.set_title("magnitude difference")
+            ax6.set_xlabel("white = no error, black = large error")
+
+            fig.suptitle('Image ' + str(images['image_left']) + '\naverage endpoint error: ' + str(average_EPE) +
+                         ' (predicting no movement would result in EPE of ' + str(zero_prediction_EPE) + ')', fontsize=12)
+
+            if save_image:
+                plt.savefig("plot_" + str(training_iter) + "_" + str(i) + ".png")
+            else:
+                plt.show()
+            plt.close('all')
+    if calculate_EPE_all_data:
+        average = np.mean(EPE_list)
+        print "average EPE is " + str(average) + " for entire " + str(imdb._name) + " dataset with network " + \
+            str(weights_filename)
+
+
+def calculate_EPE(gt, pred):
+    # calculates average end point error
+    return np.mean(np.sqrt(np.sum(np.square(gt - pred), axis=2)))
+
+assert calculate_EPE(np.zeros([3, 3, 2]), np.ones([3, 3, 2])) == 2 ** 0.5
+
+
+def calculate_flow_single_frame(sess, net, im_left, im_right):
+    # compute image blob
+    left_blob, right_blob, im_scales = _get_flow_image_blob(im_left, im_right, 0)
+
+    feed_dict = {net.data_left: left_blob, net.data_right: right_blob,
+                 net.gt_flow: np.zeros([left_blob.shape[0], left_blob.shape[1], left_blob.shape[2], 2],
+                                       dtype=np.float32), net.keep_prob: 1.0}
+
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
+    output_flow = sess.run([net.get_output('predicted_flow')])
+    return output_flow
+
+
+def siphon_flow_single_frame(sess, net, im_left, im_right):
+    # compute image blob
+    left_blob, right_blob, im_scales = _get_flow_image_blob(im_left, im_right, 0)
+
+    training_data_queue = list()
+    queue_start_size = sess.run(net.queue_size_op)
+    while sess.run(net.queue_size_op) != 0:
+        training_data_queue.append(sess.run({'left':net.get_output('data_left'), 'right':net.get_output('data_right'),
+                                             'flow':net.get_output('gt_flow'), 'keep_prob':net.keep_prob_queue}))
+
+    feed_dict = {net.data_left: left_blob, net.data_right: right_blob,
+                 net.gt_flow: np.zeros([left_blob.shape[0], left_blob.shape[1], left_blob.shape[2], 2],
+                                       dtype=np.float32), net.keep_prob: 1.0}
+
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
+    output = sess.run({'flow':net.get_output('predicted_flow'), 'left':net.get_output('data_left_tap'),
+                            'right':net.get_output('data_left_tap')})
+
+    for i in training_data_queue:
+        feed_dict = {net.data_left: i['left'], net.data_right: i['right'], net.gt_flow: i['flow'], net.keep_prob: i['keep_prob']}
+        sess.run(net.enqueue_op, feed_dict=feed_dict)
+
+    assert sess.run(net.queue_size_op) == queue_start_size, "data queue size changed"
+    return output
+
+
+def _get_flow_image_blob(im_left, im_right, scale_ind):
+    """Converts an image into a network input.
+
+    Arguments:
+        im (ndarray): a color image in BGR order
+
+    Returns:
+        blob (ndarray): a data blob holding an image pyramid
+        im_scale_factors (list): list of image scales (relative to im) used
+            in the image pyramid
+    """
+    num_images = 1
+    processed_left = []
+    processed_right = []
+    processed_flow = []
+    im_scales = []
+
+    # left image
+    im_left = pad_im(cv2.imread(im_left, cv2.IMREAD_UNCHANGED), 16)
+    if im_left.shape[2] == 4:
+        im = np.copy(im_left[:, :, :3])
+        alpha = im_left[:, :, 3]
+        I = np.where(alpha == 0)
+        im[I[0], I[1], :] = 0
+        im_lef = im
+
+    im_right = pad_im(cv2.imread(im_right, cv2.IMREAD_UNCHANGED), 16)
+    if im_left.shape[2] == 4:
+        im = np.copy(im_left[:, :, :3])
+        alpha = im_right[:, :, 3]
+        I = np.where(alpha == 0)
+        im[I[0], I[1], :] = 0
+        im_right = im
+
+
+    # TODO: is this important?
+    im_scale = cfg.TEST.SCALES_BASE[scale_ind]
+    im_scales.append(im_scale)
+
+    im_left_orig = im_left.astype(np.float32, copy=True)
+    im_left_orig -= cfg.PIXEL_MEANS
+    im_left_processed = cv2.resize(im_left_orig, None, None, fx=im_scale, fy=im_scale,
+                                   interpolation=cv2.INTER_LINEAR)
+    processed_left.append(im_left_processed)
+
+    im_right_orig = im_right.astype(np.float32, copy=True)
+    im_right_orig -= cfg.PIXEL_MEANS
+    im_right_processed = cv2.resize(im_right_orig, None, None, fx=im_scale, fy=im_scale,
+                                    interpolation=cv2.INTER_LINEAR)
+    processed_right.append(im_right_processed)
+
+
+    # Create a blob to hold the input images
+    image_left_blob = im_list_to_blob(processed_left, 3)
+    image_right_blob = im_list_to_blob(processed_right, 3)
+    blob_rescale = []
+
+    return image_left_blob, image_right_blob, im_scales
+
 
 ##################
 # test video

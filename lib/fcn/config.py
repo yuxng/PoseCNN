@@ -31,6 +31,7 @@ cfg = __C
 __C.FLIP_X = False
 __C.INPUT = 'RGBD'
 __C.NETWORK = 'VGG16'
+__C.LOSS_FUNC = 'not_specified'
 
 #
 # Training options
@@ -47,6 +48,7 @@ __C.TRAIN.GAN = False
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
+__C.TRAIN.LEARNING_RATE_ADAM = 0.1
 __C.TRAIN.MOMENTUM = 0.9
 __C.TRAIN.GAMMA = 0.1
 __C.TRAIN.STEPSIZE = 30000
@@ -79,6 +81,10 @@ __C.TRAIN.SNAPSHOT_INFIX = ''
 
 __C.TRAIN.DISPLAY = 20
 __C.TRAIN.OPTICAL_FLOW = False
+__C.TRAIN.DELETE_OLD_CHECKPOINTS = False
+__C.TRAIN.VISUALIZE_DURING_TRAIN = False
+__C.TRAIN.OPTIMIZER = 'MomentumOptimizer'
+
 
 
 #
@@ -92,6 +98,7 @@ __C.TEST.VERTEX_REG = False
 __C.TEST.VISUALIZE = False
 __C.TEST.RANSAC = False
 __C.TEST.GAN = False
+__C.TEST.OPTICAL_FLOW = False
 
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)

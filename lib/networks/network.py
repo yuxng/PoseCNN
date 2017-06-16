@@ -85,6 +85,7 @@ class Network(object):
                         if not ignore_missing:
                             raise
 
+
     def feed(self, *args):
         assert len(args)!=0
         self.inputs = []
@@ -183,6 +184,20 @@ class Network(object):
 
     @layer
     def deconv(self, input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, padding=DEFAULT_PADDING, trainable=True):
+        # type: (any, int, int, int, int, int, str, bool, str, bool) -> any
+        """
+        :param input: input tensor
+        :param k_h: height
+        :param k_w: width
+        :param c_o: output depth
+        :param s_h: vertical stride
+        :param s_w: horizontal stride
+        :param name: layer name
+        :param reuse: should weights be reused from another layer with the same name?
+        :param padding:
+        :param trainable:
+        :return:
+        """
         self.validate_padding(padding)
         c_i = input.get_shape()[-1]
         with tf.variable_scope(name, reuse=reuse) as scope:
@@ -294,6 +309,10 @@ class Network(object):
     @layer
     def add(self, inputs, name):
         return tf.add_n(inputs, name=name)
+
+    @layer
+    def add_immediate(self, input, value, name):
+        return tf.add(input, value, name=name)
 
     @layer
     def multiply_sum(self, inputs, num_classes, name):

@@ -18,6 +18,9 @@ import pprint
 import numpy as np
 import sys
 import os.path as osp
+import datetime
+import os
+import sys
 
 def parse_args():
     """
@@ -73,8 +76,20 @@ if __name__ == '__main__':
     print 'Loaded dataset `{:s}` for training'.format(imdb.name)
     roidb = get_training_roidb(imdb)
 
-    output_dir = get_output_dir(imdb, None)
-    print 'Output will be saved to `{:s}`'.format(output_dir)
+    if not cfg.TRAIN.OPTICAL_FLOW:
+        output_dir = get_output_dir(imdb, None)
+        print 'Output will be saved to `{:s}`'.format(output_dir)
+    else:
+        output_dir = osp.abspath(osp.join(cfg.ROOT_DIR, 'output', cfg.EXP_DIR,
+                                          "batch_size_" + str(cfg.TRAIN.IMS_PER_BATCH) + "_loss_" + str(cfg.LOSS_FUNC) +
+                                          "_optimizer_" + cfg.TRAIN.OPTIMIZER + "_" + str(datetime.date.today())))
+        print 'Output will be saved to `{:s}`'.format(output_dir)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        else:
+            # sys.stderr.write("output directory already exists, please move it or choose another output dir")
+            pass
+        pprint.pprint(cfg, stream=open(output_dir + "/config.txt", 'w'))
 
     device_name = '/gpu:{:d}'.format(args.gpu_id)
     cfg.GPU_ID = args.gpu_id

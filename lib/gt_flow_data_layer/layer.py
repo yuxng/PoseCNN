@@ -9,7 +9,7 @@
 """
 
 from fcn.config import cfg
-from gt_single_data_layer.minibatch import get_minibatch
+from gt_flow_data_layer.minibatch import get_minibatch, preload_data
 import numpy as np
 from utils.voxelizer import Voxelizer
 
@@ -22,6 +22,7 @@ class GtFlowDataLayer(object):
         self._num_classes = num_classes
         self._voxelizer = Voxelizer(cfg.TRAIN.GRID_SIZE, num_classes)
         self._shuffle_roidb_inds()
+        # preload_data(self._roidb)
 
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
@@ -41,6 +42,7 @@ class GtFlowDataLayer(object):
     def _get_next_minibatch(self):
         """Return the blobs to be used for the next minibatch."""
         db_inds = self._get_next_minibatch_inds()
+        # minibatch_db = [self._roidb[i] for i in db_inds]
         minibatch_db = [self._roidb[i] for i in db_inds]
         return get_minibatch(minibatch_db, self._voxelizer)
             

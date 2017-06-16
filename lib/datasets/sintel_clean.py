@@ -8,13 +8,13 @@ import numpy as np
 import cv2
 
 
-class sintel_albedo(datasets.imdb):
+class sintel_clean(datasets.imdb):
     def __init__(self, image_set, sintel_path=None):
         self._image_set = image_set
         if image_set == "train":
-            datasets.imdb.__init__(self, 'sintel/training/albedo')
+            datasets.imdb.__init__(self, 'sintel/training/clean')
         elif image_set == "val":
-            datasets.imdb.__init__(self, 'sintel/training/albedo')
+            datasets.imdb.__init__(self, 'sintel/training/clean')
         self._sintel_path = self._get_default_path() if sintel_path is None \
             else sintel_path
         self._data_path = os.path.join(self._sintel_path)
@@ -35,7 +35,7 @@ class sintel_albedo(datasets.imdb):
         self._roidb_handler = self.gt_roidb
 
         assert os.path.exists(self._sintel_path), \
-            'sintel albedo path does not exist: {}'.format(self._sintel_path)
+            'sintel clean path does not exist: {}'.format(self._sintel_path)
         assert os.path.exists(self._data_path), \
             'Data path does not exist: {}'.format(self._data_path)
 
@@ -122,9 +122,9 @@ class sintel_albedo(datasets.imdb):
         Return the default path where KITTI is expected to be installed.
         """
         if self._image_set == "train":
-            return os.path.join(datasets.ROOT_DIR, 'data', 'sintel', 'training', 'albedo')
+            return os.path.join(datasets.ROOT_DIR, 'data', 'sintel', 'training', 'clean')
         if self._image_set == "val":
-            return os.path.join(datasets.ROOT_DIR, 'data', 'sintel', 'training', 'albedo')
+            return os.path.join(datasets.ROOT_DIR, 'data', 'sintel', 'training', 'clean')
 
     def _load_object_extents(self):
 
@@ -326,7 +326,7 @@ class sintel_albedo(datasets.imdb):
 
 
 if __name__ == '__main__':
-    d = datasets.sintel_albedo('train')
+    d = datasets.sintel_clean('train')
     res = d.roidb
     from IPython import embed
 

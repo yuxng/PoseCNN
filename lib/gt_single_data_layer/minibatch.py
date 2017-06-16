@@ -16,7 +16,7 @@ from utils.blob import im_list_to_blob, pad_im, chromatic_transform
 from utils.se3 import *
 import scipy.io
 from normals import gpu_normals
-from utils import sintel_utils
+
 
 def get_minibatch(roidb, voxelizer):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -24,138 +24,128 @@ def get_minibatch(roidb, voxelizer):
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    image_left_blob, image_right_blob, flow_blob, image_scales = _get_image_blob(roidb, random_scale_ind)
+    im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind)
 
     # build the label blob
-    # depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
-    #     gan_z_blob = _get_label_blob(roidb, voxelizer)
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, \
+    gan_z_blob = _get_label_blob(roidb, voxelizer)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        _vis_minibatch(image_left_blob, image_right_blob, flow_blob)
+        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
 
-    blobs = {'left_image': image_left_blob,
-                'right_image': image_right_blob,
-                'flow': flow_blob}
+    blobs = {'data_image_color': im_blob,
+             'data_image_color_rescale': im_rescale_blob,
+             'data_image_depth': im_depth_blob,
+             'data_image_normal': im_normal_blob,
+             'data_label': label_blob,
+             'data_depth': depth_blob,
+             'data_meta_data': meta_data_blob,
+             'data_vertex_targets': vertex_target_blob,
+             'data_vertex_weights': vertex_weight_blob,
+             'data_gan_z': gan_z_blob}
 
     return blobs
+
 
 def _get_image_blob(roidb, scale_ind):
     """Builds an input blob from the images in the roidb at the specified
     scales.
     """
     num_images = len(roidb)
-    processed_left = []
-    processed_right = []
-    processed_flow = []
+    processed_ims = []
+    processed_ims_depth = []
+    processed_ims_normal = []
     im_scales = []
-    # if cfg.TRAIN.GAN:
-    #     processed_ims_rescale = []
+    if cfg.TRAIN.GAN:
+        processed_ims_rescale = []
 
     for i in xrange(num_images):
-        # # meta data
-        # meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
-        # K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-        # fx = K[0, 0]
-        # fy = K[1, 1]
-        # cx = K[0, 2]
-        # cy = K[1, 2]
+        # meta data
+        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
+        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+        fx = K[0, 0]
+        fy = K[1, 1]
+        cx = K[0, 2]
+        cy = K[1, 2]
 
-        # # depth raw
-        # im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
-        # height = im_depth_raw.shape[0]
-        # width = im_depth_raw.shape[1]
+        # depth raw
+        im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+        height = im_depth_raw.shape[0]
+        width = im_depth_raw.shape[1]
 
-        # left image
-        im_left = pad_im(cv2.imread(roidb[i]['image_left'], cv2.IMREAD_UNCHANGED), 16)
-        if im_left.shape[2] == 4:
-            im = np.copy(im_left[:,:,:3])
-            alpha = im_lef[:,:,3]
+        # rgba
+        rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = np.copy(rgba[:, :, :3])
+            alpha = rgba[:, :, 3]
             I = np.where(alpha == 0)
             im[I[0], I[1], :] = 0
-            im_lef = im
-
-        im_right = pad_im(cv2.imread(roidb[i]['image_right'], cv2.IMREAD_UNCHANGED), 16)
-        if im_left.shape[2] == 4:
-            im = np.copy(im_left[:,:,:3])
-            alpha = im_right[:,:,3]
-            I = np.where(alpha == 0)
-            im[I[0], I[1], :] = 0
-            im_right = im
-
-        gt_flow = sintel_utils.read_flow_file_with_path(roidb[i]['flow'])
+        else:
+            im = rgba
 
         # chromatic transform
-        # if cfg.TRAIN.CHROMATIC:
-        #     label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
-        #     im = chromatic_transform(im, label)
+        if cfg.TRAIN.CHROMATIC:
+            label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+            im = chromatic_transform(im, label)
 
         # mask the color image according to depth
-        # if cfg.EXP_DIR == 'rgbd_scene':
-        #     I = np.where(im_depth_raw == 0)
-        #     im[I[0], I[1], :] = 0
+        if cfg.EXP_DIR == 'rgbd_scene':
+            I = np.where(im_depth_raw == 0)
+            im[I[0], I[1], :] = 0
 
-        # if roidb[i]['flipped']:
-        #     im = im[:, ::-1, :]
+        if roidb[i]['flipped']:
+            im = im[:, ::-1, :]
 
-        # if cfg.TRAIN.GAN:
-        #     im_orig = im.astype(np.float32, copy=True) / 127.5 - 1
-        #     im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
-        #     im_rescale = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        #     processed_ims_rescale.append(im_rescale)
+        if cfg.TRAIN.GAN:
+            im_orig = im.astype(np.float32, copy=True) / 127.5 - 1
+            im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
+            im_rescale = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            processed_ims_rescale.append(im_rescale)
 
-        #TODO: is this important?
+        im_orig = im.astype(np.float32, copy=True)
+        im_orig -= cfg.PIXEL_MEANS
         im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
+        im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         im_scales.append(im_scale)
-
-        im_left_orig = im_left.astype(np.float32, copy=True)
-        im_left_orig -= cfg.PIXEL_MEANS
-        im_left_processed = cv2.resize(im_left_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_left.append(im_left_processed)
-
-        im_right_orig = im_right.astype(np.float32, copy=True)
-        im_right_orig -= cfg.PIXEL_MEANS
-        im_right_processed = cv2.resize(im_right_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_right.append(im_right_processed)
-
-        processed_flow.append(gt_flow)
+        processed_ims.append(im)
 
         # depth
-        # im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
-        # im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
-        #
-        # if roidb[i]['flipped']:
-        #     im_depth = im_depth[:, ::-1]
-        #
-        # im_orig = im_depth.astype(np.float32, copy=True)
-        # im_orig -= cfg.PIXEL_MEANS
-        # im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        # processed_ims_depth.append(im_depth)
+        im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
+        im_depth = np.tile(im_depth[:, :, np.newaxis], (1, 1, 3))
 
-        # # normals
-        # depth = im_depth_raw.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
-        # nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
-        # im_normal = 127.5 * nmap + 127.5
-        # im_normal = im_normal.astype(np.uint8)
-        # im_normal = im_normal[:, :, (2, 1, 0)]
-        # if roidb[i]['flipped']:
-        #     im_normal = im_normal[:, ::-1, :]
-        #
-        # im_orig = im_normal.astype(np.float32, copy=True)
-        # im_orig -= cfg.PIXEL_MEANS
-        # im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        # processed_ims_normal.append(im_normal)
+        if roidb[i]['flipped']:
+            im_depth = im_depth[:, ::-1]
+
+        im_orig = im_depth.astype(np.float32, copy=True)
+        im_orig -= cfg.PIXEL_MEANS
+        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_depth.append(im_depth)
+
+        # normals
+        depth = im_depth_raw.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+        im_normal = 127.5 * nmap + 127.5
+        im_normal = im_normal.astype(np.uint8)
+        im_normal = im_normal[:, :, (2, 1, 0)]
+        if roidb[i]['flipped']:
+            im_normal = im_normal[:, ::-1, :]
+
+        im_orig = im_normal.astype(np.float32, copy=True)
+        im_orig -= cfg.PIXEL_MEANS
+        im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_normal.append(im_normal)
 
     # Create a blob to hold the input images
-    image_left_blob = im_list_to_blob(processed_left, 3)
-    image_right_blob = im_list_to_blob(processed_right, 3)
-    gt_flow_blob = im_list_to_blob(processed_flow, 2)
-    # if cfg.TRAIN.GAN:
-    #     blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
-    # else:
-    blob_rescale = []
+    blob = im_list_to_blob(processed_ims, 3)
+    blob_depth = im_list_to_blob(processed_ims_depth, 3)
+    blob_normal = im_list_to_blob(processed_ims_normal, 3)
+    if cfg.TRAIN.GAN:
+        blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
+    else:
+        blob_rescale = []
 
-    return image_left_blob, image_right_blob, gt_flow_blob, im_scales
+    return blob, blob_rescale, blob_depth, blob_normal, im_scales
 
 
 def _process_label_image(label_image, class_colors, class_weights):
@@ -170,10 +160,10 @@ def _process_label_image(label_image, class_colors, class_weights):
 
     if len(label_image.shape) == 3:
         # label image is in BGR order
-        index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
+        index = label_image[:, :, 2] + 256 * label_image[:, :, 1] + 256 * 256 * label_image[:, :, 0]
         for i in xrange(len(class_colors)):
             color = class_colors[i]
-            ind = color[0] + 256*color[1] + 256*256*color[2]
+            ind = color[0] + 256 * color[1] + 256 * 256 * color[2]
             I = np.where(index == ind)
             if cfg.TRAIN.GAN:
                 label_index[I[0], I[1], i] = 1.0
@@ -188,7 +178,7 @@ def _process_label_image(label_image, class_colors, class_weights):
             else:
                 label_index[I[0], I[1], i] = class_weights[i]
             labels[I[0], I[1]] = i
-    
+
     return label_index, labels
 
 
@@ -230,7 +220,8 @@ def _get_label_blob(roidb, voxelizer):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'],
+                                                           num_classes)
             processed_vertex_targets.append(center_targets)
             processed_vertex_weights.append(center_weights)
 
@@ -299,40 +290,40 @@ def _get_label_blob(roidb, voxelizer):
         gan_z_blob = []
 
     for i in xrange(num_images):
-        depth_blob[i,:,:,0] = processed_depth[i]
-        label_blob[i,:,:,:] = processed_label[i]
-        meta_data_blob[i,0,0,:] = processed_meta_data[i]
+        depth_blob[i, :, :, 0] = processed_depth[i]
+        label_blob[i, :, :, :] = processed_label[i]
+        meta_data_blob[i, 0, 0, :] = processed_meta_data[i]
         if cfg.TRAIN.VERTEX_REG:
-            vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
-            vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
-    
-    return depth_blob, label_blob,  meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_z_blob
+            vertex_target_blob[i, :, :, :] = processed_vertex_targets[i]
+            vertex_weight_blob[i, :, :, :] = processed_vertex_weights[i]
+
+    return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, gan_z_blob
 
 
 # compute the voting label image in 2D
 def _vote_centers(im_label, cls_indexes, center, num_classes):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 2 * num_classes), dtype=np.float32)
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
 
     c = np.zeros((2, 1), dtype=np.float32)
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
-            ind = np.where(cls_indexes == i)[0] 
+            ind = np.where(cls_indexes == i)[0]
             c[0] = center[ind, 0]
             c[1] = center[ind, 1]
             R = np.tile(c, (1, len(x))) - np.vstack((x, y))
             # compute the norm
             N = np.linalg.norm(R, axis=0) + 1e-10
             # normalization
-            R = np.divide(R, np.tile(N, (2,1)))
+            R = np.divide(R, np.tile(N, (2, 1)))
             # assignment
             start = 2 * i
             end = start + 2
-            vertex_targets[y, x, 2*i] = R[0,:]
-            vertex_targets[y, x, 2*i+1] = R[1,:]
+            vertex_targets[y, x, 2 * i] = R[0, :]
+            vertex_targets[y, x, 2 * i + 1] = R[1, :]
             vertex_weights[y, x, start:end] = 10.0
 
     return vertex_targets, vertex_weights
@@ -367,7 +358,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
 def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
-    vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 2 * num_classes), dtype=np.float32)
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
 
     vertmap = _unscale_vertmap(vertmap, im_label, extents, num_classes)
@@ -377,17 +368,18 @@ def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     # sin of elevation, sin, cos of azimuth
     elevation_sin = np.zeros_like(r)
     index = np.where(r != 0)
-    elevation_sin[index[0], index[1]] = np.sin(np.pi/2 - np.arccos(np.divide(vertmap[index[0],index[1],2], r[index[0], index[1]])))
+    elevation_sin[index[0], index[1]] = np.sin(
+        np.pi / 2 - np.arccos(np.divide(vertmap[index[0], index[1], 2], r[index[0], index[1]])))
     azimuth_sin = np.sin(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
     azimuth_cos = np.cos(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
-    
+
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
         if len(I[0]) > 0:
             start = 2 * i
             end = start + 2
             vertex_targets[I[0], I[1], start] = r[I[0], I[1]]
-            vertex_targets[I[0], I[1], start+1] = elevation_sin[I[0], I[1]]
+            vertex_targets[I[0], I[1], start + 1] = elevation_sin[I[0], I[1]]
             # vertex_targets[I[0], I[1], start+2] = azimuth_sin[I[0], I[1]]
             # vertex_targets[I[0], I[1], start+3] = azimuth_cos[I[0], I[1]]
 
@@ -396,31 +388,117 @@ def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
     return vertex_targets, vertex_weights
 
 
-def _vis_minibatch(image_left_blob, image_right_blob, flow_blob):
+def _get_gan_labels(im_label, class_colors, num_classes):
+    height = im_label.shape[0] / 32
+    width = im_label.shape[1] / 32
+    labels_true = np.zeros((height, width, 2), dtype=np.float32)
+    labels_false = np.zeros((height, width, 2), dtype=np.float32)
+    labels_false[:, :, 0] = 1.0
+    labels_true[:, :, 1] = 1.0
+
+    # prepare color tensors
+    height = im_label.shape[0]
+    width = im_label.shape[1]
+    labels_color = np.zeros((num_classes, 3), dtype=np.float32)
+
+    for i in xrange(num_classes):
+        labels_color[i, 0] = class_colors[i][0] - cfg.PIXEL_MEANS[0, 0, 2]
+        labels_color[i, 1] = class_colors[i][1] - cfg.PIXEL_MEANS[0, 0, 1]
+        labels_color[i, 2] = class_colors[i][2] - cfg.PIXEL_MEANS[0, 0, 0]
+
+    return labels_true, labels_false, labels_color
+
+
+def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
-    for i in xrange(image_left_blob.shape[0]):
+    for i in xrange(im_blob.shape[0]):
         fig = plt.figure()
         # show image
-        im_left = image_left_blob[i, :, :, :].copy()
-        im_left += cfg.PIXEL_MEANS
-        im_left = im_left[:, :, (2, 1, 0)]
-        im_left = im_left.astype(np.uint8)
-        fig.add_subplot(311)
-        plt.imshow(im_left)
+        im = im_blob[i, :, :, :].copy()
+        im += cfg.PIXEL_MEANS
+        im = im[:, :, (2, 1, 0)]
+        im = im.astype(np.uint8)
+        fig.add_subplot(231)
+        plt.imshow(im)
 
         # show depth image
-        im_right = image_right_blob[i, :, :, :].copy()
-        im_right += cfg.PIXEL_MEANS
-        im_right = im_right[:, :, (2, 1, 0)]
-        im_right = im_right.astype(np.uint8)
-        fig.add_subplot(312)
-        plt.imshow(im_right)
+        depth = depth_blob[i, :, :, 0]
+        fig.add_subplot(232)
+        plt.imshow(abs(depth))
 
         # show normal image
-        im_flow = flow_blob[i, :, :].copy()
-        fig.add_subplot(313)
-        plt.imshow(sintel_utils.sintel_compute_color(im_flow).transpose([1, 0, 2]))
+        im_normal = im_normal_blob[i, :, :, :].copy()
+        im_normal += cfg.PIXEL_MEANS
+        im_normal = im_normal[:, :, (2, 1, 0)]
+        im_normal = im_normal.astype(np.uint8)
+        fig.add_subplot(233)
+        plt.imshow(im_normal)
+
+        # show label
+        label = label_blob[i, :, :, :]
+        height = label.shape[0]
+        width = label.shape[1]
+        num_classes = label.shape[2]
+        l = np.zeros((height, width), dtype=np.int32)
+        if cfg.TRAIN.VERTEX_REG:
+            vertex_target = vertex_target_blob[i, :, :, :]
+            center = np.zeros((height, width, 2), dtype=np.float32)
+        for k in xrange(num_classes):
+            index = np.where(label[:, :, k] > 0)
+            l[index] = k
+            if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
+                center[index[0], index[1], :] = vertex_target[index[0], index[1], 2 * k:2 * k + 2]
+        fig.add_subplot(234)
+        if cfg.TRAIN.VERTEX_REG:
+            plt.imshow(l)
+            fig.add_subplot(235)
+            plt.imshow(center[:, :, 0])
+            fig.add_subplot(236)
+            plt.imshow(center[:, :, 1])
+        else:
+            plt.imshow(l)
+
+        plt.show()
+
+
+def _vis_minibatch_gan(im_blob, depth_blob, label_blob, vertex_image_blob):
+    """Visualize a mini-batch for debugging."""
+    import matplotlib.pyplot as plt
+
+    for i in xrange(im_blob.shape[0]):
+        fig = plt.figure()
+        # show image
+        im = im_blob[i, :, :, :].copy()
+        im = (im + 1) * 127.5
+        im = im[:, :, (2, 1, 0)]
+        im = im.astype(np.uint8)
+        fig.add_subplot(221)
+        plt.imshow(im)
+
+        # show depth image
+        depth = depth_blob[i, :, :, 0]
+        fig.add_subplot(222)
+        plt.imshow(abs(depth))
+
+        # show label
+        label = label_blob[i, :, :, :]
+        height = label.shape[0]
+        width = label.shape[1]
+        num_classes = label.shape[2]
+        l = np.zeros((height, width), dtype=np.int32)
+        for k in xrange(num_classes):
+            index = np.where(label[:, :, k] > 0)
+            l[index] = k
+        fig.add_subplot(223)
+        plt.imshow(l)
+
+        # show vertex image
+        im = vertex_image_blob[i, :, :, :].copy()
+        im = (im + 1) * 127.5
+        im = im.astype(np.uint8)
+        fig.add_subplot(224)
+        plt.imshow(im)
 
         plt.show()

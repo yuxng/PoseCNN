@@ -12,6 +12,7 @@
 import _init_paths
 from fcn.test import test_net, test_gan
 from fcn.test import test_net_single_frame
+from fcn.test import test_flow_net
 from fcn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
 import argparse
@@ -99,7 +100,9 @@ if __name__ == '__main__':
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 
-    if cfg.TEST.SINGLE_FRAME:
+    if cfg.TEST.OPTICAL_FLOW:
+        test_flow_net(sess, network, imdb, weights_filename)
+    elif cfg.TEST.SINGLE_FRAME:
         if cfg.TEST.GAN:
             test_gan(sess, network, imdb, weights_filename)
         else:

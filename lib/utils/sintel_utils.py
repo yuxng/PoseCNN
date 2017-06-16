@@ -73,7 +73,7 @@ makecolorwheel()
 
 
 def sintel_compute_color(data_interlaced):
-    # type: (np.ndarray, np.ndarray) -> np.ndarray
+    # type: (np.ndarray) -> np.ndarray
     data_u_in, data_v_in = np.split(data_interlaced, 2, axis=2)
     data_u_in = np.squeeze(data_u_in)
     data_v_in = np.squeeze(data_v_in)
