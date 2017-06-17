@@ -68,6 +68,8 @@ class SolverWrapper(object):
             for var_name, saved_var_name in var_names:
                 if 'global_step' in var_name:
                     continue
+                if 'Variable' in var_name:
+                    continue
                 curr_var = var_name_to_var[var_name]
                 var_shape = curr_var.get_shape().as_list()
                 if var_shape == saved_shapes[saved_var_name]:
@@ -77,7 +79,6 @@ class SolverWrapper(object):
                 else:
                     print('Shape mismatch for var', saved_var_name, 'expected', var_shape, 'got', saved_shapes[saved_var_name])
         ignored_var_names = sorted(list(set(saved_shapes.keys()) - restored_var_names))
-        print('\n')
         if len(ignored_var_names) == 0:
             print('Restored all variables')
         else:
@@ -301,7 +302,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
 
                     loss_matching = network.get_output('matching_loss')[0]
-                    loss = loss_cls + loss_vertex + 10 * loss_pose + loss_matching
+                    loss = loss_cls + loss_vertex + loss_pose + loss_matching
                 else:
                     loss = loss_cls + loss_vertex
             else:

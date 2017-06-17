@@ -217,8 +217,8 @@ class Network(object):
         return triplet_loss_op.triplet_loss(input[0], input[1], tf.cast(input[2], tf.int32), margin, name=name)
 
     @layer
-    def matching_loss(self, input, filename_model, filename_camera, name):
-        return matching_loss_op.matching_loss(input[0], input[1], input[2], input[3], input[4], input[5], filename_model, filename_camera, name=name)
+    def matching_loss(self, input, filename_model, name):
+        return matching_loss_op.matching_loss(input[0], input[1], input[2], input[3], input[4], input[5], input[6], filename_model, name=name)
 
     @layer
     def project(self, input, kernel_size, threshold, name):

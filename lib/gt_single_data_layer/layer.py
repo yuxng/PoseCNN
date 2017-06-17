@@ -27,6 +27,9 @@ class GtSingleDataLayer(object):
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
         self._perm = np.random.permutation(np.arange(len(self._roidb)))
+        #print self._roidb[self._perm[14]]['meta_data']
+        #print self._roidb[self._perm[15]]['meta_data']
+        #print self._roidb[self._perm[16]]['meta_data']
         self._cur = 0
 
     def _get_next_minibatch_inds(self):

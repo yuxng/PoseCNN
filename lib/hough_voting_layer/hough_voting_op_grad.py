@@ -5,13 +5,13 @@ import hough_voting_op
 @ops.RegisterShape("Houghvoting")
 def _hough_voting_shape(op):
 
-  dims_prob = op.inputs[0].get_shape().as_list()
-  channels = dims_prob[3]
+  dims_vertex = op.inputs[1].get_shape().as_list()
+  num_classes = dims_vertex[3] / 2
 
   output_shape_0 = tf.TensorShape([None, 6])
   output_shape_1 = tf.TensorShape([None, 7])
-  output_shape_2 = tf.TensorShape([None, 4 * channels])
-  output_shape_3 = tf.TensorShape([None, 4 * channels])
+  output_shape_2 = tf.TensorShape([None, 4 * num_classes])
+  output_shape_3 = tf.TensorShape([None, 4 * num_classes])
   return [output_shape_0, output_shape_1, output_shape_2, output_shape_3]
 
 @ops.RegisterGradient("Houghvoting")

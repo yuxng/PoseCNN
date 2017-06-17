@@ -37,7 +37,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Houghvoting")
     .Attr("T: {float, double}")
-    .Input("bottom_prob: T")
+    .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("bottom_extents: T")
     .Input("bottom_meta_data: T")
@@ -49,10 +49,10 @@ REGISTER_OP("Houghvoting")
 
 REGISTER_OP("HoughvotingGrad")
     .Attr("T: {float, double}")
-    .Input("bottom_prob: T")
+    .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("grad: T")
-    .Output("output_prob: T")
+    .Output("output_label: T")
     .Output("output_vertex: T");
 
 /**
@@ -70,19 +70,19 @@ struct DataForOpt
 
 void getProbs(const float* probability, std::vector<jp::img_stat_t>& probs, int width, int height, int num_classes);
 void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes);
-void getLabels(const float* probability, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
+void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 void getBb3Ds(float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
 void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_stat_t>& probs, int imageWidth, int imageHeight);
-inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const std::vector<jp::img_center_t>& vertexs);
+inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
 std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
 inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
-inline void countInliers2D(TransHyp& hyp, const std::vector<jp::img_center_t>& vertexs, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int pixelBatch);
+inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
 inline void updateHyp2D(TransHyp& hyp, int maxPixels);
 inline void filterInliers2D(TransHyp& hyp, int maxInliers);
-inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const std::vector<jp::img_center_t>& vertexs);
+inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
 static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
-void estimateCenter(const float* probability, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
+void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs);
 void compute_target_weight(float* target, float* weight, const float* poses_gt, int num_gt, int num_classes, std::vector<cv::Vec<float, 13> > outputs);
 
@@ -92,13 +92,13 @@ class HoughvotingOp : public OpKernel {
   explicit HoughvotingOp(OpKernelConstruction* context) : OpKernel(context) {
   }
 
-  // bottom_prob: (batch_size, height, width, num_classes)
+  // bottom_label: (batch_size, height, width)
   // bottom_vertex: (batch_size, height, width, 2 * num_classes)
   // top_box: (num, 6) i.e., batch_index, cls, x1, y1, x2, y2
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
-    const Tensor& bottom_prob = context->input(0);
+    const Tensor& bottom_label = context->input(0);
     const Tensor& bottom_vertex = context->input(1);
     const Tensor& bottom_extents = context->input(2);
 
@@ -116,20 +116,20 @@ class HoughvotingOp : public OpKernel {
     const float* gt = bottom_gt.flat<float>().data();
 
     // data should have 5 dimensions.
-    OP_REQUIRES(context, bottom_prob.dims() == 4,
-                errors::InvalidArgument("prob must be 4-dimensional"));
+    OP_REQUIRES(context, bottom_label.dims() == 3,
+                errors::InvalidArgument("label must be 3-dimensional"));
 
     OP_REQUIRES(context, bottom_vertex.dims() == 4,
                 errors::InvalidArgument("vertex must be 4-dimensional"));
 
     // batch size
-    int batch_size = bottom_prob.dim_size(0);
+    int batch_size = bottom_label.dim_size(0);
     // height
-    int height = bottom_prob.dim_size(1);
+    int height = bottom_label.dim_size(1);
     // width
-    int width = bottom_prob.dim_size(2);
+    int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_prob.dim_size(3);
+    int num_classes = bottom_vertex.dim_size(3) / 2;
     int num_meta_data = bottom_meta_data.dim_size(3);
     int num_gt = bottom_gt.dim_size(0);
 
@@ -137,26 +137,20 @@ class HoughvotingOp : public OpKernel {
     std::vector<cv::Vec<float, 13> > outputs;
     const float* extents = bottom_extents.flat<float>().data();
 
-    // clock_t t;
-    // t = clock();
-
     int index_meta_data = 0;
     for (int n = 0; n < batch_size; n++)
     {
-      const float* probability = bottom_prob.flat<float>().data() + n * height * width * num_classes;
+      const int* labelmap = bottom_label.flat<int>().data() + n * height * width;
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * 2 * num_classes;
       float fx = meta_data(index_meta_data + 0);
       float fy = meta_data(index_meta_data + 4);
       float px = meta_data(index_meta_data + 2);
       float py = meta_data(index_meta_data + 5);
 
-      estimateCenter(probability, vertmap, extents, n, height, width, num_classes, fx, fy, px, py, outputs);
+      estimateCenter(labelmap, vertmap, extents, n, height, width, num_classes, fx, fy, px, py, outputs);
 
       index_meta_data += num_meta_data;
     }
-
-    // t = clock() - t;
-    // std::cout << "time: " << t*1.0/CLOCKS_PER_SEC << " seconds" << std::endl;
 
     // Create output tensors
     // top_box
@@ -223,31 +217,31 @@ class HoughvotingGradOp : public OpKernel {
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
-    const Tensor& bottom_prob = context->input(0);
+    const Tensor& bottom_label = context->input(0);
     const Tensor& bottom_vertex = context->input(1);
 
     // data should have 5 dimensions.
-    OP_REQUIRES(context, bottom_prob.dims() == 4,
-                errors::InvalidArgument("prob must be 4-dimensional"));
+    OP_REQUIRES(context, bottom_label.dims() == 3,
+                errors::InvalidArgument("label must be 3-dimensional"));
 
     OP_REQUIRES(context, bottom_vertex.dims() == 4,
                 errors::InvalidArgument("vertex must be 4-dimensional"));
 
     // batch size
-    int batch_size = bottom_prob.dim_size(0);
+    int batch_size = bottom_label.dim_size(0);
     // height
-    int height = bottom_prob.dim_size(1);
+    int height = bottom_label.dim_size(1);
     // width
-    int width = bottom_prob.dim_size(2);
+    int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_prob.dim_size(3);
+    int num_classes = bottom_vertex.dim_size(3) / 2;
 
     // construct the output shape
-    TensorShape output_shape = bottom_prob.shape();
-    Tensor* top_prob_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_prob_tensor));
-    T* top_prob = top_prob_tensor->template flat<T>().data();
-    memset(top_prob, 0, batch_size * height * width * num_classes *sizeof(T));
+    TensorShape output_shape = bottom_label.shape();
+    Tensor* top_label_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_label_tensor));
+    T* top_label = top_label_tensor->template flat<T>().data();
+    memset(top_label, 0, batch_size * height * width * sizeof(T));
 
     TensorShape output_shape_1 = bottom_vertex.shape();
     Tensor* top_vertex_tensor = NULL;
@@ -309,7 +303,7 @@ void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, in
 
 
 // get label lists
-void getLabels(const float* probability, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
+void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
 {
   for(int i = 0; i < num_classes; i++)
     labels.push_back( std::vector<int>() );
@@ -319,18 +313,7 @@ void getLabels(const float* probability, std::vector<std::vector<int>>& labels, 
   for(int x = 0; x < width; x++)
   for(int y = 0; y < height; y++)
   {
-    float prob = -1;
-    int label = -1;
-    for (int i = 0; i < num_classes; i++)
-    {
-      int offset = i + num_classes * (y * width + x);
-      if (probability[offset] > prob)
-      {
-        prob = probability[offset];
-        label = i;
-      }
-    }
-
+    int label = label_map[y * width + x];
     labels[label].push_back(y * width + x);
   }
 
@@ -393,16 +376,22 @@ void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_
 }
 
 
-inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const std::vector<jp::img_center_t>& vertexs)
+inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes)
 {
-  jp::coord2_t mode = vertexs[objID-1](pt.y, pt.x);
+  int channel = 2 * objID;
+  int offset = channel + 2 * num_classes * (pt.y * width + pt.x);
+
+  jp::coord2_t mode;
+  mode(0) = vertmap[offset];
+  mode(1) = vertmap[offset + 1];
+
   return cv::Point2f(mode(0), mode(1));
 }
 
 
-inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const std::vector<jp::img_center_t>& vertexs)
+inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes)
 {
-  cv::Point2f obj = getMode2D(objID, pt2D, vertexs); // read out object coordinate
+  cv::Point2f obj = getMode2D(objID, pt2D, vertmap, width, num_classes); // read out object coordinate
 
   eyePts.push_back(pt2D);
   objPts.push_back(obj);
@@ -446,7 +435,7 @@ inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p)
 }
 
 
-inline void countInliers2D(TransHyp& hyp, const std::vector<jp::img_center_t>& vertexs, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int pixelBatch)
+inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch)
 {
   // reset data of last RANSAC iteration
   hyp.inlierPts2D.clear();
@@ -469,7 +458,7 @@ inline void countInliers2D(TransHyp& hyp, const std::vector<jp::img_center_t>& v
     hyp.effPixels++;
   
     // read out object coordinate
-    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertexs);
+    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertmap, width, num_classes);
 
     // inlier check
     if(point2line(hyp.center, obj, pt2D) < inlierThreshold)
@@ -520,16 +509,16 @@ inline void filterInliers2D(TransHyp& hyp, int maxInliers)
 }
 
 
-void estimateCenter(const float* probability, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
+void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs)
 {
   // probs
-  std::vector<jp::img_stat_t> probs;
-  getProbs(probability, probs, width, height, num_classes);
+  // std::vector<jp::img_stat_t> probs;
+  // getProbs(probability, probs, width, height, num_classes);
 
   // vertexs
-  std::vector<jp::img_center_t> vertexs;
-  getCenters(vertmap, vertexs, width, height, num_classes);
+  // std::vector<jp::img_center_t> vertexs;
+  // getCenters(vertmap, vertexs, width, height, num_classes);
       
   //set parameters, see documentation of GlobalProperties
   int maxIterations = 10000000;
@@ -537,14 +526,14 @@ void estimateCenter(const float* probability, const float* vertmap, const float*
   float inlierThreshold3D = 0.5;
   int ransacIterations = 256;  // 256
   int poseIterations = 100;
-  int preemptiveBatch = 200;  // 1000
+  int preemptiveBatch = 100;  // 1000
   int maxPixels = 1000;  // 1000
   int refIt = 8;  // 8
 
   // labels
   std::vector<std::vector<int>> labels;
   std::vector<int> object_ids;
-  getLabels(probability, labels, object_ids, width, height, num_classes, minArea);
+  getLabels(labelmap, labels, object_ids, width, height, num_classes, minArea);
 
   // bb3Ds
   std::vector<std::vector<cv::Point3f>> bb3Ds;
@@ -565,8 +554,8 @@ void estimateCenter(const float* probability, const float* vertmap, const float*
   int imageHeight = height;
 
   // create samplers for choosing pixel positions according to probability maps
-  std::vector<Sampler2D> samplers;
-  createSamplers(samplers, probs, imageWidth, imageHeight);
+  // std::vector<Sampler2D> samplers;
+  // createSamplers(samplers, probs, imageWidth, imageHeight);
 		
   // hold for each object a list of pose hypothesis, these are optimized until only one remains per object
   std::map<jp::id_t, std::vector<TransHyp>> hypMap;
@@ -590,7 +579,7 @@ void estimateCenter(const float* probability, const float* vertmap, const float*
     cv::Point2f pt1(index % width, index / width);
     
     // sample first correspondence
-    if(!samplePoint2D(objID, eyePts, objPts, pt1, vertexs))
+    if(!samplePoint2D(objID, eyePts, objPts, pt1, vertmap, width, num_classes))
       continue;
 
     // sample other points in search radius, discard hypothesis if minimum distance constrains are violated
@@ -598,7 +587,7 @@ void estimateCenter(const float* probability, const float* vertmap, const float*
     index = labels[objID][pindex];
     cv::Point2f pt2(index % width, index / width);
 
-    if(!samplePoint2D(objID, eyePts, objPts, pt2, vertexs))
+    if(!samplePoint2D(objID, eyePts, objPts, pt2, vertmap, width, num_classes))
       continue;
 
     // reconstruct camera
@@ -643,7 +632,7 @@ void estimateCenter(const float* probability, const float* vertmap, const float*
     // draw a batch of pixels and check for inliers, the number of pixels looked at is increased in each iteration
     #pragma omp parallel for
     for(int h = 0; h < workingQueue.size(); h++)
-      countInliers2D(*(workingQueue[h]), vertexs, labels, inlierThreshold3D, width, preemptiveBatch);
+      countInliers2D(*(workingQueue[h]), vertmap, labels, inlierThreshold3D, width, num_classes, preemptiveBatch);
 	    	    
     // sort hypothesis according to inlier count and discard bad half
     #pragma omp parallel for 
@@ -844,14 +833,16 @@ void compute_target_weight(float* target, float* weight, const float* poses_gt, 
   for (int i = 0; i < num; i++)
   {
     cv::Vec<float, 13> roi = outputs[i];
+    int batch_id = int(roi(0));
     int class_id = int(roi(1));
 
     // find the gt index
     int gt_ind = -1;
     for (int j = 0; j < num_gt; j++)
     {
+      int gt_batch = int(poses_gt[j * 13 + 0]);
       int gt_id = int(poses_gt[j * 13 + 1]);
-      if(class_id == gt_id)
+      if(class_id == gt_id && batch_id == gt_batch)
       {
         gt_ind = j;
         break;

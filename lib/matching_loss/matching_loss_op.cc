@@ -30,7 +30,6 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Matching")
     .Attr("T: {float, double}")
-    .Attr("filename_camera: string")
     .Attr("filename_model: string")
     .Input("bottom_pose: T")
     .Input("bottom_init: T")
@@ -38,6 +37,7 @@ REGISTER_OP("Matching")
     .Input("bottom_data: T")
     .Input("bottom_rois: T")
     .Input("bottom_labels: int32")
+    .Input("bottom_meta_data: T")
     .Output("loss: T")
     .Output("bottom_diff: T");
 
@@ -61,16 +61,7 @@ class MatchingOp : public OpKernel {
         throw std::runtime_error("3D model filename does not exist!");
     }
 
-    // Get the camera filename
-    OP_REQUIRES_OK(context, context->GetAttr("filename_camera", &filename_camera_));
-    std::cout << filename_camera_ << std::endl;
-
-    if (!pangolin::FileExists(filename_camera_)) 
-    {
-        throw std::runtime_error("Camera filename does not exist!");
-    }
-
-    render_.setup(filename_camera_, filename_model_);
+    render_.setup(filename_model_);
   }
 
   // bottom_pose: (batch_size, 4 * num_classes)
@@ -97,6 +88,16 @@ class MatchingOp : public OpKernel {
     const Tensor& bottom_labels = context->input(5);
     const int* labels = bottom_labels.flat<int>().data();
 
+    // format of the meta_data
+    // intrinsic matrix: meta_data[0 ~ 8]
+    // inverse intrinsic matrix: meta_data[9 ~ 17]
+    // pose_world2live: meta_data[18 ~ 29]
+    // pose_live2world: meta_data[30 ~ 41]
+    // voxel step size: meta_data[42, 43, 44]
+    // voxel min value: meta_data[45, 46, 47]
+    const Tensor& bottom_meta_data = context->input(6);
+    const T* meta_data = bottom_meta_data.flat<T>().data();
+
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_pose.dims() == 2,
                 errors::InvalidArgument("pose must be 2-dimensional"));
@@ -116,6 +117,7 @@ class MatchingOp : public OpKernel {
     int height = bottom_data.dim_size(1);
     int width = bottom_data.dim_size(2);
     int num_rois = bottom_rois.dim_size(0);
+    int num_meta_data = bottom_meta_data.dim_size(3);
 
     // Create output loss tensor
     int dim = 1;
@@ -134,14 +136,19 @@ class MatchingOp : public OpKernel {
     memset(bottom_diff, 0, batch_size * num_channels *sizeof(T));
 
     // rendering to compute the loss
-    T loss = render_.render(data, labels, rois, num_rois, gt_size, num_classes, gt, pose, init, bottom_diff);
+    clock_t start = clock();
+
+    T loss = render_.render(data, labels, rois, num_rois, gt_size, num_classes, width, height, gt, pose, init, bottom_diff, meta_data, num_meta_data);
+
+    clock_t stop = clock(); 
+    double elapsed = (double)(stop - start) / CLOCKS_PER_SEC;
+    printf("Rendering time elapsed: %f\n", elapsed);
 
     top_data(0) = loss;
   }
  private:
   // file names
   std::string filename_model_;
-  std::string filename_camera_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Matching").Device(DEVICE_CPU).TypeConstraint<float>("T"), MatchingOp<CPUDevice, float>);

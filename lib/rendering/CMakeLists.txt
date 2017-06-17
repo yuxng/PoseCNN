@@ -50,7 +50,8 @@ link_libraries(${Pangolin_LIBRARIES}
                ${SUITESPARSE_LIBRARIES}
                ${OpenEXR_LIBRARIES}
                ${OpenCV_LIBS}
-               assimp)
+               assimp
+               util)
 
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-arch=sm_61;--expt-extended-lambda;--verbose;")
 
