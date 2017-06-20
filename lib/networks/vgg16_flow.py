@@ -89,16 +89,42 @@ class vgg16_flow(Network):
 
         elif cfg.NET_CONF.CONCAT_OR_SUBTRACT == "subtract":
             (self.feed('conv5_3_l', 'conv5_3_r')
-             .subtract(name='concat_conv5')
-             .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5', c_i=512)
+             .subtract(name='concat_conv5'))
+            for i in range(cfg.NET_CONF.N_CONVOLUTIONS):
+                if i == 0:
+                    (self.feed('concat_conv5')
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5', c_i=512))
+                    score_conv5_final_layer_name = 'score_conv5'
+                elif i == 1:
+                    (self.feed('score_conv5')
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5_' + str(i)))
+                    score_conv5_final_layer_name = 'score_conv5_' + str(i)
+                else:
+                    (self.feed('score_conv5_' + str(i - 1))
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5_' + str(i)))
+                    score_conv5_final_layer_name = 'score_conv5_' + str(i)
+            (self.feed(score_conv5_final_layer_name)
              .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
             (self.feed('conv4_3_l', 'conv4_3_r')
-             .subtract(name='concat_conv4')
-             .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4', c_i=512))
+             .subtract(name='concat_conv4'))
+            for i in range(cfg.NET_CONF.N_CONVOLUTIONS):
+                if i == 0:
+                    (self.feed('concat_conv4')
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4', c_i=512))
+                    score_conv4_final_layer_name = 'score_conv4'
+                elif i == 1:
+                    (self.feed('score_conv4')
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4_' + str(i)))
+                    score_conv4_final_layer_name = 'score_conv4_' + str(i)
+                else:
+                    (self.feed('score_conv4_' + str(i - 1))
+                     .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4_' + str(i)))
+                    score_conv4_final_layer_name = 'score_conv4_' + str(i)
+
         else:
             assert False, "invalid setting for cfg.NET_CONF.CONCAT_OR_SUBTRACT"
 
-        (self.feed('score_conv4', 'upscore_conv5')
+        (self.feed(score_conv4_final_layer_name, 'upscore_conv5')
          .add(name='add_score')
          .dropout(self.keep_prob_queue, name='dropout')
          # .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)

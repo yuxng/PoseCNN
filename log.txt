@@ -1,0 +1,110 @@
++ echo Logging output to experiments/logs/lov_single_color.txt.2017-06-12_17-16-25
+Logging output to experiments/logs/lov_single_color.txt.2017-06-12_17-16-25
++ export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
++ LD_PRELOAD=/usr/lib/libtcmalloc.so.4
++ ./tools/train_net.py --gpu 0 --network vgg16_flow --weights data/imagenet_models/vgg16_convs.npy --imdb sintel_albedo_train --cfg experiments/cfgs/sintel_albedo.yml --iters 2000
+ERROR: ld.so: object '/usr/lib/libtcmalloc.so.4' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
+ERROR: ld.so: object '/usr/lib/libtcmalloc.so.4' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
+ncols = 55
+
+ERROR: ld.so: object '/usr/lib/libtcmalloc.so.4' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
+shapenet_scene_train
+shapenet_scene_val
+shapenet_single_train
+shapenet_single_val
+gmu_scene_train
+gmu_scene_val
+rgbd_scene_train
+rgbd_scene_val
+rgbd_scene_trainval
+lov_train
+lov_val
+linemod_ape_train
+linemod_ape_val
+sintel_albedo_train
+sintel_albedo_val
+Called with args:
+Namespace(cfg_file='experiments/cfgs/sintel_albedo.yml', gpu_id=0, imdb_name='sintel_albedo_train', max_iters=2000, network_name='vgg16_flow', pretrained_model='data/imagenet_models/vgg16_convs.npy', randomize=False)
+Using config:
+{'EPS': 1e-14,
+ 'EXP_DIR': 'sintel_albedo',
+ 'FLIP_X': False,
+ 'GPU_ID': 0,
+ 'INPUT': 'LEFT_RIGHT_FLOW',
+ 'NETWORK': 'VGG16FLOW',
+ 'PIXEL_MEANS': array([[[ 102.9801,  115.9465,  122.7717]]]),
+ 'RNG_SEED': 3,
+ 'ROOT_DIR': '/home/davidm/DA-RNN/DA-RNN',
+ 'TEST': {'GAN': False,
+          'GRID_SIZE': 256,
+          'RANSAC': False,
+          'SCALES_BASE': [1.0],
+          'SINGLE_FRAME': True,
+          'VERTEX_REG': True,
+          'VISUALIZE': True},
+ 'TRAIN': {'CHROMATIC': False,
+           'DISPLAY': 20,
+           'GAMMA': 0.1,
+           'GAN': False,
+           'GRID_SIZE': 256,
+           'IMS_PER_BATCH': 2,
+           'LEARNING_RATE': 0.001,
+           'MOMENTUM': 0.9,
+           'NUM_CLASSES': 10,
+           'NUM_STEPS': 5,
+           'NUM_UNITS': 64,
+           'OPTICAL_FLOW': True,
+           'SCALES_BASE': [1.0],
+           'SINGLE_FRAME': True,
+           'SNAPSHOT_INFIX': 'sintel_albedo',
+           'SNAPSHOT_ITERS': 10000,
+           'SNAPSHOT_PREFIX': 'vgg16_fcn_color_single_frame',
+           'STEPSIZE': 30000,
+           'TRAINABLE': True,
+           'USE_FLIPPED': False,
+           'VERTEX_REG': False,
+           'VERTEX_W': 10.0,
+           'VISUALIZE': False}}
+Loaded dataset `sintel/training/albedo` for training
+Output will be saved to `/home/davidm/DA-RNN/DA-RNN/output/sintel_albedo/sintel/training/albedo`
+/gpu:0
+Tensor("fifo_queue_Dequeue:0", dtype=float32)
+Tensor("fifo_queue_Dequeue:1", dtype=float32)
+Tensor("conv5_3_l:0", shape=(?, ?, ?, 512), dtype=float32)
+Tensor("conv5_3_r:0", shape=(?, ?, ?, 512), dtype=float32)
+Tensor("conv4_3_l:0", shape=(?, ?, ?, 512), dtype=float32)
+Tensor("conv4_3_r:0", shape=(?, ?, ?, 512), dtype=float32)
+Tensor("score_conv4/score_conv4:0", shape=(?, ?, ?, 64), dtype=float32)
+Tensor("upscore_conv5_1:0", shape=(?, ?, ?, ?), dtype=float32)
+Use network `vgg16_flow` in training
+2017-06-12 17:16:28.079846: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use SSE4.1 instructions, but these are available on your machine and could speed up CPU computations.
+2017-06-12 17:16:28.079870: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use SSE4.2 instructions, but these are available on your machine and could speed up CPU computations.
+2017-06-12 17:16:28.089002: E tensorflow/stream_executor/cuda/cuda_driver.cc:405] failed call to cuInit: CUDA_ERROR_NO_DEVICE
+2017-06-12 17:16:28.089071: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:158] retrieving CUDA diagnostic information for host: meyer
+2017-06-12 17:16:28.089086: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:165] hostname: meyer
+2017-06-12 17:16:28.089163: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:189] libcuda reported version is: 375.66.0
+2017-06-12 17:16:28.089220: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:369] driver version file contents: """NVRM version: NVIDIA UNIX x86_64 Kernel Module  375.66  Mon May  1 15:29:16 PDT 2017
+GCC version:  gcc version 4.8.4 (Ubuntu 4.8.4-2ubuntu1~14.04.3) 
+"""
+2017-06-12 17:16:28.089257: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:193] kernel reported version is: 375.66.0
+2017-06-12 17:16:28.089269: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:300] kernel version seems to match DSO: 375.66.0
+Solving...
+Traceback (most recent call last):
+  File "./tools/train_net.py", line 101, in <module>
+    max_iters=args.max_iters)
+  File "/home/davidm/DA-RNN/DA-RNN/tools/../lib/fcn/train.py", line 319, in train_flow
+    sw.train_model(sess, train_op, loss, learning_rate, max_iters)
+  File "/home/davidm/DA-RNN/DA-RNN/tools/../lib/fcn/train.py", line 69, in train_model
+    sess.run(tf.global_variables_initializer())
+  File "/usr/local/lib/python2.7/dist-packages/tensorflow/python/debug/wrappers/framework.py", line 411, in run
+    self._run_call_count))
+  File "/usr/local/lib/python2.7/dist-packages/tensorflow/python/debug/wrappers/local_cli_wrapper.py", line 212, in on_run_start
+    self._run_start_response = self._launch_cli()
+  File "/usr/local/lib/python2.7/dist-packages/tensorflow/python/debug/wrappers/local_cli_wrapper.py", line 366, in _launch_cli
+    title_color=self._title_color)
+  File "/usr/local/lib/python2.7/dist-packages/tensorflow/python/debug/cli/curses_ui.py", line 456, in run_ui
+    self._screen_launch(enable_mouse_on_start=enable_mouse_on_start)
+  File "/usr/local/lib/python2.7/dist-packages/tensorflow/python/debug/cli/curses_ui.py", line 409, in _screen_launch
+    curses.cbreak()
+_curses.error: cbreak() returned ERR
+[?1049h[1;24r(B[m[4l[?7h[39;49m[39;49m[37m[40m[H[2J
