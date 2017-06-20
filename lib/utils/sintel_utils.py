@@ -18,12 +18,8 @@ def read_flow_file_with_path(path):
         raw_data = flow_file.read()
         assert struct.unpack_from("f", raw_data, 0)[0] == 202021.25  # check to make sure the file is being read correctly
         width, height = struct.unpack_from("ii", raw_data, 4)
-
-        data = np.zeros([width, height, 2], dtype=np.float32)
-        for j in range(height):
-            for i in range(width):
-                data[i, j, 0] = struct.unpack_from("f", raw_data, 8 * (i + j * width) + 12)[0]
-                data[i, j, 1] = struct.unpack_from("f", raw_data, 8 * (i + j * width) + 12 + 4)[0]
+        data_raw = np.frombuffer(raw_data, dtype=np.float32, offset=12)
+        data = data_raw.reshape([height, width, 2], order='C').transpose([1, 0, 2])
         return data
 
 

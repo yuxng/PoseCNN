@@ -343,9 +343,7 @@ def test_flow_net(sess, net, imdb, weights_filename, n_images = None, save_image
 
         if calculate_EPE_all_data:
             path_segments = str(images['image_left']).split("/")
-
-            print "EPE is " + str(average_EPE) + " for " + \
-                  path_segments[-3] + "/" + path_segments[-2] + "/" + path_segments[-1]
+            print ("EPE is %7.4f for " % average_EPE) + path_segments[-3] + "/" + path_segments[-2] + "/" + path_segments[-1]
             EPE_list.append(average_EPE)
         else:
             predicted_flow_im = sintel_utils.sintel_compute_color(predicted_flow)
@@ -393,7 +391,7 @@ def test_flow_net(sess, net, imdb, weights_filename, n_images = None, save_image
             ax6.set_xlabel("white = no error, black = large error")
 
             fig.suptitle('Image ' + str(images['image_left']) + '\naverage endpoint error: ' + str(average_EPE) +
-                         ' (predicting no movement would result in EPE of ' + str(zero_prediction_EPE) + ')', fontsize=12)
+                         ' (predicting no movement would result in EPE of ' + str(zero_prediction_EPE) + ')', fontsize=10)
 
             if save_image:
                 plt.savefig("plot_" + str(training_iter) + "_" + str(i) + ".png")
@@ -448,7 +446,7 @@ def siphon_flow_single_frame(sess, net, im_left, im_right):
         feed_dict = {net.data_left: i['left'], net.data_right: i['right'], net.gt_flow: i['flow'], net.keep_prob: i['keep_prob']}
         sess.run(net.enqueue_op, feed_dict=feed_dict)
 
-    assert sess.run(net.queue_size_op) == queue_start_size, "data queue size changed"
+    # assert sess.run(net.queue_size_op) == queue_start_size, "data queue size changed"
     return output
 
 

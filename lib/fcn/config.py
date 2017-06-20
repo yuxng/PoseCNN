@@ -25,7 +25,7 @@ from easydict import EasyDict as edict
 
 __C = edict()
 # Consumers can get config by:
-#   from fast_rcnn_config import cfg
+#   from fcn.config import cfg
 cfg = __C
 
 __C.FLIP_X = False
@@ -85,6 +85,10 @@ __C.TRAIN.DELETE_OLD_CHECKPOINTS = False
 __C.TRAIN.VISUALIZE_DURING_TRAIN = False
 __C.TRAIN.OPTIMIZER = 'MomentumOptimizer'
 
+
+__C.NET_CONF = edict()
+__C.NET_CONF.COMBINE_CONVOLUTION_SIZE = 1
+__C.NET_CONF.CONCAT_OR_SUBTRACT = "concat"
 
 
 #

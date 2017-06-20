@@ -10,6 +10,7 @@
 """Train a Fully Convolutional Network (FCN) on image segmentation database."""
 
 import _init_paths
+import cv2
 from fcn.train import get_training_roidb, train_net, train_gan, train_flow
 from fcn.config import cfg, cfg_from_file, get_output_dir
 from datasets.factory import get_imdb
@@ -82,7 +83,8 @@ if __name__ == '__main__':
     else:
         output_dir = osp.abspath(osp.join(cfg.ROOT_DIR, 'output', cfg.EXP_DIR,
                                           "batch_size_" + str(cfg.TRAIN.IMS_PER_BATCH) + "_loss_" + str(cfg.LOSS_FUNC) +
-                                          "_optimizer_" + cfg.TRAIN.OPTIMIZER + "_" + str(datetime.date.today())))
+                                          "_optimizer_" + cfg.TRAIN.OPTIMIZER + "_conv_size_" + str(cfg.NET_CONF.COMBINE_CONVOLUTION_SIZE) +
+                                          "_ConcatSub_" + cfg.NET_CONF.CONCAT_OR_SUBTRACT + "_" + str(datetime.date.today())))
         print 'Output will be saved to `{:s}`'.format(output_dir)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)

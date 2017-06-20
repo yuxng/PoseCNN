@@ -1,5 +1,6 @@
 import tensorflow as tf
 from networks.network import Network
+from fcn.config import cfg
 
 class vgg16_flow(Network):
     def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, trainable=True):
@@ -76,14 +77,26 @@ class vgg16_flow(Network):
              .conv(3, 3, 512, 1, 1, name='conv5_3', c_i=512, trainable=trainable, reuse=reuse)
              .add_immediate(tf.constant(0.0, tf.float32), name='conv5_3_r'))
 
-        (self.feed('conv5_3_l', 'conv5_3_r')
-             .concat(3, name='concat_conv5')
-             .conv(1, 1, self.num_units, 1, 1, name='score_conv5', c_i=1024)
-             .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
+        conv_size = cfg.NET_CONF.COMBINE_CONVOLUTION_SIZE
+        if cfg.NET_CONF.CONCAT_OR_SUBTRACT == "concat":
+            (self.feed('conv5_3_l', 'conv5_3_r')
+                 .concat(3, name='concat_conv5')
+                 .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5', c_i=1024)
+                 .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
+            (self.feed('conv4_3_l', 'conv4_3_r')
+                 .concat(3, name='concat_conv4')
+                 .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4', c_i=1024))
 
-        (self.feed('conv4_3_l', 'conv4_3_r')
-             .concat(3, name='concat_conv4')
-             .conv(1, 1, self.num_units, 1, 1, name='score_conv4', c_i=1024))
+        elif cfg.NET_CONF.CONCAT_OR_SUBTRACT == "subtract":
+            (self.feed('conv5_3_l', 'conv5_3_r')
+             .subtract(name='concat_conv5')
+             .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv5', c_i=512)
+             .deconv(4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False))
+            (self.feed('conv4_3_l', 'conv4_3_r')
+             .subtract(name='concat_conv4')
+             .conv(conv_size, conv_size, self.num_units, 1, 1, name='score_conv4', c_i=512))
+        else:
+            assert False, "invalid setting for cfg.NET_CONF.CONCAT_OR_SUBTRACT"
 
         (self.feed('score_conv4', 'upscore_conv5')
          .add(name='add_score')

@@ -72,6 +72,7 @@ class SolverWrapper(object):
         train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
 
         # initialize variables
+        print "initializing variables"
         sess.run(tf.global_variables_initializer())
         if self.pretrained_model is not None and str(self.pretrained_model).find('.npy') != -1:
             print ('Loading pretrained model '
@@ -90,6 +91,7 @@ class SolverWrapper(object):
             end_index = str(self.pretrained_model).find('.ckpt')
             start_iter = int(self.pretrained_model[start_index : end_index])
 
+        loss_history = list()
         timer = Timer()
         for iter in range(start_iter, max_iters):
             timer.tic()
@@ -104,23 +106,27 @@ class SolverWrapper(object):
             
             print 'iter: %d / %d, loss: %7.4f, lr: %.8f, time: %1.2f, queue size before training op: %3i' %\
                     (iter+1, max_iters, loss_value, lr, timer.diff, queue_size)
+            loss_history.append(loss_value)
 
             if (iter+1) % cfg.TRAIN.DISPLAY == 0:
-                print 'speed: {:.3f}s / iter'.format(timer.average_time)
+                print 'speed: {:.3f}s / iter'.format(timer.average_time) + ", averaged loss: %7.4f" % np.mean(loss_history)
+                loss_history = list()
                 # putting any file called show_visuals in the project root directory will show network output
                 # in its current (partially trained) state
-                # if cfg.TRAIN.VISUALIZE_DURING_TRAIN and os.listdir('.').count('show_visuals') != 0:
-                #     assert net is not None, "the network must be passed to train_model() if VISUALIZE is true"
-                #     # pause the data loading thread and wait for it to finish
-                #     pause_data_input = True
-                #     while loader_paused == False:
-                #         time.sleep(0.01)
-                #     try:
-                #         test.test_flow_net(sess, net, imdb, None, n_images=4, training_iter=iter, save_image=True)
-                #     except IndexError as e:
-                #         print "error during visualization (training should continue)"
-                #         print e
-                #     pause_data_input = False
+                if cfg.TRAIN.VISUALIZE_DURING_TRAIN and os.listdir('.').count('show_visuals') != 0:
+                    assert net is not None, "the network must be passed to train_model() if VISUALIZE is true"
+                    # pause the data loading thread and wait for it to finish
+                    pause_data_input = True
+                    for i in xrange(1000):
+                        time.sleep(0.001)
+                        if loader_paused == True:
+                            break
+                    try:
+                        test.test_flow_net(sess, net, imdb, None, n_images=4, training_iter=iter, save_image=False)
+                    except IndexError as e:
+                        print "error during visualization (training should continue)"
+                        print e
+                    pause_data_input = False
 
             if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
                 last_snapshot_iter = iter
@@ -254,6 +260,10 @@ def load_and_enqueue(sess, net, roidb, num_classes, coord):
             loader_paused = True
             time.sleep(0.001)
         loader_paused = False
+
+        while sess.run(net.queue_size_op) > 90:
+            time.sleep(0.01)
+
         # print "\t\t\t\t\t\tstarting load operation " + str(i)
 
         blobs = data_layer.forward()
@@ -357,7 +367,7 @@ def train_flow(network, imdb, roidb, output_dir, pretrained_model=None, max_iter
     if cfg.LOSS_FUNC == "L2":
         loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.pow(gt_flow - predicted_flow, 2), axis=3)))
     elif cfg.LOSS_FUNC == "L1":
-        loss = tf.reduce_mean(gt_flow - predicted_flow)
+        loss = tf.abs(tf.reduce_mean(gt_flow - predicted_flow))
     else:
         assert False, "LOSS_FUNC must be specified"
 

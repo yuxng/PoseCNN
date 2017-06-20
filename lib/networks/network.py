@@ -10,11 +10,11 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
-from gru2d import GRU2DCell
-from gru2d_original import GRUCell
-from gru3d import GRU3DCell
-from vanilla2d import Vanilla2DCell
-from add2d import Add2DCell
+# from gru2d import GRU2DCell
+# from gru2d_original import GRUCell
+# from gru3d import GRU3DCell
+# from vanilla2d import Vanilla2DCell
+# from add2d import Add2DCell
 
 DEFAULT_PADDING = 'SAME'
 
@@ -233,35 +233,35 @@ class Network(object):
     def compute_label(self, input, name):
         return compute_label_op.compute_label(input[0], input[1], input[2], name=name)
 
-    @layer
-    def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
-        with tf.variable_scope(name, reuse=reuse) as scope:
-            gru2d = GRU2DCell(num_units, channels)
-            return gru2d(input[0], input[1][0], input[1][1], scope)
-
-    @layer
-    def rnn_gru2d_original(self, input, num_units, channels, name, reuse=None):
-        with tf.variable_scope(name, reuse=reuse) as scope:
-            gru2d = GRUCell(num_units, channels)
-            return gru2d(input[0], input[1][0], input[1][1], scope)
-
-    @layer
-    def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
-        with tf.variable_scope(name, reuse=reuse) as scope:
-            gru3d = GRU3DCell(num_units, channels)
-            return gru3d(input[0][0], input[0][2], input[1], scope)
-
-    @layer
-    def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):
-        with tf.variable_scope(name, reuse=reuse) as scope:
-            vanilla2d = Vanilla2DCell(num_units, channels)
-            return vanilla2d(input[0], input[1], scope)
-    
-    @layer
-    def rnn_add2d(self, input, num_units, channels, step, name, reuse=None):
-        with tf.variable_scope(name, reuse=reuse) as scope:
-            add2d = Add2DCell(num_units, channels)
-            return add2d(input[0], input[1], step, scope)
+    # @layer
+    # def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
+    #     with tf.variable_scope(name, reuse=reuse) as scope:
+    #         gru2d = GRU2DCell(num_units, channels)
+    #         return gru2d(input[0], input[1][0], input[1][1], scope)
+    #
+    # @layer
+    # def rnn_gru2d_original(self, input, num_units, channels, name, reuse=None):
+    #     with tf.variable_scope(name, reuse=reuse) as scope:
+    #         gru2d = GRUCell(num_units, channels)
+    #         return gru2d(input[0], input[1][0], input[1][1], scope)
+    #
+    # @layer
+    # def rnn_gru3d(self, input, num_units, channels, name, reuse=None):
+    #     with tf.variable_scope(name, reuse=reuse) as scope:
+    #         gru3d = GRU3DCell(num_units, channels)
+    #         return gru3d(input[0][0], input[0][2], input[1], scope)
+    #
+    # @layer
+    # def rnn_vanilla2d(self, input, num_units, channels, name, reuse=None):
+    #     with tf.variable_scope(name, reuse=reuse) as scope:
+    #         vanilla2d = Vanilla2DCell(num_units, channels)
+    #         return vanilla2d(input[0], input[1], scope)
+    #
+    # @layer
+    # def rnn_add2d(self, input, num_units, channels, step, name, reuse=None):
+    #     with tf.variable_scope(name, reuse=reuse) as scope:
+    #         add2d = Add2DCell(num_units, channels)
+    #         return add2d(input[0], input[1], step, scope)
 
     @layer
     def sigmoid(self, input, name):
@@ -313,6 +313,11 @@ class Network(object):
     @layer
     def add_immediate(self, input, value, name):
         return tf.add(input, value, name=name)
+
+    @layer
+    def subtract(self, inputs, name):
+        assert len(inputs) == 2, "subtract must receive two input layers"
+        return tf.subtract(inputs[0], inputs[1], name=name)
 
     @layer
     def multiply_sum(self, inputs, num_classes, name):
