@@ -6,6 +6,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 add_definitions(-std=c++11)
 add_definitions(-Wall)
@@ -13,45 +14,32 @@ add_definitions(-fPIC)
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 find_package(CUDA REQUIRED)
-find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
+
 find_package(OpenCV REQUIRED)
-pkg_check_modules(OpenEXR REQUIRED OpenEXR)
+if(NOT OpenCV_FOUND)
+        # make FIND_PACKAGE friendly
+        if(NOT OpenCV_FIND_QUIETLY)
+                if(OpenCV_FIND_REQUIRED)
+                        message(FATAL_ERROR "OpenCV required but some headers or libs not found. ${ERR_MSG}")
+                else(OpenCV_FIND_REQUIRED)
+                        message(STATUS "WARNING: OpenCV was not found. ${ERR_MSG}")
+                endif(OpenCV_FIND_REQUIRED)
+        endif(NOT OpenCV_FIND_QUIETLY)
+else(NOT OpenCV_FOUND)
+	message(STATUS "OpenCV Include Directory: ${OpenCV_INCLUDE_DIRS}")
+	message(STATUS "OpenCV Link Libraries: ${OpenCV_LIBS}")
+endif(NOT OpenCV_FOUND)
+include_directories(${OpenCV_INCLUDE_DIRS} )
 
-set(xFusion_ROOT "/var/Projects/FCN/lib/kinect_fusion")
-set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
-set(xFusion_LIBRARY_DIRS ${xFusion_ROOT}/build)
-set(xFusion_LIBRARIES kfusion)
-
-# TODO:
-set(SUITESPARSE_INCLUDE_DIRS "/usr/include/suitesparse" CACHE PATH "suitesparse include directory")
-set(SUITESPARSE_LIBRARIES "cholmod;metis")
-
-message(STATUS "xFusion root: ${xFusion_ROOT}")
-message(STATUS "pangolin: ${Pangolin_INCLUDE_DIRS}")
-
-include_directories(${Pangolin_INCLUDE_DIRS}
-                    ${xFusion_INCLUDE_DIRS}
-                    ${EIGEN3_INCLUDE_DIR}
-                    ${OpenEXR_INCLUDE_DIRS}
-                    ${SUITESPARSE_INCLUDE_DIRS}
-                    ${OpenCV_INCLUDE_DIRS}
-                    ${PROJECT_SOURCE_DIR}/include
+include_directories(${EIGEN3_INCLUDE_DIR}
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
 
-link_directories(${Pangolin_LIBRARY_DIRS}
-                 ${xFusion_LIBRARY_DIRS}
-                 ${OpenEXR_LIBRARY_DIRS})
-
-link_libraries(${Pangolin_LIBRARIES}
-               ${xFusion_LIBRARIES}
-               ${DEPTHSENSE_LIBRARIES}
-               ${SUITESPARSE_LIBRARIES}
-               ${OpenEXR_LIBRARIES}
-               ${OpenCV_LIBS}
+link_libraries(${OpenCV_LIBS}
                assimp
-               util)
+               util
+               OSMesa)
 
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-std=c++11;--expt-relaxed-constexpr;-O3;-arch=sm_61;--expt-extended-lambda;--verbose;")
 

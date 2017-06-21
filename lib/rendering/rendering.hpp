@@ -10,22 +10,17 @@
 #include <string>
 #include <cstddef> 
 
-#include <pangolin/pangolin.h>
 #include "opencv2/opencv.hpp"
 
-#include <Eigen/Sparse>
+#define GL_GLEXT_PROTOTYPES
+#include "GL/gl.h"
+#include "GL/glext.h"
+#include "GL/osmesa.h"
 
-#include <df/camera/camera.h>
-#include <df/camera/linear.h>
-#include <df/camera/poly3.h>
-#include <df/camera/rig.h>
-#include <df/image/backprojection.h>
-#include <df/prediction/glRender.h>
-#include <df/prediction/glRenderTypes.h>
-#include <df/util/args.h>
-#include <df/util/glHelpers.h>
-#include <df/util/pangolinHelpers.h>
-#include <df/util/tensor.h>
+#include <cuda_runtime.h>
+#include <Eigen/Sparse>
+#include <Eigen/Geometry>
+#include <sophus/se3.hpp>
 
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
@@ -42,30 +37,15 @@ inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
 
 }
 
-struct ForegroundRenderType {
-    static std::string vertShaderName() {
-        static const char name[] = "foreground.vert";
-        return std::string(name);
+template<typename P> inline
+void OpenGlMatrix(const Eigen::Matrix<P,4,4>& mat, float* m)
+{
+    for(int r=0; r<4; ++r ) {
+        for(int c=0; c<4; ++c ) {
+            m[c*4+r] = mat(r,c);
+        }
     }
-    static std::string fragShaderName() {
-        static const char name[] = "foreground.frag";
-        return std::string(name);
-    }
-    static constexpr int numTextures = 1;
-    static const GLenum * textureFormats() {
-        static const GLenum formats[numTextures] = { GL_RGBA32F};
-        return formats;
-    }
-    static constexpr int numVertexAttributes = 1;
-    static const int * vertexAttributeSizes() {
-        static const int sizes[numVertexAttributes] = { 3 };
-        return sizes;
-    }
-    static const GLenum * vertexAttributeTypes() {
-        static const GLenum types[numVertexAttributes] = { GL_FLOAT };
-        return types;
-    }
-};
+}
 
 unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 0}, {255, 0, 255}, {0, 255, 255},
                               {128, 0, 0}, {0, 128, 0}, {0, 0, 128}, {128, 128, 0}, {128, 0, 128}, {0, 128, 128},
@@ -73,39 +53,36 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
                               {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
 
 
+typedef struct
+{
+  int num_vertices;
+  int num_faces;
+  void* vertices;
+  void* faces; 
+}MyModel;
+
 class Render
 {
  public:
 
   Render() {};
   Render(std::string model_file);
-  ~Render() {};
+  ~Render();
 
   void setup(std::string model_file);
-  void create_window(int width, int height);
-  void destroy_window();
   float render(const float* data, const int* labels, const float* rois, int num_rois, int num_gt, int num_classes, int width, int height,
                const float* poses_gt, const float* poses_pred, const float* poses_init, float* bottom_diff, const float* meta_data, int num_meta_data);
-  void loadModels(std::string filename);
-  aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
-  void initializeBuffers(aiMesh* assimpMesh, std::string textureName, 
-    pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
-  void feed_data(int width, int height, const float* data, const int* labels, pangolin::GlTexture & colorTex, pangolin::GlTexture & labelTex);
+  void loadModels(const std::string filename);
+  void loadTexturedMesh(const std::string filename, std::string & texture_name, MyModel* model);
+  void initializeBuffers(MyModel* model, std::string textureName, GLuint vertexbuffer, GLuint indexbuffer);
+  void ProjectionMatrixRDF_TopLeft(float* m, int w, int h, float fu, float fv, float u0, float v0, float zNear, float zFar );
+  void write_ppm(const char *filename, const GLubyte *buffer, int width, int height);
+  void print_matrix(float *m);
 
  private:
   int counter_;
 
   // 3D models
-  std::vector<aiMesh*> assimpMeshes_;
+  std::vector<MyModel*> models_;
   std::vector<std::string> texture_names_;
-
-  // render
-  df::GLRenderer<ForegroundRenderType>* renderer_;
-
-  // pangoline views
-  pangolin::View* gtView_;
-  pangolin::View* poseView_;
-  pangolin::View* colorView_;
-  pangolin::View* labelView_;
-  pangolin::View* multiView_;
 };

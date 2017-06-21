@@ -56,11 +56,6 @@ class MatchingOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("filename_model", &filename_model_));
     std::cout << filename_model_ << std::endl;
 
-    if (!pangolin::FileExists(filename_model_))
-    {
-        throw std::runtime_error("3D model filename does not exist!");
-    }
-
     render_.setup(filename_model_);
   }
 

@@ -134,7 +134,52 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
-    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters):
+    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters):
+        """Network training loop."""
+        # add summary
+        # tf.summary.scalar('loss', loss)
+        # merged = tf.summary.merge_all()
+        # train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
+
+        # intialize variables
+        sess.run(tf.global_variables_initializer())
+        if self.pretrained_model is not None:
+            print ('Loading pretrained model '
+                   'weights from {:s}').format(self.pretrained_model)
+            self.net.load(self.pretrained_model, sess, True)
+
+        if self.pretrained_ckpt is not None:
+            print ('Loading pretrained ckpt '
+                   'weights from {:s}').format(self.pretrained_ckpt)
+            self.restore(sess, self.pretrained_ckpt)
+
+        tf.get_default_graph().finalize()
+
+        # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
+
+        last_snapshot_iter = -1
+        timer = Timer()
+        for iter in range(max_iters):
+            timer.tic()
+            loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, loss_pose, learning_rate, train_op])
+            # train_writer.add_summary(summary, iter)
+            timer.toc()
+            
+            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, loss_pose: %.4f, lr: %.8f,  time: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, timer.diff)
+
+            if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
+                print 'speed: {:.3f}s / iter'.format(timer.average_time)
+
+            if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
+                last_snapshot_iter = iter
+                self.snapshot(sess, iter)
+
+        if last_snapshot_iter != iter:
+            self.snapshot(sess, iter)
+
+
+    def train_model_vertex_matching(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -301,8 +346,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     pose_weights = network.get_output('poses_weight')
                     loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
 
-                    loss_matching = network.get_output('matching_loss')[0]
-                    loss = loss_cls + loss_vertex + loss_pose + loss_matching
+                    # loss_matching = network.get_output('matching_loss')[0]
+                    loss = loss_cls + loss_vertex + loss_pose
                 else:
                     loss = loss_cls + loss_vertex
             else:
@@ -323,7 +368,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
@@ -338,7 +383,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
-            sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters)
+            sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
         else:
             sw.train_model(sess, train_op, loss, learning_rate, max_iters)
         print 'done solving'

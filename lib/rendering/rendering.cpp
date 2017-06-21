@@ -1,7 +1,5 @@
 #include "rendering.hpp"
 
-using namespace df;
-
 Render::Render(std::string model_file)
 {
   counter_ = 0;
@@ -9,38 +7,20 @@ Render::Render(std::string model_file)
 }
 
 
+Render::~Render()
+{
+  for(int i = 0; i < models_.size(); i++)
+  {
+    free(models_[i]->vertices);
+    free(models_[i]->faces);
+    free(models_[i]);
+  }
+}
+
 void Render::setup(std::string model_file)
 {
   counter_ = 0;
   loadModels(model_file);
-}
-
-// create window
-void Render::create_window(int width, int height)
-{
-  pangolin::CreateWindowAndBind("Render", 640, 480);
-
-  gtView_ = &pangolin::Display("gt").SetAspect(640.0/480.);
-  poseView_ = &pangolin::Display("pose").SetAspect(640.0/480.);
-  colorView_ = &pangolin::Display("color").SetAspect(640.0/480.);
-  labelView_ = &pangolin::Display("label").SetAspect(640.0/480.);
-
-  multiView_ = &pangolin::Display("multi")
-      .SetLayout(pangolin::LayoutEqual)
-      .AddDisplay(*gtView_)
-      .AddDisplay(*poseView_)
-      .AddDisplay(*colorView_)
-      .AddDisplay(*labelView_);
-
-  // create render
-  // renderer_ = new df::GLRenderer<ForegroundRenderType>(width, height);
-}
-
-
-void Render::destroy_window()
-{
-  pangolin::DestroyWindow("Render");
-  // delete renderer_;
 }
 
 // read the 3D models
@@ -58,17 +38,18 @@ void Render::loadModels(const std::string filename)
 
   // load meshes
   const int num_models = model_names.size();
-  assimpMeshes_.resize(num_models);
+  models_.resize(num_models);
   texture_names_.resize(num_models);
 
   for (int m = 0; m < num_models; ++m)
   {
-    assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names_[m]);
+    models_[m] = new MyModel();
+    loadTexturedMesh(model_names[m], texture_names_[m], models_[m]);
     std::cout << texture_names_[m] << std::endl;
   }
 }
 
-aiMesh* Render::loadTexturedMesh(const std::string filename, std::string & texture_name)
+void Render::loadTexturedMesh(const std::string filename, std::string & texture_name, MyModel* model)
 {
     const struct aiScene * scene = aiImportFile(filename.c_str(),0); //aiProcess_JoinIdenticalVertices);
     if (scene == 0) {
@@ -113,19 +94,13 @@ aiMesh* Render::loadTexturedMesh(const std::string filename, std::string & textu
     }
 
     texture_name = textureName;
-    return assimpMesh;
-}
 
+    // constrcut the model
+    model->num_vertices = assimpMesh->mNumVertices;
+    model->num_faces = assimpMesh->mNumFaces;
+    model->vertices = malloc( assimpMesh->mNumVertices*sizeof(float)*3 );
+    memcpy(model->vertices, assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float)*3);
 
-void Render::initializeBuffers(aiMesh* assimpMesh, std::string textureName, 
-  pangolin::GlBuffer & vertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
-{
-    // std::cout << "loading vertices..." << std::endl;
-    // std::cout << assimpMesh->mNumVertices << std::endl;
-    vertices.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
-    vertices.Upload(assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float)*3);
-
-    // std::cout << "loading normals..." << std::endl;
     std::vector<uint3> faces3(assimpMesh->mNumFaces);
     for (std::size_t i = 0; i < assimpMesh->mNumFaces; ++i) {
         aiFace & face = assimpMesh->mFaces[i];
@@ -135,118 +110,98 @@ void Render::initializeBuffers(aiMesh* assimpMesh, std::string textureName,
         faces3[i] = make_uint3(face.mIndices[0],face.mIndices[1],face.mIndices[2]);
     }
 
-    indices.Reinitialise(pangolin::GlElementArrayBuffer,assimpMesh->mNumFaces*3,GL_UNSIGNED_INT,3,GL_STATIC_DRAW);
-    indices.Upload(faces3.data(),assimpMesh->mNumFaces*sizeof(int)*3);
+    model->faces = malloc( assimpMesh->mNumFaces*sizeof(int)*3 );
+    memcpy(model->faces, faces3.data(), assimpMesh->mNumFaces*sizeof(int)*3);
 
-    if (is_textured)
-    {
-      std::cout << "loading texture from " << textureName << std::endl;
-      texture.LoadFromFile(textureName);
-
-      std::cout << "loading tex coords..." << std::endl;
-      texCoords.Reinitialise(pangolin::GlArrayBuffer,assimpMesh->mNumVertices,GL_FLOAT,2,GL_STATIC_DRAW);
-
-      std::vector<float2> texCoords2(assimpMesh->mNumVertices);
-      for (std::size_t i = 0; i < assimpMesh->mNumVertices; ++i) {
-          texCoords2[i] = make_float2(assimpMesh->mTextureCoords[0][i].x,1.0 - assimpMesh->mTextureCoords[0][i].y);
-      }
-      texCoords.Upload(texCoords2.data(),assimpMesh->mNumVertices*sizeof(float)*2);
-    }
+    aiReleaseImport(scene);
 }
 
 
-// feed data
-void Render::feed_data(int width, int height, const float* data, const int* labels, pangolin::GlTexture & colorTex, pangolin::GlTexture & labelTex)
+void Render::initializeBuffers(MyModel* model, std::string textureName, GLuint vertexbuffer, GLuint indexbuffer)
 {
-  // convert depth values
-  unsigned char* p = (unsigned char*)malloc(sizeof(unsigned char) * width * height * 3);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glBufferData(GL_ARRAY_BUFFER, model->num_vertices*sizeof(float)*3, model->vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  for (int i = 0; i < width * height * 3; i++)
-  {
-    switch(i % 3)
-    {
-      case 0:
-        p[i] = (unsigned char)(data[i] + 102.9801);
-        break;
-      case 1:
-        p[i] = (unsigned char)(data[i] + 115.9465);
-        break;
-      case 2:
-        p[i] = (unsigned char)(data[i] + 122.7717);
-        break;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexbuffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, model->num_faces*sizeof(int)*3, model->faces, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+
+// Camera Axis:
+//   X - Right, Y - Down, Z - Forward
+// Image Origin:
+//   Top Left
+// Pricipal point specified with image origin (0,0) at top left of top-left pixel (not center)
+void Render::ProjectionMatrixRDF_TopLeft(float* m, int w, int h, float fu, float fv, float u0, float v0, float zNear, float zFar )
+{
+    // http://www.songho.ca/opengl/gl_projectionmatrix.html
+    const float L = -(u0) * zNear / fu;
+    const float R = +(w-u0) * zNear / fu;
+    const float T = -(v0) * zNear / fv;
+    const float B = +(h-v0) * zNear / fv;
+    
+    std::fill_n(m, 4*4, 0);
+    
+    m[0*4+0] = 2 * zNear / (R-L);
+    m[1*4+1] = 2 * zNear / (T-B);
+    
+    m[2*4+0] = (R+L)/(L-R);
+    m[2*4+1] = (T+B)/(B-T);
+    m[2*4+2] = (zFar +zNear) / (zFar - zNear);
+    m[2*4+3] = 1.0;
+    
+    m[3*4+2] =  (2*zFar*zNear)/(zNear - zFar);
+}
+
+
+void Render::print_matrix(float *m)
+{
+    for(int r=0; r< 4; ++r) {
+        for(int c=0; c<4; ++c) {
+            std::cout << m[4*c+r] << '\t';
+        }
+        std::cout << std::endl;
     }
-  }
-
-  colorTex.Upload(p, GL_BGR, GL_UNSIGNED_BYTE);
-  free(p);
-
-  // process labels
-  p = (unsigned char*)malloc(sizeof(unsigned char) * width * height * 3);
-  for (int i = 0; i < width * height; i++)
-  {
-    int label = labels[i];
-    p[3 * i] = class_colors[label][0];
-    p[3 * i + 1] = class_colors[label][1];
-    p[3 * i + 2] = class_colors[label][2];
-  }
-
-  labelTex.Upload(p, GL_RGB, GL_UNSIGNED_BYTE);
-  free(p);
 }
 
 
 float Render::render(const float* data, const int* labels, const float* rois, int num_rois, int num_gt, int num_classes, int width, int height,
                     const float* poses_gt, const float* poses_pred, const float* poses_init, float* bottom_diff, const float* meta_data, int num_meta_data)
 {
-  bool is_textured = false;
-  create_window(width, height);
+  void *buffer;
+  float projectionMatrix[16], mvMatrix[16];
+
+  // build context
+  OSMesaContext ctx = OSMesaCreateContextExt( OSMESA_RGB, 16, 0, 0, NULL );
+
+  if (!ctx) 
+  {
+    printf("OSMesaCreateContext failed!\n");
+    return 0;
+  }
+
+   /* Allocate the image buffer */
+   buffer = malloc( width * height * 3 * sizeof(GLubyte) );
+   if (!buffer) {
+      printf("Alloc image buffer failed!\n");
+      return 0;
+   }
+
+   /* Bind the buffer to the context and make it current */
+   if (!OSMesaMakeCurrent( ctx, buffer, GL_UNSIGNED_BYTE, width, height )) {
+      printf("OSMesaMakeCurrent failed!\n");
+      return 0;
+   }
 
   // initialize buffers
-  pangolin::GlBuffer texturedVertices_;
-  pangolin::GlBuffer texturedIndices_;
-  pangolin::GlBuffer texturedCoords_;
-  pangolin::GlTexture texturedTextures_;
-
-  pangolin::GlTexture colorTex(width, height);
-  pangolin::GlTexture labelTex(width, height);
-
-  // feed the first image in the batch only
-  feed_data(width, height, data, labels, colorTex, labelTex);
-
-  // show image
-  colorView_->ActivateScissorAndClear();
-  colorTex.RenderToViewportFlipY();
-
-  // draw rois
-  glColor3ub(0, 255, 0);
-  for (int i = 0; i < num_rois; i++)
-  {
-    int batch_index = int(rois[6 * i + 0]);
-    if (batch_index > 0)
-      break;
-
-    float x1 = 2 * rois[6 * i + 2] / width - 1;
-    float y1 = -1 * (2 * rois[6 * i + 3] / height - 1);
-    float x2 = 2 * rois[6 * i + 4] / width - 1;
-    float y2 = -1 * (2 * rois[6 * i + 5] / height - 1);
-    glBegin(GL_LINE_LOOP);
-      glVertex2f(x1,y1);
-      glVertex2f(x2,y1);
-      glVertex2f(x2,y2);
-      glVertex2f(x1,y2);
-    glEnd();
-  }
+  GLuint vertexbuffer, indexbuffer;
+  // Generate 1 buffer, put the resulting identifier in vertexbuffer
+  glGenBuffers(1, &vertexbuffer);
+  glGenBuffers(1, &indexbuffer);
 
   // show gt pose
-  if (is_textured)
-  {
-    glEnable(GL_DEPTH_TEST);
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-
-    glColor3ub(255,255,255);
-    gtView_->ActivateScissorAndClear();
-  }
-
   std::vector<cv::Mat*> gt_masks(num_gt);
   for (int n = 0; n < num_gt; n++)
   {
@@ -256,97 +211,47 @@ float Render::render(const float* data, const int* labels, const float* rois, in
     float px = meta_data[batch_id * num_meta_data + 2];
     float py = meta_data[batch_id * num_meta_data + 5];
 
-    pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), 0.25, 6.0);
+    ProjectionMatrixRDF_TopLeft(projectionMatrix, width, height, fx, -fy, px+0.5, height-(py+0.5), 0.25, 6.0);
 
     int class_id = int(poses_gt[n * 13 + 1]);
 
-    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+    initializeBuffers(models_[class_id-1], texture_names_[class_id-1], vertexbuffer, indexbuffer);
     Eigen::Quaterniond quaternion(poses_gt[n * 13 + 6], poses_gt[n * 13 + 7], poses_gt[n * 13 + 8], poses_gt[n * 13 + 9]);
     Sophus::SE3d::Point translation(poses_gt[n * 13 + 10], poses_gt[n * 13 + 11], poses_gt[n * 13 + 12]);
     const Sophus::SE3d T_co(quaternion, translation);
 
-    if (is_textured)
-    {
-      glMatrixMode(GL_PROJECTION);
-      projectionMatrix.Load();
-      glMatrixMode(GL_MODELVIEW);
+    // OpenGL rendering
+    glColor3ub(255,255,255);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      Eigen::Matrix4f mv = T_co.cast<float>().matrix();
-      pangolin::OpenGlMatrix mvMatrix(mv);
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(projectionMatrix);
 
-      mvMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+    Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+    OpenGlMatrix(mv, mvMatrix);
+    glLoadMatrixf(mvMatrix);
 
-      glEnable(GL_TEXTURE_2D);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-      texturedTextures_.Bind();
-      texturedVertices_.Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedCoords_.Bind();
-      glTexCoordPointer(2,GL_FLOAT,0,0);
-      texturedIndices_.Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_.Unbind();
-      texturedTextures_.Unbind();
-      texturedVertices_.Unbind();
-      texturedCoords_.Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-      glDisable(GL_TEXTURE_2D);
-    }
-    else
-    {
-/*
-      renderer_->setProjectionMatrix(projectionMatrix);
-      renderer_->setModelViewMatrix(T_co.cast<float>().matrix());
-      renderer_->render( { &texturedVertices_ }, texturedIndices_ );
-      glColor3ub(255,255,255);
-      gtView_->ActivateScissorAndClear();
-      renderer_->texture(0).RenderToViewportFlipY();
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+    glVertexPointer(3, GL_FLOAT, 0, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexbuffer);
+    glDrawElements(GL_TRIANGLES, models_[class_id-1]->num_faces * 3, GL_UNSIGNED_INT, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisableClientState(GL_VERTEX_ARRAY);
 
-      // download the mask
-      gt_masks[n] = new cv::Mat(height, width, CV_8UC3);
-      renderer_->texture(0).Download(gt_masks[n]->data, GL_RGB, GL_UNSIGNED_BYTE);
-*/
-      // OpenGL rendering
-      glColor3ub(255,255,255);
-      gtView_->ActivateScissorAndClear();
+    glFinish();
 
-      glMatrixMode(GL_PROJECTION);
-      projectionMatrix.Load();
-      glMatrixMode(GL_MODELVIEW);
+    gt_masks[n] = new cv::Mat(height, width, CV_8UC3);
+    memcpy( gt_masks[n]->data, buffer, width * height * 3 * sizeof(GLubyte) );
 
-      Eigen::Matrix4f mv = T_co.cast<float>().matrix();
-      pangolin::OpenGlMatrix mvMatrix(mv);
-      mvMatrix.Load();
-
-      glEnableClientState(GL_VERTEX_ARRAY);
-      texturedVertices_.Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedIndices_.Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_.Unbind();
-      texturedVertices_.Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-
-      gt_masks[n] = new cv::Mat(height, width, CV_8UC3);
-      glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, gt_masks[n]->data);
-    }
+    // std::string filename = std::to_string(counter_++) + "_gt.ppm";
+    // cv::imwrite(filename.c_str(), *(gt_masks[n]) );
+    // write_ppm(filename.c_str(), (GLubyte*)buffer, width, height);
   }
-
-  // show label
-  glColor3ub(255,255,255);
-  labelView_->ActivateScissorAndClear();
-  labelTex.Upload(gt_masks[0]->data, GL_RGB, GL_UNSIGNED_BYTE);
-  labelTex.RenderToViewportFlipY();
 
   // show predicted pose
-  if (is_textured)
-  {
-    glColor3ub(255,255,255);
-    poseView_->ActivateScissorAndClear();
-  }
-
   cv::Mat dst1;
   cv::Mat dst2;
   double delta = 0.001;
@@ -359,7 +264,7 @@ float Render::render(const float* data, const int* labels, const float* rois, in
     float px = meta_data[batch_id * num_meta_data + 2];
     float py = meta_data[batch_id * num_meta_data + 5];
 
-    pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), 0.25, 6.0);
+    ProjectionMatrixRDF_TopLeft(projectionMatrix, width, height, fx, -fy, px+0.5, height-(py+0.5), 0.25, 6.0);
 
     int class_id = int(rois[n * 6 + 1]);
 
@@ -382,7 +287,7 @@ float Render::render(const float* data, const int* labels, const float* rois, in
       continue;
     }
 
-    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+    initializeBuffers(models_[class_id-1], texture_names_[class_id-1], vertexbuffer, indexbuffer);
 
     // render mulitple times
     int num = 5;
@@ -430,76 +335,39 @@ float Render::render(const float* data, const int* labels, const float* rois, in
       Sophus::SE3d::Point translation_pred(poses_init[n * 7 + 4], poses_init[n * 7 + 5], poses_init[n * 7 + 6]);
       const Sophus::SE3d T_co_pred(quaternion_pred, translation_pred);
 
-      if (is_textured)
-      {
-        glMatrixMode(GL_PROJECTION);
-        projectionMatrix.Load();
-        glMatrixMode(GL_MODELVIEW);
+      glColor3ub(255,255,255);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        Eigen::Matrix4f mv = T_co_pred.cast<float>().matrix();
-        pangolin::OpenGlMatrix mvMatrix(mv);
+      glMatrixMode(GL_PROJECTION);
+      glLoadMatrixf(projectionMatrix);
+      glMatrixMode(GL_MODELVIEW);
 
-        mvMatrix.Load();
+      Eigen::Matrix4f mv = T_co_pred.cast<float>().matrix();
+      OpenGlMatrix(mv, mvMatrix);
+      glLoadMatrixf(mvMatrix);
 
-        glEnable(GL_TEXTURE_2D);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        texturedTextures_.Bind();
-        texturedVertices_.Bind();
-        glVertexPointer(3,GL_FLOAT,0,0);
-        texturedCoords_.Bind();
-        glTexCoordPointer(2,GL_FLOAT,0,0);
-        texturedIndices_.Bind();
-        glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-        texturedIndices_.Unbind();
-        texturedTextures_.Unbind();
-        texturedVertices_.Unbind();
-        texturedCoords_.Unbind();
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisable(GL_TEXTURE_2D);
-      }
-      else
-      {
-/*
-        renderer_->setProjectionMatrix(projectionMatrix);
-        renderer_->setModelViewMatrix(T_co_pred.cast<float>().matrix());
-        renderer_->render( { &texturedVertices_ }, texturedIndices_ );
-        poseView_->ActivateScissorAndClear();
-        renderer_->texture(0).RenderToViewportFlipY();
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+      glVertexPointer(3, GL_FLOAT, 0, 0);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexbuffer);
+      glDrawElements(GL_TRIANGLES, models_[class_id-1]->num_faces * 3, GL_UNSIGNED_INT, 0);
+      glBindBuffer(GL_ARRAY_BUFFER, 0);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+      glDisableClientState(GL_VERTEX_ARRAY);
 
-        // download the mask
-        cv::Mat mask(height, width, CV_8UC3);
-        renderer_->texture(0).Download(mask.data, GL_RGB, GL_UNSIGNED_BYTE);
-*/
-        glColor3ub(255,255,255);
-        poseView_->ActivateScissorAndClear();
+      glFinish();
 
-        glMatrixMode(GL_PROJECTION);
-        projectionMatrix.Load();
-        glMatrixMode(GL_MODELVIEW);
+      cv::Mat mask(height, width, CV_8UC3);
+      memcpy( mask.data, buffer, width * height * 3 * sizeof(GLubyte) );
 
-        Eigen::Matrix4f mv = T_co_pred.cast<float>().matrix();
-        pangolin::OpenGlMatrix mvMatrix(mv);
-        mvMatrix.Load();
+      // compute the overlap between masks
+      cv::bitwise_and(mask, *gt_masks[gt_ind], dst1);
+      cv::bitwise_or(mask, *gt_masks[gt_ind], dst2);
+      IoUs[i] = cv::sum(dst1)[0] / cv::sum(dst2)[0];
 
-        glEnableClientState(GL_VERTEX_ARRAY);
-        texturedVertices_.Bind();
-        glVertexPointer(3,GL_FLOAT,0,0);
-        texturedIndices_.Bind();
-        glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-        texturedIndices_.Unbind();
-        texturedVertices_.Unbind();
-        glDisableClientState(GL_VERTEX_ARRAY);
+      // std::string filename = std::to_string(counter_++) + "_pose.ppm";
+      // cv::imwrite(filename.c_str(), mask );
 
-        cv::Mat mask(height, width, CV_8UC3);
-        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, mask.data);
-
-        // compute the overlap between masks
-        cv::bitwise_and(mask, *gt_masks[gt_ind], dst1);
-        cv::bitwise_or(mask, *gt_masks[gt_ind], dst2);
-        IoUs[i] = cv::sum(dst1)[0] / cv::sum(dst2)[0];
-      }
     }  // end rendering
 
     // compute loss and gradient
@@ -511,17 +379,59 @@ float Render::render(const float* data, const int* labels, const float* rois, in
     bottom_diff[n * 4 * num_classes + 4 * class_id + 3] = (IoUs[0] - IoUs[4]) / delta / num_rois;
   }
 
-  std::string filename = std::to_string(counter_++);
-  pangolin::SaveWindowOnRender(filename);
-  pangolin::FinishFrame();
-
-  usleep( 2000 * 1000 );
-  destroy_window();
-
   for (int n = 0; n < num_gt; n++)
     delete gt_masks[n];
 
+  OSMesaDestroyContext( ctx );
+
+  /* free the image buffer */
+  free( buffer );
+
   return loss;
+}
+
+void Render::write_ppm(const char *filename, const GLubyte *buffer, int width, int height)
+{
+   const int binary = 0;
+   FILE *f = fopen( filename, "w" );
+   if (f) {
+      int i, x, y;
+      const GLubyte *ptr = buffer;
+      if (binary) {
+         fprintf(f,"P6\n");
+         fprintf(f,"# ppm-file created by osdemo.c\n");
+         fprintf(f,"%i %i\n", width,height);
+         fprintf(f,"255\n");
+         fclose(f);
+         f = fopen( filename, "ab" );  /* reopen in binary append mode */
+         for (y=height-1; y>=0; y--) {
+            for (x=0; x<width; x++) {
+               i = (y*width + x) * 3;
+               fputc(ptr[i], f);   /* write red */
+               fputc(ptr[i+1], f); /* write green */
+               fputc(ptr[i+2], f); /* write blue */
+            }
+         }
+      }
+      else {
+         /*ASCII*/
+         int counter = 0;
+         fprintf(f,"P3\n");
+         fprintf(f,"# ascii ppm file created by osdemo.c\n");
+         fprintf(f,"%i %i\n", width, height);
+         fprintf(f,"255\n");
+         for (y=height-1; y>=0; y--) {
+            for (x=0; x<width; x++) {
+               i = (y*width + x) * 3;
+               fprintf(f, " %3d %3d %3d", ptr[i], ptr[i+1], ptr[i+2]);
+               counter++;
+               if (counter % 5 == 0)
+                  fprintf(f, "\n");
+            }
+         }
+      }
+      fclose(f);
+   }
 }
 
 int main(int argc, char** argv) 

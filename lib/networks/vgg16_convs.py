@@ -167,5 +167,5 @@ class vgg16_convs(Network):
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
 
                 # matching loss
-                (self.feed('poses_pred', 'poses_init', 'poses', 'data', 'rois', 'label_2d', 'meta_data')
-                     .matching_loss(self.filename_model, name='matching_loss'))
+                # (self.feed('poses_pred', 'poses_init', 'poses', 'data', 'rois', 'label_2d', 'meta_data')
+                #     .matching_loss(self.filename_model, name='matching_loss'))
