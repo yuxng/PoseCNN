@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, pose_reg=False, trainable=True, filename_model=''):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, pose_reg=False, matching=False, trainable=True, filename_model=''):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
@@ -10,6 +10,7 @@ class vgg16_convs(Network):
         self.scale = 1 / scales[0]
         self.vertex_reg = vertex_reg
         self.pose_reg = pose_reg
+        self.matching = matching
         self.filename_model = filename_model
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
@@ -167,5 +168,6 @@ class vgg16_convs(Network):
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
 
                 # matching loss
-                # (self.feed('poses_pred', 'poses_init', 'poses', 'data', 'rois', 'label_2d', 'meta_data')
-                #     .matching_loss(self.filename_model, name='matching_loss'))
+                if self.matching:
+                    (self.feed('poses_pred', 'poses_init', 'poses', 'data', 'rois', 'label_2d', 'meta_data')
+                         .matching_loss(self.filename_model, name='matching_loss'))

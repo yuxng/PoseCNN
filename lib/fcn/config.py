@@ -47,6 +47,7 @@ __C.TRAIN.VERTEX_W = 10.0
 __C.TRAIN.VISUALIZE = False
 __C.TRAIN.GAN = False
 __C.TRAIN.POSE_REG = False
+__C.TRAIN.MATCHING = False
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001

@@ -346,8 +346,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     pose_weights = network.get_output('poses_weight')
                     loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
 
-                    # loss_matching = network.get_output('matching_loss')[0]
-                    loss = loss_cls + loss_vertex + loss_pose
+                    if cfg.TRAIN.MATCHING:
+                        loss_matching = network.get_output('matching_loss')[0]
+                        loss = loss_cls + loss_vertex + loss_pose + loss_matching
+                    else:
+                        loss = loss_cls + loss_vertex + loss_pose
                 else:
                     loss = loss_cls + loss_vertex
             else:
@@ -383,7 +386,10 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
-            sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
+            if cfg.TRAIN.MATCHING:
+                sw.train_model_vertex_matching(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters)
+            else:
+                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
         else:
             sw.train_model(sess, train_op, loss, learning_rate, max_iters)
         print 'done solving'
