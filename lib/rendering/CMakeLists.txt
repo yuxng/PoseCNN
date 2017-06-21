@@ -31,10 +31,12 @@ else(NOT OpenCV_FOUND)
 	message(STATUS "OpenCV Include Directory: ${OpenCV_INCLUDE_DIRS}")
 	message(STATUS "OpenCV Link Libraries: ${OpenCV_LIBS}")
 endif(NOT OpenCV_FOUND)
-include_directories(${OpenCV_INCLUDE_DIRS} )
+include_directories(${OpenCV_INCLUDE_DIRS} "/home/yuxiang/Softwares/mesa-17.0.0-rc1/include")
 
 include_directories(${EIGEN3_INCLUDE_DIR}
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
+
+link_directories("/home/yuxiang/Softwares/mesa-17.0.0-rc1/lib")
 
 link_libraries(${OpenCV_LIBS}
                assimp

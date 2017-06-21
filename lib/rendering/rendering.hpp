@@ -18,7 +18,7 @@
 #include "GL/osmesa.h"
 
 #include <cuda_runtime.h>
-#include <Eigen/Sparse>
+#include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <sophus/se3.hpp>
 
