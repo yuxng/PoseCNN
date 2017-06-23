@@ -28,7 +28,7 @@ class vgg16_convs(Network):
 
         # define a queue
         if input_format == 'RGBD':
-            if vertex_reg and trainable:
+            if vertex_reg:
                 if pose_reg:
                     q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                     self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meat_data])
@@ -46,7 +46,7 @@ class vgg16_convs(Network):
                 data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
-            if vertex_reg and trainable:
+            if vertex_reg:
                 if pose_reg:
                     q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                     self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
@@ -151,7 +151,7 @@ class vgg16_convs(Network):
             if self.pose_reg:
 
                 (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                     .hough_voting(name='hough'))
+                     .hough_voting(100, name='hough'))
 
                 self.layers['rois'] = self.get_output('hough')[0]
                 self.layers['poses_init'] = self.get_output('hough')[1]
@@ -159,9 +159,9 @@ class vgg16_convs(Network):
                 self.layers['poses_weight'] = self.get_output('hough')[3]
 
                 # roi pooling
-                (self.feed('conv5_3', 'rois')
-                     .roi_pool(6, 6, 1.0/16, name='pool5')
-                     .fc(256, num_in=6*6*512, name='fc6')
+                (self.feed('upscore', 'rois')
+                     .roi_pool(6, 6, 1.0, name='pool5')
+                     .fc(256, height=6, width=6, channel=self.num_units, name='fc6')
                      .dropout(self.keep_prob_queue, name='drop6')
                      .fc(256, num_in=256, name='fc7')
                      .dropout(self.keep_prob_queue, name='drop7')

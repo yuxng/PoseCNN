@@ -26,3 +26,4 @@ TEST:
   VERTEX_REG: True
   VISUALIZE: True
   POSE_REG: True
+  MATCHING: False

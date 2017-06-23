@@ -37,6 +37,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Houghvoting")
     .Attr("T: {float, double}")
+    .Attr("preemptive_batch: int")
     .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("bottom_extents: T")
@@ -82,7 +83,7 @@ inline void filterInliers2D(TransHyp& hyp, int maxInliers);
 inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
 static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
-void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
+void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, int preemptive_batch,
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs);
 void compute_target_weight(float* target, float* weight, const float* poses_gt, int num_gt, int num_classes, std::vector<cv::Vec<float, 13> > outputs);
 
@@ -90,6 +91,13 @@ template <typename Device, typename T>
 class HoughvotingOp : public OpKernel {
  public:
   explicit HoughvotingOp(OpKernelConstruction* context) : OpKernel(context) {
+    // Get the pool height
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("preemptive_batch", &preemptive_batch_));
+    // Check that pooled_height is positive
+    OP_REQUIRES(context, preemptive_batch_ >= 0,
+                errors::InvalidArgument("Need preemptive_batch >= 0, got ",
+                                        preemptive_batch_));
   }
 
   // bottom_label: (batch_size, height, width)
@@ -147,7 +155,7 @@ class HoughvotingOp : public OpKernel {
       float px = meta_data(index_meta_data + 2);
       float py = meta_data(index_meta_data + 5);
 
-      estimateCenter(labelmap, vertmap, extents, n, height, width, num_classes, fx, fy, px, py, outputs);
+      estimateCenter(labelmap, vertmap, extents, n, height, width, num_classes, preemptive_batch_, fx, fy, px, py, outputs);
 
       index_meta_data += num_meta_data;
     }
@@ -202,6 +210,8 @@ class HoughvotingOp : public OpKernel {
 
     compute_target_weight(top_target, top_weight, gt, num_gt, num_classes, outputs);
   }
+ private:
+  int preemptive_batch_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvoting").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotingOp<CPUDevice, float>);
@@ -509,7 +519,7 @@ inline void filterInliers2D(TransHyp& hyp, int maxInliers)
 }
 
 
-void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, 
+void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, int preemptive_batch,
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs)
 {
   // probs
@@ -526,7 +536,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
   float inlierThreshold3D = 0.5;
   int ransacIterations = 256;  // 256
   int poseIterations = 100;
-  int preemptiveBatch = 100;  // 1000
+  int preemptiveBatch = preemptive_batch;  // 1000
   int maxPixels = 1000;  // 1000
   int refIt = 8;  // 8
 

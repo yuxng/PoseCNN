@@ -142,6 +142,13 @@ ext_modules = [
         extra_objects=["pose_estimation/build/libransac.so"],
         extra_compile_args={'gcc': ["-Wno-unused-function"]},
         include_dirs = ['pose_estimation/include']
+    ),
+    Extension(
+        "pose_refinement.refiner",                                # the extension name
+        sources=['pose_refinement/refiner.pyx'],
+        language='c++',
+        extra_objects=["pose_refinement/build/librefiner.so"],
+        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"]}
     )
 ]
 
