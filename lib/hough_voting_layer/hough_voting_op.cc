@@ -738,6 +738,14 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     jp::cv_trans_t trans(rvec, tvec);
     jp::jp_trans_t pose = jp::cv2our(trans);
 
+    // use the projected 3D box
+    cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
+
+    roi(2) = bb2D_proj.x - 0.1 * bb2D_proj.width;
+    roi(3) = bb2D_proj.y - 0.1 * bb2D_proj.height;
+    roi(4) = bb2D_proj.x + 1.1 * bb2D_proj.width;
+    roi(5) = bb2D_proj.y + 1.1 * bb2D_proj.height;
+
     // convert to quarternion
     cv::Mat pose_t;
     cv::transpose(pose.first, pose_t);

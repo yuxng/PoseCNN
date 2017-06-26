@@ -15,8 +15,12 @@ def _roi_pool_shape(op):
 
   pooled_height = op.get_attr('pooled_height')
   pooled_width = op.get_attr('pooled_width')
+  pool_channel = op.get_attr('pool_channel')
 
-  output_shape = tf.TensorShape([num_rois, pooled_height, pooled_width, channels])
+  if pool_channel == 1:
+    output_shape = tf.TensorShape([num_rois, pooled_height, pooled_width, 1])
+  else:
+    output_shape = tf.TensorShape([num_rois, pooled_height, pooled_width, channels])
   return [output_shape, output_shape]
 
 @ops.RegisterGradient("RoiPool")
@@ -35,8 +39,9 @@ def _roi_pool_grad(op, grad, _):
   pooled_height = op.get_attr('pooled_height')
   pooled_width = op.get_attr('pooled_width')
   spatial_scale = op.get_attr('spatial_scale')
+  pool_channel = op.get_attr('pool_channel')
 
   # compute gradient
-  data_grad = roi_pooling_op.roi_pool_grad(data, rois, argmax, grad, pooled_height, pooled_width, spatial_scale)
+  data_grad = roi_pooling_op.roi_pool_grad(data, rois, argmax, grad, pooled_height, pooled_width, spatial_scale, pool_channel)
 
   return [data_grad, None]  # List of one Tensor, since we have one input

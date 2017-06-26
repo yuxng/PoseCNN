@@ -80,4 +80,10 @@ class Refiner
   pangolin::View* colorView_;
   pangolin::View* labelView_;
   pangolin::View* multiView_;
+
+  // buffers
+  std::vector<pangolin::GlBuffer> texturedVertices_;
+  std::vector<pangolin::GlBuffer> texturedIndices_;
+  std::vector<pangolin::GlBuffer> texturedCoords_;
+  std::vector<pangolin::GlTexture> texturedTextures_;
 };

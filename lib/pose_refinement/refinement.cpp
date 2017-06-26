@@ -5,10 +5,10 @@ using namespace df;
 Refiner::Refiner(std::string model_file)
 {
   counter_ = 0;
+  create_window(640, 480);
+
   loadModels(model_file);
   std::cout << "loaded models" << std::endl;
-
-  create_window(640, 480);
 }
 
 
@@ -70,6 +70,15 @@ void Refiner::loadModels(const std::string filename)
     assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names_[m]);
     std::cout << texture_names_[m] << std::endl;
   }
+
+  // buffers
+  texturedVertices_.resize(num_models);
+  texturedIndices_.resize(num_models);
+  texturedCoords_.resize(num_models);
+  texturedTextures_.resize(num_models);
+
+  for (int m = 0; m < num_models; m++)
+    initializeBuffers(assimpMeshes_[m], texture_names_[m], texturedVertices_[m], texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], true);
 }
 
 aiMesh* Refiner::loadTexturedMesh(const std::string filename, std::string & texture_name)
@@ -174,10 +183,10 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
   bool is_textured = true;
 
   // initialize buffers
-  pangolin::GlBuffer texturedVertices_;
-  pangolin::GlBuffer texturedIndices_;
-  pangolin::GlBuffer texturedCoords_;
-  pangolin::GlTexture texturedTextures_;
+  // pangolin::GlBuffer texturedVertices_;
+  // pangolin::GlBuffer texturedIndices_;
+  // pangolin::GlBuffer texturedCoords_;
+  // pangolin::GlTexture texturedTextures_;
 
   pangolin::GlTexture colorTex(width, height);
   pangolin::GlTexture labelTex(width, height);
@@ -224,7 +233,7 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
 
     int class_id = int(poses_gt[n * 13 + 1]);
 
-    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+    // initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
     Eigen::Quaterniond quaternion(poses_gt[n * 13 + 6], poses_gt[n * 13 + 7], poses_gt[n * 13 + 8], poses_gt[n * 13 + 9]);
     Sophus::SE3d::Point translation(poses_gt[n * 13 + 10], poses_gt[n * 13 + 11], poses_gt[n * 13 + 12]);
     const Sophus::SE3d T_co(quaternion, translation);
@@ -240,17 +249,17 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
     glEnable(GL_TEXTURE_2D);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_.Bind();
-    texturedVertices_.Bind();
+    texturedTextures_[class_id-1].Bind();
+    texturedVertices_[class_id-1].Bind();
     glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_.Bind();
+    texturedCoords_[class_id-1].Bind();
     glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_.Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_.Unbind();
-    texturedTextures_.Unbind();
-    texturedVertices_.Unbind();
-    texturedCoords_.Unbind();
+    texturedIndices_[class_id-1].Bind();
+    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id-1].num_elements, GL_UNSIGNED_INT, 0);
+    texturedIndices_[class_id-1].Unbind();
+    texturedTextures_[class_id-1].Unbind();
+    texturedVertices_[class_id-1].Unbind();
+    texturedCoords_[class_id-1].Unbind();
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisable(GL_TEXTURE_2D);
@@ -284,7 +293,7 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
       continue;
     }
 
-    initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
+    // initializeBuffers(assimpMeshes_[class_id-1], texture_names_[class_id-1], texturedVertices_, texturedIndices_, texturedCoords_, texturedTextures_, is_textured);
 
     Eigen::Quaterniond quaternion_pred(poses_pred[n * 7 + 0], poses_pred[n * 7 + 1], poses_pred[n * 7 + 2], poses_pred[n * 7 + 3]);
     Sophus::SE3d::Point translation_pred(poses_pred[n * 7 + 4], poses_pred[n * 7 + 5], poses_pred[n * 7 + 6]);
@@ -302,24 +311,24 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
     glEnable(GL_TEXTURE_2D);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_.Bind();
-    texturedVertices_.Bind();
+    texturedTextures_[class_id-1].Bind();
+    texturedVertices_[class_id-1].Bind();
     glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_.Bind();
+    texturedCoords_[class_id-1].Bind();
     glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_.Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_.num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_.Unbind();
-    texturedTextures_.Unbind();
-    texturedVertices_.Unbind();
-    texturedCoords_.Unbind();
+    texturedIndices_[class_id-1].Bind();
+    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id-1].num_elements, GL_UNSIGNED_INT, 0);
+    texturedIndices_[class_id-1].Unbind();
+    texturedTextures_[class_id-1].Unbind();
+    texturedVertices_[class_id-1].Unbind();
+    texturedCoords_[class_id-1].Unbind();
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisable(GL_TEXTURE_2D);
   }
 
   std::string filename = std::to_string(counter_++);
-  pangolin::SaveWindowOnRender(filename);
+  // pangolin::SaveWindowOnRender(filename);
   pangolin::FinishFrame();
 }
 

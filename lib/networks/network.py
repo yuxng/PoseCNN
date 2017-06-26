@@ -293,7 +293,7 @@ class Network(object):
                               name=name)
 
     @layer
-    def roi_pool(self, input, pooled_height, pooled_width, spatial_scale, name):
+    def roi_pool(self, input, pooled_height, pooled_width, spatial_scale, pool_channel, name):
         # only use the first input
         if isinstance(input[0], tuple):
             input[0] = input[0][0]
@@ -302,6 +302,7 @@ class Network(object):
                               pooled_height,
                               pooled_width,
                               spatial_scale,
+                              pool_channel,
                               name=name)
 
     @layer
@@ -320,6 +321,16 @@ class Network(object):
     @layer
     def add(self, inputs, name):
         return tf.add_n(inputs, name=name)
+
+    @layer
+    def multiply(self, input, name):
+        if isinstance(input[0], tuple):
+            input[0] = input[0][0]
+
+        if isinstance(input[1], tuple):
+            input[1] = input[1][0]
+
+        return tf.multiply(input[0], input[1], name=name)
 
     @layer
     def multiply_sum(self, inputs, num_classes, name):
@@ -395,6 +406,19 @@ class Network(object):
         if isinstance(input, tuple):
             input = input[0]
         return tf.nn.log_softmax(input, name=name)
+
+    @layer
+    def tile(self, input, num, name):
+        if isinstance(input, tuple):
+            input = input[0]
+
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+
+        return tf.tile(input, multiples)
 
     @layer
     def softmax_high_dimension(self, input, num_classes, name):
