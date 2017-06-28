@@ -183,13 +183,21 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 class_id = int(rois[i, 1])
                 poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
             print poses
+
+            # average rois
+            rois_new = np.zeros((num/5, 6), dtype=np.float32);
+            poses_new = np.zeros((num/5, 7), dtype=np.float32);
+            for i in xrange(num/5):
+                rois_new[i, :] = np.mean(rois[5*i:5*(i+1), :], axis=0)
+                poses_new[i, :] = np.mean(poses[5*i:5*(i+1), :], axis=0)
+
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
             vertex_pred = []
             rois = []
             poses = []
 
-    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred, rois, poses
+    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred, rois_new, poses_new
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -809,7 +817,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
             fy = meta_data['intrinsic_matrix'][1, 1]
             px = meta_data['intrinsic_matrix'][0, 2]
             py = meta_data['intrinsic_matrix'][1, 2]
-            RF.render(im, im_label, rois, qt, poses, fx, fy, px, py);
+            poses_new = np.zeros_like(poses)
+            RF.render(im, labels, rois, qt, poses, fx, fy, px, py, imdb.num_classes, imdb._extents, poses_new);
             
         seg = {'labels': labels}
         segmentations[i] = seg

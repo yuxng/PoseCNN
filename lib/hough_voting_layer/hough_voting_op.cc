@@ -777,6 +777,39 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     */
 
     outputs.push_back(roi);
+
+    // add jittering rois
+    float x1 = roi(2);
+    float y1 = roi(3);
+    float x2 = roi(4);
+    float y2 = roi(5);
+    float w = x2 - x1;
+    float h = y2 - y1;
+
+    roi(2) = x1 - 0.05 * w;
+    roi(3) = y1 - 0.05 * h;
+    roi(4) = roi(2) + w;
+    roi(4) = roi(3) + h;
+    outputs.push_back(roi);
+
+    roi(2) = x1 + 0.05 * w;
+    roi(3) = y1 - 0.05 * h;
+    roi(4) = roi(2) + w;
+    roi(4) = roi(3) + h;
+    outputs.push_back(roi);
+
+    roi(2) = x1 - 0.05 * w;
+    roi(3) = y1 + 0.05 * h;
+    roi(4) = roi(2) + w;
+    roi(4) = roi(3) + h;
+    outputs.push_back(roi);
+
+    roi(2) = x1 + 0.05 * w;
+    roi(3) = y1 + 0.05 * h;
+    roi(4) = roi(2) + w;
+    roi(4) = roi(3) + h;
+    outputs.push_back(roi);
+
   }
 }
 

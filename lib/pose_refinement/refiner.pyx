@@ -14,7 +14,7 @@ cdef extern from "refiner.hpp":
     cdef cppclass Refiner:
         Refiner(string) except +
         void setup(string)
-        void render(unsigned char*, unsigned char*, float*, int, int, int, int, float*, float*, float, float, float, float)
+        void render(unsigned char*, unsigned char*, float*, int, int, int, int, int, float*, float*, float, float, float, float, float*, float*)
 
 cdef class PyRefiner:
     cdef Refiner *refiner     # hold a C++ instance which we're wrapping
@@ -28,8 +28,9 @@ cdef class PyRefiner:
     def setup(self, string filename):
         return self.refiner.setup(filename)
 
-    def render(self, np.ndarray[np.uint8_t, ndim=3] color, np.ndarray[np.uint8_t, ndim=3] label, np.ndarray[np.float32_t, ndim=2] rois, \
-               np.ndarray[np.float32_t, ndim=2] poses_gt, np.ndarray[np.float32_t, ndim=2] poses_pred, np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py):
+    def render(self, np.ndarray[np.uint8_t, ndim=3] color, np.ndarray[np.uint8_t, ndim=2] label, np.ndarray[np.float32_t, ndim=2] rois, \
+               np.ndarray[np.float32_t, ndim=2] poses_gt, np.ndarray[np.float32_t, ndim=2] poses_pred, np.float32_t fx, \
+               np.float32_t fy, np.float32_t px, np.float32_t py, int num_classes, np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=2] poses_new):
 
         cdef unsigned char* color_buff = <unsigned char*> color.data
         cdef unsigned char* label_buff = <unsigned char*> label.data
@@ -38,4 +39,5 @@ cdef class PyRefiner:
         cdef int num_rois = rois.shape[0]
         cdef int num_gt = poses_gt.shape[0]
 
-        return self.refiner.render(color_buff, label_buff, &rois[0, 0], num_rois, num_gt, width, height, &poses_gt[0, 0], &poses_pred[0, 0], fx, fy, px, py)
+        return self.refiner.render(color_buff, label_buff, &rois[0, 0], num_rois, num_gt, width, height, num_classes, \
+                                   &poses_gt[0, 0], &poses_pred[0, 0], fx, fy, px, py, &extents[0, 0], &poses_new[0, 0])

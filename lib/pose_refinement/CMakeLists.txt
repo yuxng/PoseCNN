@@ -12,6 +12,8 @@ add_definitions(-Wall)
 add_definitions(-fPIC)
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
+include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
+
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -50,6 +52,7 @@ link_libraries(${Pangolin_LIBRARIES}
                ${SUITESPARSE_LIBRARIES}
                ${OpenEXR_LIBRARIES}
                ${OpenCV_LIBS}
+               ${NLOPT_LIBRARIES}
                assimp
                util)
 
