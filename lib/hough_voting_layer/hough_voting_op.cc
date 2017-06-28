@@ -783,31 +783,31 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     float y1 = roi(3);
     float x2 = roi(4);
     float y2 = roi(5);
-    float w = x2 - x1;
-    float h = y2 - y1;
+    float ww = x2 - x1;
+    float hh = y2 - y1;
 
-    roi(2) = x1 - 0.05 * w;
-    roi(3) = y1 - 0.05 * h;
-    roi(4) = roi(2) + w;
-    roi(4) = roi(3) + h;
+    roi(2) = x1 - 0.05 * ww;
+    roi(3) = y1 - 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
-    roi(2) = x1 + 0.05 * w;
-    roi(3) = y1 - 0.05 * h;
-    roi(4) = roi(2) + w;
-    roi(4) = roi(3) + h;
+    roi(2) = x1 + 0.05 * ww;
+    roi(3) = y1 - 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
-    roi(2) = x1 - 0.05 * w;
-    roi(3) = y1 + 0.05 * h;
-    roi(4) = roi(2) + w;
-    roi(4) = roi(3) + h;
+    roi(2) = x1 - 0.05 * ww;
+    roi(3) = y1 + 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
-    roi(2) = x1 + 0.05 * w;
-    roi(3) = y1 + 0.05 * h;
-    roi(4) = roi(2) + w;
-    roi(4) = roi(3) + h;
+    roi(2) = x1 + 0.05 * ww;
+    roi(3) = y1 + 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
   }
