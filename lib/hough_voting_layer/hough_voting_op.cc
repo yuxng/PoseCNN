@@ -674,12 +674,12 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
   {
     // std::cout << "Estimated Hypothesis for Object " << (int) it->second[h].objID << ":" << std::endl;
 
-    cv::Point2d center = it->second[h].center;
-    it->second[h].compute_width_height();
-
     cv::Vec<float, 13> roi;
     roi(0) = batch;
     roi(1) = it->second[h].objID;
+
+    cv::Point2d center = it->second[h].center;
+    it->second[h].compute_width_height();
     roi(2) = std::max(center.x - it->second[h].width_ / 2, 0.0);
     roi(3) = std::max(center.y - it->second[h].height_ / 2, 0.0);
     roi(4) = std::min(center.x + it->second[h].width_ / 2, double(width));
@@ -741,10 +741,11 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     // use the projected 3D box
     cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
 
-    roi(2) = bb2D_proj.x - 0.1 * bb2D_proj.width;
-    roi(3) = bb2D_proj.y - 0.1 * bb2D_proj.height;
-    roi(4) = bb2D_proj.x + 1.1 * bb2D_proj.width;
-    roi(5) = bb2D_proj.y + 1.1 * bb2D_proj.height;
+    float scale = 0.1;
+    roi(2) = bb2D_proj.x - scale * bb2D_proj.width;
+    roi(3) = bb2D_proj.y - scale * bb2D_proj.height;
+    roi(4) = bb2D_proj.x + (1 + scale) * bb2D_proj.width;
+    roi(5) = bb2D_proj.y + (1 + scale) * bb2D_proj.height;
 
     // convert to quarternion
     cv::Mat pose_t;
@@ -786,26 +787,58 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     float ww = x2 - x1;
     float hh = y2 - y1;
 
+    // (-1, -1)
     roi(2) = x1 - 0.05 * ww;
     roi(3) = y1 - 0.05 * hh;
     roi(4) = roi(2) + ww;
     roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
+    // (+1, -1)
     roi(2) = x1 + 0.05 * ww;
     roi(3) = y1 - 0.05 * hh;
     roi(4) = roi(2) + ww;
     roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
+    // (-1, +1)
     roi(2) = x1 - 0.05 * ww;
     roi(3) = y1 + 0.05 * hh;
     roi(4) = roi(2) + ww;
     roi(5) = roi(3) + hh;
     outputs.push_back(roi);
 
+    // (+1, +1)
     roi(2) = x1 + 0.05 * ww;
     roi(3) = y1 + 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
+    outputs.push_back(roi);
+
+    // (0, -1)
+    roi(2) = x1;
+    roi(3) = y1 - 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
+    outputs.push_back(roi);
+
+    // (-1, 0)
+    roi(2) = x1 - 0.05 * ww;
+    roi(3) = y1;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
+    outputs.push_back(roi);
+
+    // (0, +1)
+    roi(2) = x1;
+    roi(3) = y1 + 0.05 * hh;
+    roi(4) = roi(2) + ww;
+    roi(5) = roi(3) + hh;
+    outputs.push_back(roi);
+
+    // (+1, 0)
+    roi(2) = x1 + 0.05 * ww;
+    roi(3) = y1;
     roi(4) = roi(2) + ww;
     roi(5) = roi(3) + hh;
     outputs.push_back(roi);

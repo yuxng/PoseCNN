@@ -27,12 +27,12 @@ g++ -std=c++11 -shared -o hough_voting.so hough_voting_op.cc \
 cd ..
 echo 'hough_voting_layer'
 
-cd roi_pooling_layer
+#cd roi_pooling_layer
 
-nvcc -std=c++11 -c -o roi_pooling_op.cu.o roi_pooling_op_gpu.cu.cc \
-	-I $TF_INC -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -arch=sm_50
+#nvcc -std=c++11 -c -o roi_pooling_op.cu.o roi_pooling_op_gpu.cu.cc \
+#	-I $TF_INC -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -arch=sm_50
 
-g++ -std=c++11 -shared -o roi_pooling.so roi_pooling_op.cc \
-	roi_pooling_op.cu.o -I $TF_INC -fPIC -lcudart -L $CUDA_PATH/lib64 -D_GLIBCXX_USE_CXX11_ABI=0
-cd ..
-echo 'roi_pooling_layer'
+#g++ -std=c++11 -shared -o roi_pooling.so roi_pooling_op.cc \
+#	roi_pooling_op.cu.o -I $TF_INC -fPIC -lcudart -L $CUDA_PATH/lib64 -D_GLIBCXX_USE_CXX11_ABI=0
+#cd ..
+#echo 'roi_pooling_layer'

@@ -46,6 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         cv::Point2d center; // object center
         float width_;
         float height_;
+        float x1_, y1_, x2_, y2_;
 	
 	cv::Rect bb; // 2D bounding box of the object under this pose hypothesis
 	
@@ -96,5 +97,30 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           }
           width_ = 2 * w;
           height_ = 2 * h;
+        }
+
+        void compute_box()
+        {
+          float x1 = 100000;
+          float y1 = 100000;
+          float x2 = -1;
+          float y2 = -1;
+          for(int i = 0; i < inliers; i++)
+          {
+            float x = inlierPts2D[i].second.x;
+            float y = inlierPts2D[i].second.y;
+            if (x1 > x)
+              x1 = x;
+            if (x2 < x)
+              x2 = x;
+            if (y1 > y)
+              y1 = y;
+            if (y2 < y)
+              y2 = y;
+          }
+          x1_ = x1;
+          x2_ = x2;
+          y1_ = y1;
+          y2_ = y2;
         }
     };

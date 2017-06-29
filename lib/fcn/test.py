@@ -185,11 +185,12 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             print poses
 
             # average rois
-            rois_new = np.zeros((num/5, 6), dtype=np.float32);
-            poses_new = np.zeros((num/5, 7), dtype=np.float32);
-            for i in xrange(num/5):
-                rois_new[i, :] = np.mean(rois[5*i:5*(i+1), :], axis=0)
-                poses_new[i, :] = np.mean(poses[5*i:5*(i+1), :], axis=0)
+            n = 9
+            rois_new = np.zeros((num/n, 6), dtype=np.float32);
+            poses_new = np.zeros((num/n, 7), dtype=np.float32);
+            for i in xrange(num/n):
+                rois_new[i, :] = np.mean(rois[n*i:n*(i+1), :], axis=0)
+                poses_new[i, :] = np.mean(poses[n*i:n*(i+1), :], axis=0)
 
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
