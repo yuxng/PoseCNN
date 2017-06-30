@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-class Vanilla2DCell(tf.contrib.rnn.core_rnn_cell.RNNCell):
+class Vanilla2DCell(tf.contrib.rnn.RNNCell):
     """Vanilla Recurrent Unit cell."""
 
     def __init__(self, num_units, channels):
