@@ -1,6 +1,6 @@
 # DA-RNN: Semantic Mapping with Data Associated Recurrent Neural Networks
 
-Created by Yu Xiang at RSE-Lab at University of Washington.
+Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
 
 ### Introduction
 
