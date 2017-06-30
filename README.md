@@ -8,6 +8,10 @@ we introduce Data Associated Recurrent Neural Networks (DA-RNNs), a novel framew
 
 [![DA-RNN](http://yuxng.github.io/DA-RNN.png)](https://youtu.be/5vnw7ZrZlB8)
 
+### License
+
+DA-RNN is released under the MIT License (refer to the LICENSE file for details).
+
 ### Citation
 
 If you find DA-RNN useful in your research, please consider citing:
@@ -110,7 +114,3 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     ./experiments/scripts/rgbd_scene_multi_rgbd_test.sh $GPU_ID
 
     ```
-
-### License
-
-DA-RNN is released under the MIT License (refer to the LICENSE file for details).
