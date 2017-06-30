@@ -1,5 +1,5 @@
 # --------------------------------------------------------
-# FCN
+# DA-RNN
 # Copyright (c) 2016 CVGL Stanford
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Yu Xiang
