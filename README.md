@@ -45,6 +45,8 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/kinect_fusion/build
     ```
 
+6. Download the VGG16 weights from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VMTducllWZzA0REU) (57M). Put the weight file vgg16_convs.npy to $ROOT/data/imagenet_models.
+
 ### Running on the RGB-D Scene dataset
 1. Download the RGB-D Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VaHIxckxwbVpabFU) (5.5G).
 
