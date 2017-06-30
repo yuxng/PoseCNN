@@ -66,6 +66,27 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
 
     ```
 
+### Running on the ShapeNet Scene dataset
+1. Download the ShapeNet Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VTzRfZTFPd0JKYTg) (2.3G).
+
+2. Create a symlink for the ShapeNet Scene dataset
+    ```Shell
+    cd $ROOT/data/ShapeNetScene
+    ln -s $ShapeNet_scene_data data
+    ```
+
+3. Training and testing on the RGB-D Scene dataset
+    ```Shell
+    cd $ROOT
+
+    # train and test RNN with different input (color, depth, normal and rgbd)
+    ./experiments/scripts/shapenet_scene_multi_*.sh $GPU_ID
+
+    # train and test FCN with different input (color, depth, normal and rgbd)
+    ./experiments/scripts/shapenet_scene_single_*.sh $GPU_ID
+
+    ```
+
 ### License
 
 DA-RNN is released under the MIT License (refer to the LICENSE file for details).
