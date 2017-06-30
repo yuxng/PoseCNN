@@ -8,6 +8,17 @@ we introduce Data Associated Recurrent Neural Networks (DA-RNNs), a novel framew
 
 [![DA-RNN](http://yuxng.github.io/DA-RNN.png)](https://youtu.be/5vnw7ZrZlB8)
 
+### Citation
+
+If you find DA-RNN useful in your research, please consider citing:
+
+    @inproceedings{xiang2017darnn,
+        Author = {Yu Xiang and Dieter Fox},
+        Title = {DA-RNN: Semantic Mapping with Data Associated Recurrent Neural Networks},
+        Booktitle = {Robotics: Science and Systems (RSS)},
+        Year = {2017}
+    }
+
 ### Installation
 
 DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
