@@ -11,8 +11,6 @@ __sets = {}
 
 import networks.vgg16
 import networks.vgg16_convs
-import networks.vgg16_gan
-import networks.dcgan
 import networks.resnet50
 import tensorflow as tf
 from fcn.config import cfg
@@ -20,10 +18,6 @@ from fcn.config import cfg
 if cfg.TRAIN.SINGLE_FRAME:
     if cfg.NETWORK == 'VGG16':
         __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, cfg.TRAIN.VERTEX_REG, cfg.TRAIN.TRAINABLE)
-    if cfg.NETWORK == 'VGG16GAN':
-        __sets['vgg16_gan'] = networks.vgg16_gan(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, cfg.TRAIN.VERTEX_REG, cfg.TRAIN.TRAINABLE)
-    if cfg.NETWORK == 'DCGAN':
-        __sets['dcgan'] = networks.dcgan()
     if cfg.NETWORK == 'RESNET50':
         __sets['resnet50'] = networks.resnet50(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.SCALES_BASE)
     if cfg.NETWORK == 'FCN8VGG':

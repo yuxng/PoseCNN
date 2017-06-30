@@ -110,11 +110,6 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
     width = im_depth.shape[1]
     label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
 
-    if cfg.TEST.GAN:
-        gan_label_true_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
-        gan_label_false_blob = np.zeros((1, height / 32, width / 32, 2), dtype=np.float32)
-        gan_label_color_blob = np.zeros((num_classes, 3), dtype=np.float32)
-
     # forward pass
     if cfg.INPUT == 'RGBD':
         data_blob = im_blob
@@ -127,17 +122,9 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        if cfg.TEST.GAN:
-            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
-                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob, net.gan_label_color: gan_label_color_blob}
-        else:
-            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
-        if cfg.TEST.GAN:
-            feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
-                         net.gan_label_true: gan_label_true_blob, net.gan_label_false: gan_label_false_blob, net.gan_label_color: gan_label_color_blob}
-        else:
-            feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
+        feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
 
@@ -821,113 +808,3 @@ def test_net_single_frame(sess, net, imdb, weights_filename, rig_filename, is_kf
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
-
-
-
-###################
-# test GAN
-###################
-
-def vis_gan(im, im_depth, vertmap, vertmap_gt):
-
-    import matplotlib.pyplot as plt
-    fig = plt.figure()
-
-    # show image
-    ax = fig.add_subplot(221)
-    im = im[:, :, (2, 1, 0)]
-    plt.imshow(im)
-    ax.set_title('input image')
-
-    # show depth
-    ax = fig.add_subplot(222)
-    plt.imshow(im_depth)
-    ax.set_title('input depth')
-
-    # show class label
-    ax = fig.add_subplot(223)
-    plt.imshow(vertmap)
-    ax.set_title('vertmap')
-
-    ax = fig.add_subplot(224)
-    plt.imshow(vertmap_gt)
-    ax.set_title('gt vertmap')
-
-    plt.show()
-
-
-def test_gan(sess, net, imdb, weights_filename):
-
-    output_dir = get_output_dir(imdb, weights_filename)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    """Test a GAN on an image database."""
-    num_images = len(imdb.image_index)
-    segmentations = [[] for _ in xrange(num_images)]
-
-    # timers
-    _t = {'im_segment' : Timer(), 'misc' : Timer()}
-
-    if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-    else:
-        perm = xrange(num_images)
-
-    for i in perm:
-
-        # read color image
-        rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-        if rgba.shape[2] == 4:
-            im = np.copy(rgba[:,:,:3])
-            alpha = rgba[:,:,3]
-            I = np.where(alpha == 0)
-            im[I[0], I[1], :] = 0
-        else:
-            im = rgba
-
-        # read depth image
-        im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-
-        # load meta data
-        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-
-        _t['im_segment'].tic()
-
-        im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
-
-        height = im.shape[0]
-        width = im.shape[1]
-        vertex_image_blob = np.zeros((1, height, width, 3), dtype=np.float32)
-        vertmap = pad_im(cv2.imread(imdb.vertmap_path_at(i), cv2.IMREAD_UNCHANGED), 16)
-        vertex_image_blob[0, :, :, :] = vertmap.astype(np.float32) / 127.5 - 1
-
-        gan_z_blob = np.random.uniform(-1, 1, [1, 100]).astype(np.float32)
-
-        feed_dict = {net.data: im_rescale_blob, net.data_gt: vertex_image_blob, net.z: gan_z_blob, net.keep_prob: 1.0}
-
-        sess.run(net.enqueue_op, feed_dict=feed_dict)
-        output_g = sess.run([net.get_output('output_g')], feed_dict=feed_dict)
-        labels = output_g[0][0,:,:,:]
-        labels = (labels + 1) * 127.5
-        print labels.shape
-
-        _t['im_segment'].toc()
-
-        _t['misc'].tic()
-        labels = unpad_im(labels, 16)
-
-        seg = {'labels': labels}
-        segmentations[i] = seg
-
-        _t['misc'].toc()
-
-        print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
-              .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
-
-        if cfg.TEST.VISUALIZE:
-            vis_gan(im, im_depth, labels, vertmap)
-
-    seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    with open(seg_file, 'wb') as f:
-        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
