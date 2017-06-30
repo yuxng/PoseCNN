@@ -6,6 +6,8 @@ Created by Yu Xiang at RSE-Lab at University of Washington.
 
 we introduce Data Associated Recurrent Neural Networks (DA-RNNs), a novel framework for joint 3D scene mapping and semantic labeling. DA-RNNs use a new recurrent neural network architecture for semantic labeling on RGB-D videos. The output of the network is integrated with mapping techniques such as KinectFusion in order to inject semantic information into the reconstructed 3D scene.
 
+![DA-RNN](http://yuxng.github.io/DA-RNN.png)
+
 ### Installation
 
 DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
