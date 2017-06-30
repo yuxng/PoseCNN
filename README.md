@@ -40,6 +40,11 @@ DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos
     python setup.py build_ext --inplace
     ```
 
+5. Add the KinectFusion libary path
+    ```Shell
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/kinect_fusion/build
+    ```
+
 ### Running on the RGB-D Scene dataset
 1. Download the RGB-D Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VaHIxckxwbVpabFU) (5.5G).
 
