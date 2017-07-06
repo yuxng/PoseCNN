@@ -104,7 +104,7 @@ class Refiner
   void create_window(int width, int height);
   void destroy_window();
   void render(unsigned char* data, unsigned char* labels, float* rois, int num_rois, int num_gt, int width, int height, int num_classes,
-                    float* poses_gt, float* poses_pred, float fx, float fy, float px, float py, float* extents, float* poses_new);
+                    float* poses_gt, float* poses_pred, float fx, float fy, float px, float py, float* extents, float* poses_new, int is_save);
   void loadModels(std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(aiMesh* assimpMesh, std::string textureName, 

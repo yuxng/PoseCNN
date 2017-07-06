@@ -196,7 +196,7 @@ void Refiner::feed_data(int width, int height, unsigned char* data, unsigned cha
 
 
 void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, int num_rois, int num_gt, int width, int height, int num_classes,
-                    float* poses_gt, float* poses_pred, float fx, float fy, float px, float py, float* extents, float* poses_new)
+                    float* poses_gt, float* poses_pred, float fx, float fy, float px, float py, float* extents, float* poses_new, int is_save)
 {
   bool is_textured = true;
 
@@ -399,8 +399,11 @@ void Refiner::render(unsigned char* data, unsigned char* labels, float* rois, in
     glDisable(GL_TEXTURE_2D);
   }
 
-  std::string filename = std::to_string(counter_++);
-  // pangolin::SaveWindowOnRender(filename);
+  if (is_save)
+  {
+    std::string filename = std::to_string(counter_++);
+    pangolin::SaveWindowOnRender(filename);
+  }
   pangolin::FinishFrame();
 }
 
@@ -693,5 +696,5 @@ int main(int argc, char** argv)
   refiner.setup(argv[1]);
 
   //while (!pangolin::ShouldQuit()) 
-  refiner.render(NULL, NULL, NULL, 0, 0, 480, 640, 22, NULL, NULL, 0, 0, 0, 0, NULL, NULL);
+  refiner.render(NULL, NULL, NULL, 0, 0, 480, 640, 22, NULL, NULL, 0, 0, 0, 0, NULL, NULL, 0);
 }

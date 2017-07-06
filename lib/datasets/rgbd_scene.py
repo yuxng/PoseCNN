@@ -22,6 +22,7 @@ class rgbd_scene(datasets.imdb):
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
+        self._extents = []
 
         assert os.path.exists(self._rgbd_scene_path), \
                 'rgbd_scene path does not exist: {}'.format(self._rgbd_scene_path)

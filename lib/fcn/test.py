@@ -819,7 +819,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
             px = meta_data['intrinsic_matrix'][0, 2]
             py = meta_data['intrinsic_matrix'][1, 2]
             poses_new = np.zeros_like(poses)
-            RF.render(im, labels, rois, qt, poses, fx, fy, px, py, imdb.num_classes, imdb._extents, poses_new);
+            RF.render(im, labels, rois, qt, poses, fx, fy, px, py, imdb.num_classes, imdb._extents, poses_new, 0);
             
         seg = {'labels': labels}
         segmentations[i] = seg
