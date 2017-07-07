@@ -21,11 +21,11 @@ import math
 import tensorflow as tf
 import scipy.io
 import time
-from normals import gpu_normals
+# from normals import gpu_normals
 # from pose_estimation import ransac
 from transforms3d.quaternions import quat2mat, mat2quat
 # from kinect_fusion import kfusion
-from pose_refinement import refiner
+# from pose_refinement import refiner
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -77,6 +77,7 @@ def _get_image_blob(im, im_depth, meta_data):
     cy = K[1, 2]
 
     # normals
+    '''
     depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
     nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
     im_normal = 127.5 * nmap + 127.5
@@ -90,12 +91,14 @@ def _get_image_blob(im, im_depth, meta_data):
     processed_ims_normal = []
     im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
     processed_ims_normal.append(im)
+    '''
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
-    blob_normal = im_list_to_blob(processed_ims_normal, 3)
+    # blob_normal = im_list_to_blob(processed_ims_normal, 3)
+    blob_normal = []
 
     return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
