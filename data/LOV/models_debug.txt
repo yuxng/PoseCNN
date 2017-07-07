@@ -1,0 +1,1 @@
+data/LOV/models/004_sugar_box/textured.obj
