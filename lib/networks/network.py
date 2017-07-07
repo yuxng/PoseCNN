@@ -10,8 +10,8 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
-import matching_loss.matching_loss_op as matching_loss_op
-import matching_loss.matching_loss_op_grad
+# import matching_loss.matching_loss_op as matching_loss_op
+# import matching_loss.matching_loss_op_grad
 import hough_voting_layer.hough_voting_op as hough_voting_op
 import hough_voting_layer.hough_voting_op_grad
 import roi_pooling_layer.roi_pooling_op as roi_pool_op

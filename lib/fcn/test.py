@@ -22,9 +22,9 @@ import tensorflow as tf
 import scipy.io
 import time
 from normals import gpu_normals
-from pose_estimation import ransac
+# from pose_estimation import ransac
 from transforms3d.quaternions import quat2mat, mat2quat
-from kinect_fusion import kfusion
+# from kinect_fusion import kfusion
 from pose_refinement import refiner
 
 def _get_image_blob(im, im_depth, meta_data):
