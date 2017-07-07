@@ -131,6 +131,8 @@ class vgg16(Network):
             (self.feed('state', 'weights', 'points', 'depth', 'meta_data')
                  .compute_flow(3, 0.02, 50, name='flow'))
 
+            # self.layers['flow'] = (self.get_output('state'), self.get_output('weights'), self.get_output('points'))
+
             (self.feed('upscore', 'flow')
                  .rnn_gru2d(self.num_units, self.num_units, name='gru2d', reuse=reuse)
                  .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=reuse, c_i=self.num_units)

@@ -127,7 +127,7 @@ ext_modules = [
         sources=['kinect_fusion/kfusion.pyx'],
         language='c++',
         extra_objects=["kinect_fusion/build/libkfusion.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function"],
+        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
                             'nvcc': ['-arch=sm_35',
                                      '--ptxas-options=-v',
                                      '-c',
