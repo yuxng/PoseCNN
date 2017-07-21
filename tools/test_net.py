@@ -106,6 +106,6 @@ if __name__ == '__main__':
         if cfg.TEST.GAN:
             test_gan(sess, network, imdb, weights_filename)
         else:
-            test_net_single_frame(sess, network, imdb, weights_filename, args.cad_name, 0)
+            test_net_single_frame(sess, network, imdb, weights_filename, args.cad_name, 1)
     else:
         test_net(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)

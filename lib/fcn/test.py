@@ -25,7 +25,7 @@ import time
 # from pose_estimation import ransac
 from transforms3d.quaternions import quat2mat, mat2quat
 # from kinect_fusion import kfusion
-# from pose_refinement import refiner
+from pose_refinement import refiner
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
