@@ -10,7 +10,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/"
 add_definitions(-std=c++11)
 add_definitions(-Wall)
 add_definitions(-fPIC)
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+#add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 #include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
 

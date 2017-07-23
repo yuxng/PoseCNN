@@ -433,11 +433,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.9
-    # config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:
-    # with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
 

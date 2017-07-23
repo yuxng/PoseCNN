@@ -8,7 +8,7 @@ endif()
 add_definitions(-std=c++11)
 add_definitions(-Wall)
 add_definitions(-fPIC)
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+#add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 # supply compile-time directory to code
 set(compileDirectory \"${PROJECT_SOURCE_DIR}\")

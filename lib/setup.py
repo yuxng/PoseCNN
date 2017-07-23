@@ -114,7 +114,7 @@ ext_modules = [
         # this syntax is specific to this build system
         # we're only going to use certain compiler args with nvcc and not with gcc
         # the implementation of this trick is in customize_compiler() below
-        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
+        extra_compile_args={'gcc': ["-Wno-unused-function"],
                             'nvcc': ['-arch=sm_35',
                                      '--ptxas-options=-v',
                                      '-c',
@@ -127,7 +127,7 @@ ext_modules = [
         sources=['kinect_fusion/kfusion.pyx'],
         language='c++',
         extra_objects=["kinect_fusion/build/libkfusion.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
+        extra_compile_args={'gcc': ["-Wno-unused-function"],
                             'nvcc': ['-arch=sm_35',
                                      '--ptxas-options=-v',
                                      '-c',
@@ -148,14 +148,14 @@ ext_modules = [
         sources=['pose_refinement/refiner.pyx'],
         language='c++',
         extra_objects=["pose_refinement/build/librefiner.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"]}
+        extra_compile_args={'gcc': ["-Wno-unused-function"]}
     ),
     Extension(
         "synthesize.synthesizer",                                # the extension name
         sources=['synthesize/synthesizer.pyx'],
         language='c++',
         extra_objects=["synthesize/build/libsynthesizer.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0", "-std=c++11", "-fPIC"]}
+        extra_compile_args={'gcc': ["-Wno-unused-function"]}
     )
 ]
 
