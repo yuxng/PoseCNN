@@ -27,6 +27,7 @@ class vgg16_convs(Network):
                 self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
 
         # define a queue
+        '''
         if input_format == 'RGBD':
             if vertex_reg:
                 if pose_reg:
@@ -64,6 +65,27 @@ class vgg16_convs(Network):
                 data, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
+        '''
+
+        if input_format == 'RGBD':
+            if vertex_reg:
+                if pose_reg:
+                    self.layers = dict({'data': self.data, 'data_p': self.data_p, 'gt_label_2d': self.gt_label_2d, 'vertex_targets': self.vertex_targets, 'vertex_weights': self.vertex_weights, \
+                                        'poses': self.poses, 'extents': self.extents, 'meta_data': self.meta_data})
+                else:
+                    self.layers = dict({'data': self.data, 'data_p': self.data_p, 'gt_label_2d': self.gt_label_2d, 'vertex_targets': self.vertex_targets, 'vertex_weights': self.vertex_weights})
+            else:
+                self.layers = dict({'data': self.data, 'data_p': self.data_p, 'gt_label_2d': self.gt_label_2d})
+        else:
+            if vertex_reg:
+                if pose_reg:
+                    self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d, 'vertex_targets': self.vertex_targets, 'vertex_weights': self.vertex_weights, 
+                                        'poses': self.poses, 'extents': self.extents, 'meta_data': self.meta_data})
+                else:
+                    self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d, 'vertex_targets': self.vertex_targets, 'vertex_weights': self.vertex_weights})
+            else:
+                self.layers = dict({'data': self.data, 'gt_label_2d': self.gt_label_2d})
+
         self.trainable = trainable
         self.setup()
 
@@ -125,7 +147,7 @@ class vgg16_convs(Network):
 
         (self.feed('score_conv4', 'upscore_conv5')
              .add(name='add_score')
-             .dropout(self.keep_prob_queue, name='dropout')
+             .dropout(self.keep_prob, name='dropout')
              .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
@@ -144,7 +166,7 @@ class vgg16_convs(Network):
             
             (self.feed('score_conv4_vertex', 'upscore_conv5_vertex')
                  .add(name='add_score_vertex')
-                 .dropout(self.keep_prob_queue, name='dropout_vertex')
+                 .dropout(self.keep_prob, name='dropout_vertex')
                  .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
                  .conv(1, 1, 2 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
@@ -170,9 +192,9 @@ class vgg16_convs(Network):
                 (self.feed('pool_tile', 'pool_score')
                      .multiply(name='pool')
                      .fc(256, height=8, width=8, channel=self.num_units, name='fc6')
-                     .dropout(self.keep_prob_queue, name='drop6')
+                     .dropout(self.keep_prob, name='drop6')
                      .fc(256, num_in=256, name='fc7')
-                     .dropout(self.keep_prob_queue, name='drop7')
+                     .dropout(self.keep_prob, name='drop7')
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
 
                 # matching loss

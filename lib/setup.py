@@ -114,7 +114,7 @@ ext_modules = [
         # this syntax is specific to this build system
         # we're only going to use certain compiler args with nvcc and not with gcc
         # the implementation of this trick is in customize_compiler() below
-        extra_compile_args={'gcc': ["-Wno-unused-function"],
+        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
                             'nvcc': ['-arch=sm_35',
                                      '--ptxas-options=-v',
                                      '-c',
@@ -122,19 +122,19 @@ ext_modules = [
                                      "'-fPIC'"]},
         include_dirs = [numpy_include, CUDA['include'], '/usr/local/include/eigen3']
     ),
-    #Extension(
-    #    "kinect_fusion.kfusion",                                # the extension name
-    #    sources=['kinect_fusion/kfusion.pyx'],
-    #    language='c++',
-    #    extra_objects=["kinect_fusion/build/libkfusion.so"],
-    #    extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
-    #                        'nvcc': ['-arch=sm_35',
-    #                                 '--ptxas-options=-v',
-    #                                 '-c',
-    #                                 '--compiler-options',
-    #                                 "'-fPIC'"]},
-    #    include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
-    #),
+    Extension(
+        "kinect_fusion.kfusion",                                # the extension name
+        sources=['kinect_fusion/kfusion.pyx'],
+        language='c++',
+        extra_objects=["kinect_fusion/build/libkfusion.so"],
+        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"],
+                            'nvcc': ['-arch=sm_35',
+                                     '--ptxas-options=-v',
+                                     '-c',
+                                     '--compiler-options',
+                                     "'-fPIC'"]},
+        include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
+    ),
     #Extension(
     #    "pose_estimation.ransac",                                # the extension name
     #    sources=['pose_estimation/ransac.pyx'],
@@ -149,6 +149,13 @@ ext_modules = [
         language='c++',
         extra_objects=["pose_refinement/build/librefiner.so"],
         extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0"]}
+    ),
+    Extension(
+        "synthesize.synthesizer",                                # the extension name
+        sources=['synthesize/synthesizer.pyx'],
+        language='c++',
+        extra_objects=["synthesize/build/libsynthesizer.so"],
+        extra_compile_args={'gcc': ["-Wno-unused-function", "-D_GLIBCXX_USE_CXX11_ABI=0", "-std=c++11", "-fPIC"]}
     )
 ]
 

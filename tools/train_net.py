@@ -10,7 +10,7 @@
 """Train a Fully Convolutional Network (FCN) on image segmentation database."""
 
 import _init_paths
-from fcn.train import get_training_roidb, train_net, train_gan
+from fcn.train import get_training_roidb, train_net
 from fcn.config import cfg, cfg_from_file, get_output_dir
 from datasets.factory import get_imdb
 import argparse
@@ -52,7 +52,10 @@ def parse_args():
                         help='name of the camera rig file',
                         default=None, type=str)
     parser.add_argument('--cad', dest='cad_name',
-                        help='name of the CAD file',
+                        help='name of the CAD files',
+                        default=None, type=str)
+    parser.add_argument('--pose', dest='pose_name',
+                        help='name of the pose files',
                         default=None, type=str)
 
     if len(sys.argv) == 1:
@@ -98,6 +101,7 @@ if __name__ == '__main__':
 
     cfg.RIG = args.rig_name
     cfg.CAD = args.cad_name
+    cfg.POSE = args.pose_name
 
     from networks.factory import get_network
     network = get_network(args.network_name)

@@ -33,6 +33,7 @@ __C.INPUT = 'RGBD'
 __C.NETWORK = 'VGG16'
 __C.RIG = ''
 __C.CAD = ''
+__C.POSE = ''
 
 #
 # Training options
@@ -41,6 +42,7 @@ __C.CAD = ''
 __C.TRAIN = edict()
 
 __C.TRAIN.SINGLE_FRAME = False
+__C.TRAIN.SYNTHESIZE = False
 __C.TRAIN.TRAINABLE = True
 __C.TRAIN.VERTEX_REG = False
 __C.TRAIN.VERTEX_W = 10.0

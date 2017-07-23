@@ -3,15 +3,15 @@
 
 using namespace df;
 
-void writeHalfPrecisionVertMap(const std::string filename, const float3 * vertMap, const int N) {
+void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap, const int N) {
 
     std::cout << "writing " << filename << std::endl;
 
     std::vector<half> halfVertMap(N*3);
     for (int i=0; i<N; ++i) {
-        halfVertMap[3*i  ] = half(vertMap[i].x);
-        halfVertMap[3*i+1] = half(vertMap[i].y);
-        halfVertMap[3*i+2] = half(vertMap[i].z);
+        halfVertMap[3*i  ] = half(vertMap[3*i]);
+        halfVertMap[3*i+1] = half(vertMap[3*i+1]);
+        halfVertMap[3*i+2] = half(vertMap[3*i+2]);
     }
 
     std::ofstream vertStream;
@@ -236,16 +236,18 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 }
 
 
-void Synthesizer::render(int width, int height, float znear, float zfar, pangolin::OpenGlMatrixSpec projectionMatrix, pangolin::OpenGlMatrixSpec projectionMatrix_reverse, int is_save)
+void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return)
 {
   bool is_textured = true;
+  int is_save = 0;
+
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
+  pangolin::OpenGlMatrixSpec projectionMatrix_reverse = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
 
   // show gt pose
   glEnable(GL_DEPTH_TEST);
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-
-  glColor3ub(255,255,255);
-  gtView_->ActivateScissorAndClear();
 
   // sample the number of objects in the scene
   int num = irand(5, 9);
@@ -268,6 +270,12 @@ void Synthesizer::render(int width, int height, float znear, float zfar, pangoli
     {
       class_ids[i++] = class_id;
     }
+  }
+
+  if (class_indexes)
+  {
+    for (int i = 0; i < num; i++)
+      class_indexes[i] = class_ids[i];
   }
 
   // store the poses
@@ -303,9 +311,54 @@ void Synthesizer::render(int width, int height, float znear, float zfar, pangoli
       if (flag)
       {
         poses[i] = T_co;
+        if (poses_return)
+        {
+          for (int j = 0; j < 7; j++)
+            poses_return[i * 7 + j] = pose[j];
+        }
         break;
       }
     }
+  }
+
+  // render vertmap
+  std::vector<Eigen::Matrix4f> transforms(num);
+  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
+  std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+
+  for (int i = 0; i < num; i++)
+  {
+    int class_id = class_ids[i];
+    transforms[i] = poses[i].matrix().cast<float>();
+    attributeBuffers[i].push_back(&texturedVertices_[class_id]);
+    attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+    modelIndexBuffers[i] = &texturedIndices_[class_id];
+  }
+
+  glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+  renderer_->setProjectionMatrix(projectionMatrix_reverse);
+  renderer_->render(attributeBuffers, modelIndexBuffers, transforms);
+
+  glColor3f(1, 1, 1);
+  gtView_->ActivateScissorAndClear();
+  renderer_->texture(0).RenderToViewportFlipY();
+
+  if (vertmap)
+  {
+    renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
+    if (is_save)
+    {
+      std::string filename = std::to_string(counter_) + ".vertmap";
+      writeHalfPrecisionVertMap(filename, vertmap, height*width);
+    }
+  }
+
+  // render color image
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  for (int i = 0; i < num; i++)
+  {
+    int class_id = class_ids[i];
 
     glMatrixMode(GL_PROJECTION);
     projectionMatrix.Load();
@@ -335,67 +388,46 @@ void Synthesizer::render(int width, int height, float znear, float zfar, pangoli
   }
 
   // read color image
-  unsigned char *color;
-  color = (unsigned char*)malloc(sizeof(unsigned char) * width * height * 4);
-  glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
-  cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
-  cv::Mat output;
-  cv::flip(C, output, 0);
-
-  std::string filename = std::to_string(counter_) + "_color.png";
-  cv::imwrite(filename.c_str(), output);
-  free(color);
-  
-  // read depth image
-  GLfloat *depth;
-  depth = (GLfloat*)malloc(sizeof(GLfloat) * width * height);
-  glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
-
-  // write depth
-  cv::Mat D = cv::Mat(height, width, CV_32FC1, depth);
-  cv::Mat DD = cv::Mat(height, width, CV_16UC1);
-  for (int x = 0; x < width; x++)
+  if (color)
   {
-    for (int y = 0; y < height; y++)
+    glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
+    if (is_save)
     {
-      if (D.at<float>(y, x) == 1)
-        DD.at<short>(y, x) = 0;
-      else
-        DD.at<short>(y, x) = short(10000 * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * D.at<float>(y, x) - 1)));
+      cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
+      cv::Mat output;
+      cv::flip(C, output, 0);
+      std::string filename = std::to_string(counter_) + "_color.png";
+      cv::imwrite(filename.c_str(), output);
     }
   }
-
-  filename = std::to_string(counter_) + "_depth.png";
-  cv::flip(DD, output, 0);
-  cv::imwrite(filename.c_str(), output);
-  free(depth);
-
-  // render vertmap
-  std::vector<Eigen::Matrix4f> transforms(num);
-  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
-  std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
-
-  for (int i = 0; i < num; i++)
+  
+  // read depth image
+  if (depth)
   {
-    int class_id = class_ids[i];
-    transforms[i] = poses[i].matrix().cast<float>();
-    attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-    attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
-    modelIndexBuffers[i] = &texturedIndices_[class_id];
+    glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
+
+    if (is_save)
+    {
+      // write depth
+      cv::Mat D = cv::Mat(height, width, CV_32FC1, depth);
+      cv::Mat DD = cv::Mat(height, width, CV_16UC1);
+      for (int x = 0; x < width; x++)
+      { 
+        for (int y = 0; y < height; y++)
+        {
+          if (D.at<float>(y, x) == 1)
+            DD.at<short>(y, x) = 0;
+          else
+            DD.at<short>(y, x) = short(10000 * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * D.at<float>(y, x) - 1)));
+        }
+      }
+
+      std::string filename = std::to_string(counter_) + "_depth.png";
+      cv::Mat output;
+      cv::flip(DD, output, 0);
+      cv::imwrite(filename.c_str(), output);
+    }
   }
-
-  glClearColor(std::nanf(""),std::nanf(""),std::nanf(""),std::nanf(""));
-  renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, transforms);
-
-  glColor3f(1, 1, 1);
-  gtView_->ActivateScissorAndClear();
-  renderer_->texture(0).RenderToViewportFlipY();
-
-  std::vector<float3> hVerts(width * height);
-  renderer_->texture(0).Download(hVerts.data(), GL_RGB, GL_FLOAT);
-  filename = std::to_string(counter_) + ".vertmap";
-  writeHalfPrecisionVertMap(filename, hVerts.data(), hVerts.size());
 
   if (is_save)
   {
@@ -416,14 +448,12 @@ int main(int argc, char** argv)
   int width = 640;
   int height = 480;
   float fx = 1066.778, fy = 1067.487, px = 312.9869, py = 241.3109, zfar = 6.0, znear = 0.25;
-  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
-  pangolin::OpenGlMatrixSpec projectionMatrix_reverse = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
 
   while (!pangolin::ShouldQuit()) 
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, znear, zfar, projectionMatrix, projectionMatrix_reverse, 0);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;

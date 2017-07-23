@@ -1,8 +1,8 @@
 EXP_DIR: lov
 INPUT: COLOR
-NETWORK: VGG16GAN
 TRAIN:
   SINGLE_FRAME: True
+  SYNTHESIZE: True
   LEARNING_RATE: 0.001
   MOMENTUM: 0.9
   GAMMA: 0.1
@@ -13,16 +13,18 @@ TRAIN:
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: lov
-  SNAPSHOT_PREFIX: vgg16_gan_color_single_frame
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_synthesize
   USE_FLIPPED: False
   CHROMATIC: False
-  VERTEX_REG: False
+  VERTEX_REG: True
   VERTEX_W: 10.0
+  POSE_REG: False
+  MATCHING: False
   VISUALIZE: False
-  GAN: True
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
-  VERTEX_REG: False
-  VISUALIZE: False
-  GAN: True
+  VERTEX_REG: True
+  POSE_REG: False
+  MATCHING: False
+  VISUALIZE: True

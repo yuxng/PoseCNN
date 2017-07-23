@@ -10,6 +10,7 @@
 from fcn.config import cfg
 from gt_data_layer.layer import GtDataLayer
 from gt_single_data_layer.layer import GtSingleDataLayer
+from gt_synthesize_layer.layer import GtSynthesizeLayer
 from utils.timer import Timer
 import numpy as np
 import os
@@ -134,7 +135,7 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
-    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters):
+    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -155,18 +156,33 @@ class SolverWrapper(object):
 
         tf.get_default_graph().finalize()
 
+        if cfg.TRAIN.SINGLE_FRAME:
+            # data layer
+            if cfg.TRAIN.SYNTHESIZE:
+                data_layer = GtSynthesizeLayer(self.roidb, self.imdb.num_classes, self.imdb._extents, self.imdb.cache_path, self.imdb.name, cfg.CAD, cfg.POSE)
+            else:
+                data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes, self.imdb._extents)
+        else:
+            # data layer
+            data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
+
         # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 
         last_snapshot_iter = -1
         timer = Timer()
         for iter in range(max_iters):
             timer.tic()
-            loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, loss_pose, learning_rate, train_op])
+            feed_dict = load_and_enqueue_one(sess, self.net, data_layer)
+            timer.toc()
+            time_data = timer.diff
+
+            timer.tic()
+            loss_value, loss_cls_value, loss_vertex_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, learning_rate, train_op], feed_dict=feed_dict)
             # train_writer.add_summary(summary, iter)
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, loss_pose: %.4f, lr: %.8f,  time: %.2f' %\
-                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, timer.diff)
+            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, lr: %.8f, time: %.2f, time data: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, lr, timer.diff, time_data)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -234,13 +250,59 @@ def get_training_roidb(imdb):
     return imdb.roidb
 
 
-def load_and_enqueue(sess, net, roidb, num_classes, extents, coord):
+
+def load_and_enqueue_one(sess, net, data_layer):
+    
+    blobs = data_layer.forward()
+
+    if cfg.INPUT == 'RGBD':
+        data_blob = blobs['data_image_color']
+        data_p_blob = blobs['data_image_depth']
+    elif cfg.INPUT == 'COLOR':
+        data_blob = blobs['data_image_color']
+    elif cfg.INPUT == 'DEPTH':
+        data_blob = blobs['data_image_depth']
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = blobs['data_image_normal']
+
     if cfg.TRAIN.SINGLE_FRAME:
-        # data layer
-        data_layer = GtSingleDataLayer(roidb, num_classes, extents)
+        if cfg.INPUT == 'RGBD':
+            if cfg.TRAIN.VERTEX_REG:
+                if cfg.TRAIN.POSE_REG:
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
+                               net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
+                else:
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+            else:
+                feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
+
+        else:
+            if cfg.TRAIN.VERTEX_REG:
+                if cfg.TRAIN.POSE_REG:
+                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
+                               net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
+                else:
+                    feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+            else:
+                feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
     else:
-        # data layer
-        data_layer = GtDataLayer(roidb, num_classes)
+        if cfg.INPUT == 'RGBD':
+            feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
+                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
+                       net.state: blobs['data_state'], net.weights: blobs['data_weights'], net.points: blobs['data_points'], net.keep_prob: 0.5}
+        else:
+            feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], \
+                       net.depth: blobs['data_depth'], net.meta_data: blobs['data_meta_data'], \
+                       net.state: blobs['data_state'], net.weights: blobs['data_weights'], net.points: blobs['data_points'], net.keep_prob: 0.5}
+    # sess.run(net.enqueue_op, feed_dict=feed_dict)
+    return feed_dict
+
+
+def load_and_enqueue(sess, net, data_layer, coord):
 
     while not coord.should_stop():
         blobs = data_layer.forward()
@@ -371,75 +433,44 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.9
+    # config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
+    # with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
 
         # thread to load data
+        '''
+        if cfg.TRAIN.SINGLE_FRAME:
+            # data layer
+            if cfg.TRAIN.SYNTHESIZE:
+                data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, cfg.CAD, cfg.POSE)
+            else:
+                data_layer = GtSingleDataLayer(roidb, imdb.num_classes, imdb._extents)
+        else:
+            # data layer
+            data_layer = GtDataLayer(roidb, imdb.num_classes)
+
         coord = tf.train.Coordinator()
         if cfg.TRAIN.VISUALIZE:
-            load_and_enqueue(sess, network, roidb, imdb.num_classes, imdb._extents, coord)
+            load_and_enqueue(sess, network, data_layer, coord)
         else:
-            t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, imdb._extents, coord))
+            t = threading.Thread(target=load_and_enqueue, args=(sess, network, data_layer, coord))
             t.start()
+        '''
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
             if cfg.TRAIN.MATCHING:
                 sw.train_model_vertex_matching(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters)
             else:
-                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
+                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters)
         else:
             sw.train_model(sess, train_op, loss, learning_rate, max_iters)
         print 'done solving'
 
-        sess.run(network.close_queue_op)
-        coord.request_stop()
-        coord.join([t])
-
-# train GAN
-def train_gan(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
-    """Train a GAN."""
-
-    # define losses
-
-    # classification loss for the discriminator
-    outputs_d = network.get_output('outputs_d')
-    scores_d_true = outputs_d[1]
-    scores_d_false = outputs_d[0]
-
-    loss_true = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_true, tf.ones_like(scores_d_true)))
-    loss_false = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_false, tf.zeros_like(scores_d_false)))
-    loss_d = loss_true + loss_false
-
-    # loss for the generator
-    output_g = network.get_output('output_g')
-    data_gt = network.get_output('data_gt')
-    loss_l1 = tf.reduce_mean(tf.abs(tf.sub(output_g, data_gt)))
-    loss_ad = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(scores_d_false, tf.ones_like(scores_d_false)))
-    loss_g = 0 * loss_l1 + 0.2 * loss_ad
-
-    # optimizer
-    train_op_d = tf.train.AdamOptimizer(cfg.TRAIN.LEARNING_RATE, cfg.TRAIN.MOMENTUM).minimize(loss_d)
-    train_op_g = tf.train.AdamOptimizer(cfg.TRAIN.LEARNING_RATE, cfg.TRAIN.MOMENTUM).minimize(loss_g)
-    
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-
-        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
-
-        # thread to load data
-        coord = tf.train.Coordinator()
-        if cfg.TRAIN.VISUALIZE:
-            load_and_enqueue(sess, network, roidb, imdb.num_classes, coord)
-        else:
-            t = threading.Thread(target=load_and_enqueue, args=(sess, network, roidb, imdb.num_classes, coord))
-            t.start()
-
-        print 'Solving...'
-        sw.train_gan(sess, train_op_d, train_op_g, loss_d, loss_true, loss_false, loss_g, loss_l1, loss_ad, max_iters)
-        print 'done solving'
-
-        sess.run(network.close_queue_op)
-        coord.request_stop()
-        coord.join([t])
+        # sess.run(network.close_queue_op)
+        # coord.request_stop()
+        # coord.join([t])

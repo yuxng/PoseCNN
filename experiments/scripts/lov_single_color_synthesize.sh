@@ -6,7 +6,7 @@ set -e
 export PYTHONUNBUFFERED="True"
 export CUDA_VISIBLE_DEVICES=$1
 
-LOG="experiments/logs/lov_single_color.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
+LOG="experiments/logs/lov_single_color_synthesize.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
@@ -16,13 +16,14 @@ time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb lov_train \
-  --cfg experiments/cfgs/lov_single_color.yml \
+  --cfg experiments/cfgs/lov_single_color_synthesize.yml \
   --cad data/LOV/models.txt \
+  --pose data/LOV/poses.txt \
   --iters 40000
 
-if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_lov_iter_40000/segmentations.pkl ]
+if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_synthesize_lov_iter_40000/segmentations.pkl ]
 then
-  rm $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_lov_iter_40000/segmentations.pkl
+  rm $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_synthesize_lov_iter_40000/segmentations.pkl
 fi
 
 # test FCN for single frames
