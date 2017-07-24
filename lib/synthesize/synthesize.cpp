@@ -237,7 +237,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 
 
 void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return)
+              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* vertex_targets, float* vertex_weights, float weight)
 {
   bool is_textured = true;
   int is_save = 0;
@@ -251,12 +251,13 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
 
   // sample the number of objects in the scene
   int num = irand(5, 9);
+  int num_classes = pose_nums_.size();
 
   // sample object classes
   std::vector<int> class_ids(num);
   for (int i = 0; i < num; )
   {
-    int class_id = irand(0, pose_nums_.size());
+    int class_id = irand(0, num_classes);
     int flag = 1;
     for (int j = 0; j < i; j++)
     {
@@ -350,6 +351,47 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     {
       std::string filename = std::to_string(counter_) + ".vertmap";
       writeHalfPrecisionVertMap(filename, vertmap, height*width);
+    }
+
+    // compute object 2D centers
+    std::vector<float> center_x(num_classes);
+    std::vector<float> center_y(num_classes);
+    for (int i = 0; i < num; i++)
+    {
+      int class_id = class_ids[i];
+      float tx = poses_return[i * 7 + 4];
+      float ty = poses_return[i * 7 + 5];
+      float tz = poses_return[i * 7 + 6];
+      center_x[class_id] = fx * (tx / tz) + px;
+      center_y[class_id] = fy * (ty / tz) + py;
+    }
+
+    // compute center regression targets and weights
+    for (int x = 0; x < width; x++)
+    {
+      for (int y = 0; y < height; y++)
+      {
+        float vx = vertmap[3 * (y * width + x)];
+        if (std::isnan(vx))
+          continue;
+        int label = std::round(vx);
+        // object center
+        float cx = center_x[label];
+        float cy = center_y[label];
+
+        float rx = cx - x;
+        float ry = cy - y;
+        float norm = std::sqrt(rx * rx + ry * ry) + 1e-10;
+
+        // assign value
+        int offset = (label + 1) * 2 + 2 * (num_classes + 1) * (y * width + x);
+        vertex_targets[offset] = rx / norm;
+        vertex_weights[offset] = weight;
+
+        offset = (label + 1) * 2 + 1 + 2 * (num_classes + 1) * (y * width + x);
+        vertex_targets[offset] = ry / norm;
+        vertex_weights[offset] = weight;
+      }
     }
   }
 
@@ -453,7 +495,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1.0);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;

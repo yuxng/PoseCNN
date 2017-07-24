@@ -17,18 +17,19 @@ from utils.se3 import *
 import scipy.io
 # from normals import gpu_normals
 from transforms3d.quaternions import mat2quat
+# import matplotlib.pyplot as plt
 
-def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds):
+def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds, intrinsic_matrix):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_normal_blob, im_scales, roidb_syn = _get_image_blob(roidb, random_scale_ind, synthesizer, num_classes, backgrounds)
+    im_blob, im_depth_blob, im_normal_blob, im_scales, roidb_syn = _get_image_blob(roidb, random_scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix)
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
-        = _get_label_blob(roidb, roidb_syn, num_classes)
+        = _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -47,7 +48,7 @@ def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds):
 
     return blobs
 
-def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds):
+def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix):
     """Builds an input blob from the images in the roidb at the specified
     scales.
     """
@@ -60,12 +61,10 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds):
 
     for i in xrange(num_images):
         # meta data
-        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
-        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-        fx = K[0, 0]
-        fy = K[1, 1]
-        cx = K[0, 2]
-        cy = K[1, 2]
+        fx = intrinsic_matrix[0, 0]
+        fy = intrinsic_matrix[1, 1]
+        cx = intrinsic_matrix[0, 2]
+        cy = intrinsic_matrix[1, 2]
         znear = 0.25
         zfar = 6.0
 
@@ -81,7 +80,9 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds):
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
         class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
         poses = np.zeros((num_classes, 7), dtype=np.float32)
-        synthesizer.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, fx, fy, cx, cy, znear, zfar)
+        vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
+        vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+        synthesizer.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, vertex_targets, vertex_weights, fx, fy, cx, cy, znear, zfar, 10.0)
         im_syn = im_syn[::-1, :, :]
         depth_syn = depth_syn[::-1, :]
 
@@ -145,7 +146,9 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds):
         entry = {'label' : label,
                  'depth' : im_depth_raw,
                  'class_indexes' : class_indexes,
-                 'poses' : poses}
+                 'poses' : poses,
+                 'vertex_targets': vertex_targets,
+                 'vertex_weights': vertex_weights}
         roidb_syn.append(entry)
 
     # Create a blob to hold the input images
@@ -185,7 +188,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index, labels
 
 
-def _get_label_blob(roidb, roidb_syn, num_classes):
+def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -200,8 +203,6 @@ def _get_label_blob(roidb, roidb_syn, num_classes):
         pose_blob = []
 
     for i in xrange(num_images):
-        # load meta data
-        meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
         im_depth = roidb_syn[i]['depth']
 
         # read label image
@@ -225,9 +226,9 @@ def _get_label_blob(roidb, roidb_syn, num_classes):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            center_targets, center_weights = _vote_centers(im, roidb_syn[i]['class_indexes'], roidb_syn[i]['poses'], meta_data['intrinsic_matrix'], num_classes)
-            processed_vertex_targets.append(center_targets)
-            processed_vertex_weights.append(center_weights)
+            # center_targets, center_weights = _vote_centers(im, roidb_syn[i]['class_indexes'], roidb_syn[i]['poses'], intrinsic_matrix, num_classes)
+            processed_vertex_targets.append(roidb_syn[i]['vertex_targets'])
+            processed_vertex_weights.append(roidb_syn[i]['vertex_weights'])
 
             poses = roidb_syn[i]['poses']
             class_indexes = roidb_syn[i]['class_indexes']
@@ -267,7 +268,7 @@ def _get_label_blob(roidb, roidb_syn, num_classes):
         voxel step size: meta_data[42, 43, 44]
         voxel min value: meta_data[45, 46, 47]
         """
-        K = np.matrix(meta_data['intrinsic_matrix'])
+        K = intrinsic_matrix
         Kinv = np.linalg.pinv(K)
         mdata = np.zeros(48, dtype=np.float32)
         mdata[0:9] = K.flatten()
@@ -321,6 +322,8 @@ def _vote_centers(im_label, cls_indexes, poses, K, num_classes):
         center[i, 0] = c[0] / c[2]
         center[i, 1] = c[1] / c[2]
 
+    print center
+
     width = im_label.shape[1]
     height = im_label.shape[0]
     vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
@@ -330,7 +333,8 @@ def _vote_centers(im_label, cls_indexes, poses, K, num_classes):
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
-            ind = np.where(cls_indexes == i-1)[0] 
+            ind = np.where(cls_indexes == i-1)[0]
+            print 'center %d' % ind
             c[0] = center[ind, 0]
             c[1] = center[ind, 1]
             R = np.tile(c, (1, len(x))) - np.vstack((x, y))
@@ -408,7 +412,6 @@ def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
 
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
     """Visualize a mini-batch for debugging."""
-    import matplotlib.pyplot as plt
 
     for i in xrange(im_blob.shape[0]):
         fig = plt.figure()

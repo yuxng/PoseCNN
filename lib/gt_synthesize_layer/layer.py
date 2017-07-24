@@ -16,6 +16,7 @@ import cv2
 from utils.blob import pad_im
 import os
 import cPickle
+import scipy.io
 
 class GtSynthesizeLayer(object):
     """FCN data layer used for training."""
@@ -30,6 +31,7 @@ class GtSynthesizeLayer(object):
         self._shuffle_roidb_inds()
         self._synthesizer = synthesizer.PySynthesizer(model_file, pose_file)
         self._build_background_images()
+        self._read_camera_parameters()
 
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
@@ -50,13 +52,17 @@ class GtSynthesizeLayer(object):
         """Return the blobs to be used for the next minibatch."""
         db_inds = self._get_next_minibatch_inds()
         minibatch_db = [self._roidb[i] for i in db_inds]
-        return get_minibatch(minibatch_db, self._extents, self._synthesizer, self._num_classes, self._backgrounds)
+        return get_minibatch(minibatch_db, self._extents, self._synthesizer, self._num_classes, self._backgrounds, self._intrinsic_matrix)
             
     def forward(self):
         """Get blobs and copy them into this layer's top blob vector."""
         blobs = self._get_next_minibatch()
 
         return blobs
+
+    def _read_camera_parameters(self):
+        meta_data = scipy.io.loadmat(self._roidb[0]['meta_data'])
+        self._intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
 
     def _build_background_images(self):
 
@@ -71,13 +77,16 @@ class GtSynthesizeLayer(object):
         num = 10
         perm = np.random.permutation(np.arange(len(self._roidb)))
         perm = perm[:num]
+        print len(perm)
 
         im = pad_im(cv2.imread(self._roidb[0]['image'], cv2.IMREAD_UNCHANGED), 16)
         height = im.shape[0]
         width = im.shape[1]
         backgrounds = np.zeros((num, height, width, 3), dtype=np.uint8)
 
+        kernel = np.ones((50, 50), np.uint8)
         for i in xrange(num):
+            print i
             index = perm[i]
             # rgba
             rgba = pad_im(cv2.imread(self._roidb[index]['image'], cv2.IMREAD_UNCHANGED), 16)
@@ -93,7 +102,6 @@ class GtSynthesizeLayer(object):
             mask = pad_im(cv2.imread(self._roidb[index]['label'], cv2.IMREAD_UNCHANGED), 16)
             index = np.where(mask > 0)
             mask[index[0], index[1]] = 1
-            kernel = np.ones((50, 50), np.uint8)
             mask = cv2.dilate(mask, kernel)
             backgrounds[i, :, :, :]  = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
 
