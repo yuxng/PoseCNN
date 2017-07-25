@@ -53,6 +53,12 @@ def parse_args():
     parser.add_argument('--kfusion', dest='kfusion',
                         help='run kinect fusion or not',
                         default=False, type=bool)
+    parser.add_argument('--pose', dest='pose_name',
+                        help='name of the pose files',
+                        default=None, type=str)
+    parser.add_argument('--background', dest='background_name',
+                        help='name of the background file',
+                        default=None, type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -90,6 +96,8 @@ if __name__ == '__main__':
 
     cfg.RIG = args.rig_name
     cfg.CAD = args.cad_name
+    cfg.POSE = args.pose_name
+    cfg.BACKGROUND = args.background_name
 
     from networks.factory import get_network
     network = get_network(args.network_name)
@@ -106,6 +114,6 @@ if __name__ == '__main__':
         if cfg.TEST.GAN:
             test_gan(sess, network, imdb, weights_filename)
         else:
-            test_net_single_frame(sess, network, imdb, weights_filename, args.cad_name, 1)
+            test_net_single_frame(sess, network, imdb, weights_filename, args.cad_name, 0)
     else:
         test_net(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)

@@ -30,7 +30,7 @@ class GtSynthesizeLayer(object):
         self._name = name
         self._shuffle_roidb_inds()
         self._synthesizer = synthesizer.PySynthesizer(model_file, pose_file)
-        self._build_background_images()
+        self._write_background_images()
         self._read_camera_parameters()
 
     def _shuffle_roidb_inds(self):
@@ -74,19 +74,14 @@ class GtSynthesizeLayer(object):
             return
 
         print "building background images"
-        num = 10
+        num = 200
         perm = np.random.permutation(np.arange(len(self._roidb)))
         perm = perm[:num]
         print len(perm)
 
-        im = pad_im(cv2.imread(self._roidb[0]['image'], cv2.IMREAD_UNCHANGED), 16)
-        height = im.shape[0]
-        width = im.shape[1]
-        backgrounds = np.zeros((num, height, width, 3), dtype=np.uint8)
-
+        backgrounds = [None]*num
         kernel = np.ones((50, 50), np.uint8)
         for i in xrange(num):
-            print i
             index = perm[i]
             # rgba
             rgba = pad_im(cv2.imread(self._roidb[index]['image'], cv2.IMREAD_UNCHANGED), 16)
@@ -103,7 +98,60 @@ class GtSynthesizeLayer(object):
             index = np.where(mask > 0)
             mask[index[0], index[1]] = 1
             mask = cv2.dilate(mask, kernel)
-            backgrounds[i, :, :, :]  = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
+            backgrounds[i] = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
+
+        self._backgrounds = backgrounds
+        print "build background images finished"
+
+        with open(cache_file, 'wb') as fid:
+            cPickle.dump(backgrounds, fid, cPickle.HIGHEST_PROTOCOL)
+        print 'wrote backgrounds to {}'.format(cache_file)
+
+    def _write_background_images(self):
+
+        cache_file = os.path.join(self._cache_path, self._name + '_backgrounds.pkl')
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as fid:
+                self._backgrounds = cPickle.load(fid)
+            print '{} backgrounds loaded from {}'.format(self._name, cache_file)
+            return
+
+        print "building background images"
+
+        outdir = os.path.join(self._cache_path, self._name + '_backgrounds')
+        if not os.path.exists(outdir):
+            os.mkdir(outdir)
+
+        num = 200
+        perm = np.random.permutation(np.arange(len(self._roidb)))
+        perm = perm[:num]
+        print len(perm)
+
+        backgrounds = [None]*num
+        kernel = np.ones((50, 50), np.uint8)
+        for i in xrange(num):
+            index = perm[i]
+            # rgba
+            rgba = pad_im(cv2.imread(self._roidb[index]['image'], cv2.IMREAD_UNCHANGED), 16)
+            if rgba.shape[2] == 4:
+                im = np.copy(rgba[:,:,:3])
+                alpha = rgba[:,:,3]
+                I = np.where(alpha == 0)
+                im[I[0], I[1], :] = 0
+            else:
+                im = rgba
+
+            # generate background image
+            mask = pad_im(cv2.imread(self._roidb[index]['label'], cv2.IMREAD_UNCHANGED), 16)
+            index = np.where(mask > 0)
+            mask[index[0], index[1]] = 1
+            mask = cv2.dilate(mask, kernel)
+            background = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
+
+            # write the image
+            filename = os.path.join(self._cache_path, self._name + '_backgrounds', '%04d.jpg' % (i))
+            cv2.imwrite(filename, background)
+            backgrounds[i] = filename
 
         self._backgrounds = backgrounds
         print "build background images finished"

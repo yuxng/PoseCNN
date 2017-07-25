@@ -69,8 +69,9 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, int
         zfar = 6.0
 
         # sample a background image
-        ind = np.random.randint(backgrounds.shape[0], size=1)[0]
-        background = backgrounds[ind, :, :, :]
+        ind = np.random.randint(len(backgrounds), size=1)[0]
+        filename = backgrounds[ind]
+        background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         height = background.shape[0]
         width = background.shape[1]
 
@@ -111,9 +112,9 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, int
         im_orig = im.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
         im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
-        im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        # im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         im_scales.append(im_scale)
-        processed_ims.append(im)
+        processed_ims.append(im_orig)
 
         # depth
         im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
@@ -124,8 +125,8 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, int
 
         im_orig = im_depth.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
-        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_depth.append(im_depth)
+        # im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_depth.append(im_orig)
 
         # normals
         '''

@@ -34,6 +34,7 @@ __C.NETWORK = 'VGG16'
 __C.RIG = ''
 __C.CAD = ''
 __C.POSE = ''
+__C.BACKGROUND = ''
 
 #
 # Training options
@@ -99,6 +100,7 @@ __C.TEST.RANSAC = False
 __C.TEST.GAN = False
 __C.TEST.POSE_REG = False
 __C.TEST.MATCHING = False
+__C.TEST.SYNTHETIC = False
 
 # Scales to compute real features
 __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)

@@ -62,7 +62,8 @@ class Synthesizer
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* vertex_targets, float* vertex_weights, float weight);
+              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
+              float* vertex_targets, float* vertex_weights, float weight);
   void loadModels(std::string filename);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);

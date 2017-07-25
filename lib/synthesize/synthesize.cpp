@@ -237,7 +237,8 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 
 
 void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* vertex_targets, float* vertex_weights, float weight)
+              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
+              float* vertex_targets, float* vertex_weights, float weight)
 {
   bool is_textured = true;
   int is_save = 0;
@@ -354,8 +355,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
 
     // compute object 2D centers
-    std::vector<float> center_x(num_classes);
-    std::vector<float> center_y(num_classes);
+    std::vector<float> center_x(num_classes, 0);
+    std::vector<float> center_y(num_classes, 0);
     for (int i = 0; i < num; i++)
     {
       int class_id = class_ids[i];
@@ -364,6 +365,15 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       float tz = poses_return[i * 7 + 6];
       center_x[class_id] = fx * (tx / tz) + px;
       center_y[class_id] = fy * (ty / tz) + py;
+    }
+
+    if (centers_return)
+    {
+      for (int i = 0; i < num_classes; i++)
+      {
+        centers_return[2 * i] = center_x[i];
+        centers_return[2 * i + 1] = center_y[i];
+      }
     }
 
     // compute center regression targets and weights
@@ -395,6 +405,9 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
+  GLfloat lightpos0[] = {drand(-1., 1.), drand(-1., 1.), drand(1., 6.), 0.};
+  GLfloat lightpos1[] = {drand(-1., 1.), drand(-1., 1.), drand(1., 6.), 0.};
+
   // render color image
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
@@ -409,6 +422,12 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
     pangolin::OpenGlMatrix mvMatrix(mv);
     mvMatrix.Load();
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
+    glEnable(GL_LIGHT1);
+    glLightfv(GL_LIGHT1, GL_POSITION, lightpos1);
 
     glEnable(GL_TEXTURE_2D);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -427,6 +446,10 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisable(GL_TEXTURE_2D);
+
+    glDisable(GL_LIGHT0);
+    glDisable(GL_LIGHT1);
+    glDisable(GL_LIGHTING);
   }
 
   // read color image
@@ -495,7 +518,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1.0);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1.0);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
