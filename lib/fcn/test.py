@@ -669,8 +669,6 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 RT[:3, :3] = quat2mat(poses[i, :4])
                 RT[:, 3] = poses[i, 4:]
 
-                print RT
-
                 num = len(index[0])
                 # extract 3D points
                 x3d = np.ones((4, num), dtype=np.float32)
@@ -928,8 +926,5 @@ def _render_synthetic_image(SYN, num_classes, backgrounds, intrinsic_matrix):
              'centers' : centers,
              'vertex_targets': vertex_targets,
              'vertex_weights': vertex_weights}
-
-    print class_indexes
-    print centers
 
     return entry

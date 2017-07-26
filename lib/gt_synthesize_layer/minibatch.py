@@ -22,14 +22,15 @@ from transforms3d.quaternions import mat2quat
 def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds, intrinsic_matrix):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
+    is_syn = [0, 1]
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_normal_blob, im_scales, roidb_syn = _get_image_blob(roidb, random_scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix)
+    im_blob, im_depth_blob, im_normal_blob, im_scales, roidb_syn = _get_image_blob(roidb, random_scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix, is_syn)
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
-        = _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes)
+        = _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes, is_syn)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -48,7 +49,7 @@ def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds, intrins
 
     return blobs
 
-def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix):
+def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, intrinsic_matrix, is_syn):
     """Builds an input blob from the images in the roidb at the specified
     scales.
     """
@@ -68,39 +69,68 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, int
         znear = 0.25
         zfar = 6.0
 
-        # sample a background image
-        ind = np.random.randint(len(backgrounds), size=1)[0]
-        filename = backgrounds[ind]
-        background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-        height = background.shape[0]
-        width = background.shape[1]
+        if is_syn[i]:
+            # sample a background image
+            ind = np.random.randint(len(backgrounds), size=1)[0]
+            filename = backgrounds[ind]
+            background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+            height = background.shape[0]
+            width = background.shape[1]
 
-        # render a synthetic image
-        im_syn = np.zeros((height, width, 4), dtype=np.uint8)
-        depth_syn = np.zeros((height, width), dtype=np.float32)
-        vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
-        class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
-        poses = np.zeros((num_classes, 7), dtype=np.float32)
-        vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
-        vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
-        synthesizer.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, vertex_targets, vertex_weights, fx, fy, cx, cy, znear, zfar, 10.0)
-        im_syn = im_syn[::-1, :, :]
-        depth_syn = depth_syn[::-1, :]
+            # render a synthetic image
+            im_syn = np.zeros((height, width, 4), dtype=np.uint8)
+            depth_syn = np.zeros((height, width), dtype=np.float32)
+            vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
+            class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
+            poses = np.zeros((num_classes, 7), dtype=np.float32)
+            centers = np.zeros((num_classes, 2), dtype=np.float32)
+            vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
+            vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+            synthesizer.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, vertex_targets, vertex_weights, fx, fy, cx, cy, znear, zfar, 10.0)
+            im_syn = im_syn[::-1, :, :]
+            depth_syn = depth_syn[::-1, :]
 
-        # convert depth
-        im_depth_raw = 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))
-        I = np.where(depth_syn == 1)
-        im_depth_raw[I[0], I[1]] = 0
+            # convert depth
+            im_depth_raw = 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))
+            I = np.where(depth_syn == 1)
+            im_depth_raw[I[0], I[1]] = 0
 
-        # add background
-        alpha = im_syn[:,:,3]
-        I = np.where(alpha == 0)
-        im_syn[I[0], I[1], :3] = background[I[0], I[1], :]
-        im = im_syn[:, :, :3]
+            # add background
+            alpha = im_syn[:,:,3]
+            I = np.where(alpha == 0)
+            im_syn[I[0], I[1], :3] = background[I[0], I[1], :]
+            im = im_syn[:, :, :3]
 
-        # compute labels from vertmap
-        label = np.round(vertmap_syn[:, :, 0]) + 1
-        label[np.isnan(label)] = 0
+            # compute labels from vertmap
+            label = np.round(vertmap_syn[:, :, 0]) + 1
+            label[np.isnan(label)] = 0
+
+            entry = {'label' : label,
+                     'depth' : im_depth_raw,
+                     'class_indexes' : class_indexes,
+                     'poses' : poses,
+                     'centers' : centers,
+                     'vertex_targets': vertex_targets,
+                     'vertex_weights': vertex_weights}
+            roidb_syn.append(entry)
+
+        else:
+            # depth raw
+            im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+
+            # rgba
+            rgba = pad_im(cv2.imread(roidb[i]['image'], cv2.IMREAD_UNCHANGED), 16)
+            if rgba.shape[2] == 4:
+                im = np.copy(rgba[:,:,:3])
+                alpha = rgba[:,:,3]
+                I = np.where(alpha == 0)
+                im[I[0], I[1], :] = 0
+            else:
+                im = rgba
+
+            if cfg.TRAIN.CHROMATIC:
+                label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+            roidb_syn.append([])
 
         # chromatic transform
         if cfg.TRAIN.CHROMATIC:
@@ -144,14 +174,6 @@ def _get_image_blob(roidb, scale_ind, synthesizer, num_classes, backgrounds, int
         processed_ims_normal.append(im_normal)
         '''
 
-        entry = {'label' : label,
-                 'depth' : im_depth_raw,
-                 'class_indexes' : class_indexes,
-                 'poses' : poses,
-                 'vertex_targets': vertex_targets,
-                 'vertex_weights': vertex_weights}
-        roidb_syn.append(entry)
-
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
@@ -189,7 +211,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index, labels
 
 
-def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes):
+def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes, is_syn):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -204,10 +226,20 @@ def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes):
         pose_blob = []
 
     for i in xrange(num_images):
-        im_depth = roidb_syn[i]['depth']
 
-        # read label image
-        im = roidb_syn[i]['label']
+        if is_syn[i]:
+            # depth
+            im_depth = roidb_syn[i]['depth']
+
+            # read label image
+            im = roidb_syn[i]['label']
+        else:
+            meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
+            im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+
+            # read label image
+            im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+
         height = im.shape[0]
         width = im.shape[1]
         # mask the label image according to depth
@@ -227,19 +259,36 @@ def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes):
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            # center_targets, center_weights = _vote_centers(im, roidb_syn[i]['class_indexes'], roidb_syn[i]['poses'], intrinsic_matrix, num_classes)
-            processed_vertex_targets.append(roidb_syn[i]['vertex_targets'])
-            processed_vertex_weights.append(roidb_syn[i]['vertex_weights'])
+            if is_syn[i]:
+                processed_vertex_targets.append(roidb_syn[i]['vertex_targets'])
+                processed_vertex_weights.append(roidb_syn[i]['vertex_weights'])
 
-            poses = roidb_syn[i]['poses']
-            class_indexes = roidb_syn[i]['class_indexes']
-            num = len(np.where(class_indexes > 0)[0])
-            qt = np.zeros((num, 13), dtype=np.float32)
-            for j in xrange(num):
-                qt[j, 0] = i
-                qt[j, 1] = class_indexes[j]
-                qt[j, 2:6] = 0  # fill boxes later
-                qt[j, 6:] = poses[j, :]
+                poses = roidb_syn[i]['poses']
+                class_indexes = roidb_syn[i]['class_indexes']
+                num = len(np.where(class_indexes > 0)[0])
+                qt = np.zeros((num, 13), dtype=np.float32)
+                for j in xrange(num):
+                    qt[j, 0] = i
+                    qt[j, 1] = class_indexes[j]
+                    qt[j, 2:6] = 0  # fill boxes later
+                    qt[j, 6:] = poses[j, :]
+            else:
+                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+                processed_vertex_targets.append(center_targets)
+                processed_vertex_weights.append(center_weights)
+
+                poses = meta_data['poses']
+                num = poses.shape[2]
+                qt = np.zeros((num, 13), dtype=np.float32)
+                for j in xrange(num):
+                    R = poses[:, :3, j]
+                    T = poses[:, 3, j]
+
+                    qt[j, 0] = i
+                    qt[j, 1] = roidb[i]['gt_classes'][j]
+                    qt[j, 2:6] = roidb[i]['boxes'][j, :]
+                    qt[j, 6:10] = mat2quat(R)
+                    qt[j, 10:] = T
 
             pose_blob = np.concatenate((pose_blob, qt), axis=0)
 
@@ -313,18 +362,7 @@ def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes):
 
 
 # compute the voting label image in 2D
-def _vote_centers(im_label, cls_indexes, poses, K, num_classes):
-
-    # compute centers
-    num = len(np.where(cls_indexes >= 0)[0])
-    center = np.zeros((num, 2), dtype=np.float32)
-    for i in xrange(num):
-        c = np.matmul(K, poses[i, 4:])
-        center[i, 0] = c[0] / c[2]
-        center[i, 1] = c[1] / c[2]
-
-    print center
-
+def _vote_centers(im_label, cls_indexes, center, num_classes):
     width = im_label.shape[1]
     height = im_label.shape[0]
     vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
@@ -334,8 +372,7 @@ def _vote_centers(im_label, cls_indexes, poses, K, num_classes):
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
-            ind = np.where(cls_indexes == i-1)[0]
-            print 'center %d' % ind
+            ind = np.where(cls_indexes == i)[0] 
             c[0] = center[ind, 0]
             c[1] = center[ind, 1]
             R = np.tile(c, (1, len(x))) - np.vstack((x, y))
