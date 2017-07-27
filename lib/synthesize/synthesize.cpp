@@ -1,5 +1,4 @@
 #include "synthesize.hpp"
-#include "thread_rand.h"
 
 using namespace df;
 
@@ -25,13 +24,19 @@ void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap,
 
 Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 {
+  model_file_ = model_file;
+  pose_file_ = pose_file;
   counter_ = 0;
+}
+
+void Synthesizer::setup()
+{
   create_window(640.0, 480.0);
 
-  loadModels(model_file);
+  loadModels(model_file_);
   std::cout << "loaded models" << std::endl;
 
-  loadPoses(pose_file);
+  loadPoses(pose_file_);
   std::cout << "loaded poses" << std::endl;
 }
 
@@ -504,10 +509,342 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   counter_++;
 }
 
+// get label lists
+void Synthesizer::getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
+{
+  for(int i = 0; i < num_classes; i++)
+    labels.push_back( std::vector<int>() );
+
+  // for each pixel
+  // #pragma omp parallel for
+  for(int x = 0; x < width; x++)
+  for(int y = 0; y < height; y++)
+  {
+    int label = label_map[y * width + x];
+    labels[label].push_back(y * width + x);
+  }
+
+  for(int i = 1; i < num_classes; i++)
+  {
+    if (labels[i].size() > minArea)
+    {
+      object_ids.push_back(i);
+    }
+  }
+}
+
+
+// get 3D bounding boxes
+void Synthesizer::getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes)
+{
+  // for each object
+  for (int i = 1; i < num_classes; i++)
+  {
+    cv::Vec<float, 3> extent;
+    extent(0) = extents[i * 3];
+    extent(1) = extents[i * 3 + 1];
+    extent(2) = extents[i * 3 + 2];
+
+    bb3Ds.push_back(getBB3D(extent));
+  }
+}
+
+
+inline cv::Point2f Synthesizer::getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes)
+{
+  int channel = 2 * objID;
+  int offset = channel + 2 * num_classes * (pt.y * width + pt.x);
+
+  jp::coord2_t mode;
+  mode(0) = vertmap[offset];
+  mode(1) = vertmap[offset + 1];
+
+  return cv::Point2f(mode(0), mode(1));
+}
+
+
+inline bool Synthesizer::samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes)
+{
+  cv::Point2f obj = getMode2D(objID, pt2D, vertmap, width, num_classes); // read out object coordinate
+
+  eyePts.push_back(pt2D);
+  objPts.push_back(obj);
+
+  return true;
+}
+
+
+/**
+ * @brief Creates a list of pose hypothesis (potentially belonging to multiple objects) which still have to be processed (e.g. refined).
+ * 
+ * The method includes all remaining hypotheses of an object if there is still more than one, or if there is only one remaining but it still needs to be refined.
+ * 
+ * @param hypMap Map of object ID to a list of hypotheses for that object.
+ * @param maxIt Each hypotheses should be at least this often refined.
+ * @return std::vector< Ransac3D::TransHyp*, std::allocator< void > > List of hypotheses to be processed further.
+*/
+std::vector<TransHyp*> Synthesizer::getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt)
+{
+  std::vector<TransHyp*> workingQueue;
+      
+  for(auto it = hypMap.begin(); it != hypMap.end(); it++)
+  for(int h = 0; h < it->second.size(); h++)
+    if(it->second.size() > 1 || it->second[h].refSteps < maxIt) //exclude a hypothesis if it is the only one remaining for an object and it has been refined enough already
+      workingQueue.push_back(&(it->second[h]));
+
+  return workingQueue;
+}
+
+
+inline float Synthesizer::point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p)
+{
+  float n1 = -n.y;
+  float n2 = n.x;
+  float p1 = p.x;
+  float p2 = p.y;
+  float x1 = x.x;
+  float x2 = x.y;
+
+  return fabs(n1 * (x1 - p1) + n2 * (x2 - p2)) / sqrt(n1 * n1 + n2 * n2);
+}
+
+
+inline void Synthesizer::countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch)
+{
+  // reset data of last RANSAC iteration
+  hyp.inlierPts2D.clear();
+  hyp.inliers = 0;
+
+  hyp.effPixels = 0; // num of pixels drawn
+  hyp.maxPixels += pixelBatch; // max num of pixels to be drawn	
+
+  int maxPt = labels[hyp.objID].size(); // num of pixels of this class
+  float successRate = hyp.maxPixels / (float) maxPt; // probability to accept a pixel
+
+  std::mt19937 generator;
+  std::negative_binomial_distribution<int> distribution(1, successRate); // lets you skip a number of pixels until you encounter the next pixel to accept
+
+  for(unsigned ptIdx = 0; ptIdx < maxPt;)
+  {
+    int index = labels[hyp.objID][ptIdx];
+    cv::Point2d pt2D(index % width, index / width);
+  
+    hyp.effPixels++;
+  
+    // read out object coordinate
+    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertmap, width, num_classes);
+
+    // inlier check
+    if(point2line(hyp.center, obj, pt2D) < inlierThreshold)
+    {
+      hyp.inlierPts2D.push_back(std::pair<cv::Point2d, cv::Point2d>(obj, pt2D)); // store object coordinate - camera coordinate correspondence
+      hyp.inliers++; // keep track of the number of inliers (correspondences might be thinned out for speed later)
+    }
+
+    // advance to the next accepted pixel
+    if(successRate < 1)
+      ptIdx += std::max(1, distribution(generator));
+    else
+      ptIdx++;
+  }
+}
+
+
+inline void Synthesizer::updateHyp2D(TransHyp& hyp, int maxPixels)
+{
+  if(hyp.inlierPts2D.size() < 4) return;
+  filterInliers2D(hyp, maxPixels); // limit the number of correspondences
+      
+  // data conversion
+  cv::Point2d center = hyp.center;
+  Hypothesis trans(center);	
+	
+  // recalculate pose
+  trans.calcCenter(hyp.inlierPts2D);
+  hyp.center = trans.getCenter();
+}
+
+
+inline void Synthesizer::filterInliers2D(TransHyp& hyp, int maxInliers)
+{
+  if(hyp.inlierPts2D.size() < maxInliers) return; // maximum number not reached, do nothing
+      		
+  std::vector<std::pair<cv::Point2d, cv::Point2d>> inlierPts; // filtered list of inlier correspondences
+	
+  // select random correspondences to keep
+  for(unsigned i = 0; i < maxInliers; i++)
+  {
+    int idx = irand(0, hyp.inlierPts2D.size());
+	    
+    inlierPts.push_back(hyp.inlierPts2D[idx]);
+  }
+	
+  hyp.inlierPts2D = inlierPts;
+}
+
+
+// Hough voting
+void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
+  float fx, float fy, float px, float py, float* outputs)
+{
+  //set parameters, see documentation of GlobalProperties
+  int maxIterations = 10000000;
+  float minArea = 400; // a hypothesis covering less projected area (2D bounding box) can be discarded (too small to estimate anything reasonable)
+  float inlierThreshold3D = 0.5;
+  int ransacIterations = 256;  // 256
+  int preemptiveBatch = preemptive_batch;  // 1000
+  int maxPixels = 1000;  // 1000
+  int refIt = 8;  // 8
+
+  // labels
+  std::vector<std::vector<int>> labels;
+  std::vector<int> object_ids;
+  getLabels(labelmap, labels, object_ids, width, height, num_classes, minArea);
+  std::cout << "read labels" << std::endl;
+
+  // bb3Ds
+  std::vector<std::vector<cv::Point3f>> bb3Ds;
+  getBb3Ds(extents, bb3Ds, num_classes);
+
+  // camera matrix
+  cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
+  camMat(0, 0) = fx;
+  camMat(1, 1) = fy;
+  camMat(2, 2) = 1.f;
+  camMat(0, 2) = px;
+  camMat(1, 2) = py;
+
+  if (object_ids.size() == 0)
+    return;
+		
+  // hold for each object a list of pose hypothesis, these are optimized until only one remains per object
+  std::map<jp::id_t, std::vector<TransHyp>> hypMap;
+	
+  // sample initial pose hypotheses
+  #pragma omp parallel for
+  for(unsigned h = 0; h < ransacIterations; h++)
+  for(unsigned i = 0; i < maxIterations; i++)
+  {
+    // camera coordinate - object coordinate correspondences
+    std::vector<cv::Point2f> eyePts;
+    std::vector<cv::Point2f> objPts;
+	    
+    // sample first point and choose object ID
+    jp::id_t objID = object_ids[irand(0, object_ids.size())];
+
+    if(objID == 0) continue;
+
+    int pindex = irand(0, labels[objID].size());
+    int index = labels[objID][pindex];
+    cv::Point2f pt1(index % width, index / width);
+    
+    // sample first correspondence
+    if(!samplePoint2D(objID, eyePts, objPts, pt1, vertmap, width, num_classes))
+      continue;
+
+    // sample other points in search radius, discard hypothesis if minimum distance constrains are violated
+    pindex = irand(0, labels[objID].size());
+    index = labels[objID][pindex];
+    cv::Point2f pt2(index % width, index / width);
+
+    if(!samplePoint2D(objID, eyePts, objPts, pt2, vertmap, width, num_classes))
+      continue;
+
+    // reconstruct camera
+    std::vector<std::pair<cv::Point2d, cv::Point2d>> pts2D;
+    for(unsigned j = 0; j < eyePts.size(); j++)
+    {
+      pts2D.push_back(std::pair<cv::Point2d, cv::Point2d>(
+      cv::Point2d(objPts[j].x, objPts[j].y),
+      cv::Point2d(eyePts[j].x, eyePts[j].y)
+      ));
+    }
+
+    Hypothesis trans(pts2D);
+
+    // center
+    cv::Point2d center = trans.getCenter();
+    
+    // create a hypothesis object to store meta data
+    TransHyp hyp(objID, center);
+    
+    #pragma omp critical
+    {
+      hypMap[objID].push_back(hyp);
+    }
+
+    break;
+  }
+
+  // create a list of all objects where hypptheses have been found
+  std::vector<jp::id_t> objList;
+  for(std::pair<jp::id_t, std::vector<TransHyp>> hypPair : hypMap)
+  {
+    objList.push_back(hypPair.first);
+  }
+
+  // create a working queue of all hypotheses to process
+  std::vector<TransHyp*> workingQueue = getWorkingQueue(hypMap, refIt);
+	
+  // main preemptive RANSAC loop, it will stop if there is max one hypothesis per object remaining which has been refined a minimal number of times
+  while(!workingQueue.empty())
+  {
+    // draw a batch of pixels and check for inliers, the number of pixels looked at is increased in each iteration
+    #pragma omp parallel for
+    for(int h = 0; h < workingQueue.size(); h++)
+      countInliers2D(*(workingQueue[h]), vertmap, labels, inlierThreshold3D, width, num_classes, preemptiveBatch);
+	    	    
+    // sort hypothesis according to inlier count and discard bad half
+    #pragma omp parallel for 
+    for(unsigned o = 0; o < objList.size(); o++)
+    {
+      jp::id_t objID = objList[o];
+      if(hypMap[objID].size() > 1)
+      {
+	std::sort(hypMap[objID].begin(), hypMap[objID].end());
+	hypMap[objID].erase(hypMap[objID].begin() + hypMap[objID].size() / 2, hypMap[objID].end());
+      }
+    }
+    workingQueue = getWorkingQueue(hypMap, refIt);
+	    
+    // refine
+    #pragma omp parallel for
+    for(int h = 0; h < workingQueue.size(); h++)
+    {
+      updateHyp2D(*(workingQueue[h]), maxPixels);
+      workingQueue[h]->refSteps++;
+    }
+    
+    workingQueue = getWorkingQueue(hypMap, refIt);
+  }
+
+  for(auto it = hypMap.begin(); it != hypMap.end(); it++)
+  {
+    for(int h = 0; h < it->second.size(); h++)
+    {
+      std::cout << "Estimated Hypothesis for Object " << (int) it->second[h].objID << ":" << std::endl;
+
+      jp::id_t objID = it->second[h].objID;
+      cv::Point2d center = it->second[h].center;
+      outputs[2 * objID] = center.x;
+      outputs[2 * objID + 1] = center.y;
+
+      // it->second[h].compute_width_height();
+    
+      std::cout << "Inliers: " << it->second[h].inliers;
+      std::printf(" (Rate: %.1f\%)\n", it->second[h].getInlierRate() * 100);
+      std::cout << "Center " << center << std::endl;
+      std::cout << "---------------------------------------------------" << std::endl;
+
+    }
+  }
+}
+
 
 int main(int argc, char** argv) 
 {
   Synthesizer Synthesizer(argv[1], argv[2]);
+  Synthesizer.setup();
 
   // camera parameters
   int width = 640;

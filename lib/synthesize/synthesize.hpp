@@ -15,8 +15,10 @@
 #include <pangolin/pangolin.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/opencv_modules.hpp>
-
 #include <Eigen/Core>
+#include <assimp/cimport.h>
+#include <assimp/scene.h>
+#include <OpenEXR/half.h>
 
 #include <df/camera/camera.h>
 #include <df/camera/linear.h>
@@ -30,9 +32,11 @@
 #include <df/util/pangolinHelpers.h>
 #include <df/util/tensor.h>
 
-#include <assimp/cimport.h>
-#include <assimp/scene.h>
-#include <OpenEXR/half.h>
+#include "types.h"
+#include "ransac.h"
+#include "Hypothesis.h"
+#include "detection.h"
+#include "thread_rand.h"
 
 template <typename Derived>
 inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
@@ -55,10 +59,10 @@ class Synthesizer
 {
  public:
 
-  Synthesizer() {};
   Synthesizer(std::string model_file, std::string pose_file);
   ~Synthesizer();
 
+  void setup();
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
@@ -70,8 +74,22 @@ class Synthesizer
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
     pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
 
+  // hough voting
+  void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
+                      float fx, float fy, float px, float py, float* outputs);
+  inline void filterInliers2D(TransHyp& hyp, int maxInliers);
+  inline void updateHyp2D(TransHyp& hyp, int maxPixels);
+  inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
+  inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
+  std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
+  inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
+  inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
+  void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
+  void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
+
  private:
   int counter_;
+  std::string model_file_, pose_file_;
 
   // poses
   std::vector<float*> poses_;

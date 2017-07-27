@@ -69,8 +69,10 @@ cuda_add_library(
   SHARED
   synthesize.cpp
   thread_rand.cpp
+  Hypothesis.cpp
 )
 
 cuda_add_executable(synthesize
                     synthesize.cpp
-                    thread_rand.cpp)
+                    thread_rand.cpp
+                    Hypothesis.cpp)

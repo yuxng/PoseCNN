@@ -205,15 +205,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             else:
                 labels_2d, probs, vertex_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')], feed_dict=feed_dict)
-                rois_new = []
-                poses_new = []
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
             vertex_pred = []
-            rois_new = []
-            poses_new = []
 
-    return labels_2d[0,:,:].astype(np.uint8), probs[0,:,:,:], vertex_pred, rois_new, poses_new
+    return labels_2d[0,:,:].astype(np.int32), probs[0,:,:,:], vertex_pred
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -301,7 +297,7 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
 
     labels_2d = labels_pred_2d[0]
 
-    return labels_2d[0,:,:].astype(np.uint8), probs[0][0,:,:,:], state, weights, points
+    return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
@@ -603,7 +599,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_gt, center, labels, labels_gt, rois, intrinsic_matrix, vertmap_gt, poses, num_classes):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, centers, intrinsic_matrix, num_classes):
     """Visual debugging of detections."""
 
     fig = plt.figure()
@@ -621,11 +617,11 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
     # show gt vertex map
     ax = fig.add_subplot(243)
-    plt.imshow(center_gt[:,:,0])
+    plt.imshow(center_map_gt[:,:,0])
     ax.set_title('gt centers x')
 
     ax = fig.add_subplot(244)
-    plt.imshow(center_gt[:,:,1])
+    plt.imshow(center_map_gt[:,:,1])
     ax.set_title('gt centers y')
 
     # show class label
@@ -633,26 +629,21 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     plt.imshow(im_labels)
     ax.set_title('class labels')
 
-    if cfg.TEST.POSE_REG:
+    if cfg.TEST.VERTEX_REG:
         # show centers
-        centers_x = (rois[:, 2] + rois[:, 4]) / 2
-        centers_y = (rois[:, 3] + rois[:, 5]) / 2
-        plt.plot(centers_x, centers_y, 'ro')
-
-        # show boxes
-        for i in xrange(rois.shape[0]):
-            plt.gca().add_patch(
-                plt.Rectangle((rois[i, 2], rois[i, 3]), rois[i, 4] - rois[i, 2],
-                              rois[i, 5] - rois[i, 3], fill=False,
-                             edgecolor='g', linewidth=3))
-
+        for i in xrange(num_classes):
+            cx = centers[i, 0]
+            cy = centers[i, 1]
+            if not np.isinf(cx) and not np.isinf(cy):
+                plt.plot(cx, cy, 'ro')          
+        
     # show vertex map
     ax = fig.add_subplot(247)
-    plt.imshow(center[:,:,0])
+    plt.imshow(center_map[:,:,0])
     ax.set_title('centers x')
 
     ax = fig.add_subplot(248)
-    plt.imshow(center[:,:,1])
+    plt.imshow(center_map[:,:,1])
     ax.set_title('centers y')
 
     # show projection of the poses
@@ -697,7 +688,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 ###################
 # test single frame
 ###################
-def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_refine):
+def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     output_dir = get_output_dir(imdb, weights_filename)
     if not os.path.exists(output_dir):
@@ -722,23 +713,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
     voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
     voxelizer.setup(-3, -3, -3, 3, 3, 4)
 
-    # kinect fusion
-    if is_refine:
-        RF = refiner.PyRefiner(model_filename)
-
-    # pose estimation
-    if cfg.TEST.RANSAC:
-        RANSAC = ransac.PyRansac3D()
-
-    if cfg.TEST.SYNTHETIC:
-        SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
-
-        cache_file = cfg.BACKGROUND
-        if os.path.exists(cache_file):
-            with open(cache_file, 'rb') as fid:
-                backgrounds = cPickle.load(fid)
-            print 'backgrounds loaded from {}'.format(cache_file)
-
     # construct colors
     colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
     for i in range(imdb.num_classes):
@@ -751,6 +725,18 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
         # perm = xrange(0, num_images, 200)
     else:
         perm = xrange(num_images)
+
+    if cfg.TEST.SYNTHETIC:
+        SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+        SYN.setup()
+
+        cache_file = cfg.BACKGROUND
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as fid:
+                backgrounds = cPickle.load(fid)
+            print 'backgrounds loaded from {}'.format(cache_file)
+    else:
+       SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
 
     for i in perm:
 
@@ -795,26 +781,18 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
                 im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         _t['im_segment'].tic()
-        labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
+        labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
-            # centers = RANSAC.estimate_center(probs, vertex_pred[0,:,:,:])
-            # print centers
-            if cfg.TEST.RANSAC:
-                # pose estimation using RANSAC
-                fx = meta_data['intrinsic_matrix'][0, 0]
-                fy = meta_data['intrinsic_matrix'][1, 1]
-                px = meta_data['intrinsic_matrix'][0, 2]
-                py = meta_data['intrinsic_matrix'][1, 2]
-                depth_factor = meta_data['factor_depth'][0, 0]
-                poses = RANSAC.estimate_pose(im_depth, probs, vertex_pred[0,:,:,:] / cfg.TRAIN.VERTEX_W, imdb._extents, fx, fy, px, py, depth_factor)
-
-                # print gt poses
-                # cls_indexes = meta_data['cls_indexes']
-                # poses_gt = meta_data['poses']
-                # for j in xrange(len(cls_indexes)):
-                #    print 'object {}'.format(cls_indexes[j])
-                #    print poses_gt[:,:,j]
+            # hough voting to compute object centers
+            centers = np.zeros((imdb.num_classes, 2), dtype=np.float32)
+            centers[:] = np.inf
+            preemptive_batch = 200
+            fx = meta_data['intrinsic_matrix'][0, 0]
+            fy = meta_data['intrinsic_matrix'][1, 1]
+            px = meta_data['intrinsic_matrix'][0, 2]
+            py = meta_data['intrinsic_matrix'][1, 2]
+            SYN.estimate_centers(labels, vertex_pred[0,:,:,:], imdb._extents, centers, imdb.num_classes, preemptive_batch, fx, fy, px, py)
 
         _t['im_segment'].toc()
 
@@ -822,29 +800,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
         labels = unpad_im(labels, 16)
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
-
-        # run kinect fusion
-        if is_refine:
-            poses_gt = meta_data['poses']
-            cls_indexes = meta_data['cls_indexes']
-            num = poses_gt.shape[2]
-            qt = np.zeros((num, 13), dtype=np.float32)
-            for j in xrange(num):
-                R = poses_gt[:, :3, j]
-                T = poses_gt[:, 3, j]
-
-                qt[j, 0] = 0
-                qt[j, 1] = cls_indexes[j]
-                # qt[j, 2:6] = roidb[i]['boxes'][j, :]
-                qt[j, 6:10] = mat2quat(R)
-                qt[j, 10:] = T
-
-            fx = meta_data['intrinsic_matrix'][0, 0]
-            fy = meta_data['intrinsic_matrix'][1, 1]
-            px = meta_data['intrinsic_matrix'][0, 2]
-            py = meta_data['intrinsic_matrix'][1, 2]
-            poses_new = np.zeros_like(poses)
-            RF.render(im, labels, rois, qt, poses, fx, fy, px, py, imdb.num_classes, imdb._extents, poses_new, 0);
             
         seg = {'labels': labels}
         segmentations[i] = seg
@@ -856,16 +811,16 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
-                centers_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
+                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
                 print 'visualization'
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_gt, vertmap, labels, labels_gt, rois, meta_data['intrinsic_matrix'], meta_data['vertmap'], poses, imdb.num_classes)
+                    centers_map_gt, vertmap, labels, labels_gt, centers, meta_data['intrinsic_matrix'], imdb.num_classes)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
-    seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    with open(seg_file, 'wb') as f:
-        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
+    # seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    # with open(seg_file, 'wb') as f:
+    #    cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)

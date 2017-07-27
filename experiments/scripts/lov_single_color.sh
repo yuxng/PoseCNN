@@ -28,7 +28,7 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/lov/lov_train/vgg16_fcn_color_single_frame_synthesize_lov_iter_10000.ckpt \
+  --model output/lov/lov_train/vgg16_fcn_color_single_frame_synthesize_lov.ckpt \
   --imdb lov_val \
   --cfg experiments/cfgs/lov_single_color.yml \
   --rig data/LOV/camera.json \
