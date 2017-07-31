@@ -22,11 +22,40 @@ void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap,
 
 }
 
+
+static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data)
+{
+  DataForOpt* dataForOpt = (DataForOpt*) data;
+
+  cv::Mat tvec(3, 1, CV_64F);
+  cv::Mat rvec(3, 1, CV_64F);
+      
+  for(int i = 0; i < 6; i++)
+  {
+    if(i > 2) 
+      tvec.at<double>(i-3, 0) = pose[i];
+    else 
+      rvec.at<double>(i, 0) = pose[i];
+  }
+	
+  jp::cv_trans_t trans(rvec, tvec);
+
+  // project the 3D bounding box according to the current pose
+  cv::Rect bb2D = getBB2D(dataForOpt->imageWidth, dataForOpt->imageHeight, dataForOpt->bb3D, dataForOpt->camMat, trans);
+
+  // compute IoU between boxes
+  float energy = -1 * getIoU(bb2D, dataForOpt->bb2D);
+
+  return energy;
+}
+
+
 Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 {
   model_file_ = model_file;
   pose_file_ = pose_file;
   counter_ = 0;
+  setup_ = 0;
 }
 
 void Synthesizer::setup()
@@ -38,6 +67,8 @@ void Synthesizer::setup()
 
   loadPoses(pose_file_);
   std::cout << "loaded poses" << std::endl;
+
+  setup_ = 1;
 }
 
 Synthesizer::~Synthesizer()
@@ -685,7 +716,7 @@ inline void Synthesizer::filterInliers2D(TransHyp& hyp, int maxInliers)
 
 // Hough voting
 void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
-  float fx, float fy, float px, float py, float* outputs)
+  float fx, float fy, float px, float py, float* outputs, float* gt_poses, int num_gt)
 {
   //set parameters, see documentation of GlobalProperties
   int maxIterations = 10000000;
@@ -703,16 +734,7 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
   std::cout << "read labels" << std::endl;
 
   // bb3Ds
-  std::vector<std::vector<cv::Point3f>> bb3Ds;
-  getBb3Ds(extents, bb3Ds, num_classes);
-
-  // camera matrix
-  cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
-  camMat(0, 0) = fx;
-  camMat(1, 1) = fy;
-  camMat(2, 2) = 1.f;
-  camMat(0, 2) = px;
-  camMat(1, 2) = py;
+  getBb3Ds(extents, bb3Ds_, num_classes);
 
   if (object_ids.size() == 0)
     return;
@@ -818,6 +840,7 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
     workingQueue = getWorkingQueue(hypMap, refIt);
   }
 
+  rois_.clear();
   for(auto it = hypMap.begin(); it != hypMap.end(); it++)
   {
     for(int h = 0; h < it->second.size(); h++)
@@ -828,16 +851,236 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
       cv::Point2d center = it->second[h].center;
       outputs[2 * objID] = center.x;
       outputs[2 * objID + 1] = center.y;
-
-      // it->second[h].compute_width_height();
     
       std::cout << "Inliers: " << it->second[h].inliers;
       std::printf(" (Rate: %.1f\%)\n", it->second[h].getInlierRate() * 100);
       std::cout << "Center " << center << std::endl;
       std::cout << "---------------------------------------------------" << std::endl;
 
+      // roi (objID, x1, y1, x2, y2, rotation_x, rotation_y, rotation_z, translation_x, translation_y, translation_z)
+      // generate different pose hypotheses
+      it->second[h].compute_width_height();
+      int interval = 8;
+      for (int rx = 0; rx < interval; rx++)
+      {
+        for (int ry = 0; ry < interval; ry++)
+        {
+          for (int rz = 0; rz < interval; rz++)
+          {
+            cv::Vec<float, 11> roi;
+            roi(0) = objID;
+            // bounding box
+            roi(1) = std::max(center.x - it->second[h].width_ / 2, 0.0);
+            roi(2) = std::max(center.y - it->second[h].height_ / 2, 0.0);
+            roi(3) = std::min(center.x + it->second[h].width_ / 2, double(width));
+            roi(4) = std::min(center.y + it->second[h].height_ / 2, double(height));
+            // 6D pose
+            roi(5) = 2 * PI * rx / float(interval);
+            roi(6) = 2 * PI * ry / float(interval);
+            roi(7) = 2 * PI * rz / float(interval);
+            // backproject the center
+            roi(8) = (center.x - px) / fx;
+            roi(9) = (center.y - py) / fy;
+            roi(10) = 1.0;
+            rois_.push_back(roi);
+          }
+        }
+      }
+
     }
   }
+
+  int poseIterations = 100;
+  estimatePose_box(height, width, fx, fy, px, py, poseIterations);
+  visualizePose(height, width, fx, fy, px, py, 0.25, 6.0, gt_poses, num_gt);
+}
+
+
+// pose refinement using bounding box overlaps
+void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, float px, float py, int poseIterations)
+{
+  int num = rois_.size();
+
+  // camera matrix
+  cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
+  camMat(0, 0) = fx;
+  camMat(1, 1) = fy;
+  camMat(2, 2) = 1.f;
+  camMat(0, 2) = px;
+  camMat(1, 2) = py;
+
+  // for each pose hypothesis
+  for(int i = 0; i < num; i++)
+  {
+    cv::Vec<float, 11> roi = rois_[i];
+
+    // 2D bounding box
+    cv::Rect bb2D(roi(1), roi(2), roi(3) - roi(1), roi(4) - roi(2));
+
+    // 3D bounding box
+    int objID = int(roi(0));
+    std::vector<cv::Point3f> bb3D = bb3Ds_[objID-1];
+
+    // construct the data
+    DataForOpt data;
+    data.imageHeight = height;
+    data.imageWidth = width;
+    data.bb2D = bb2D;
+    data.bb3D = bb3D;
+    data.camMat = camMat;
+
+    // initialize pose
+    std::vector<double> vec(6);
+    vec[0] = roi(5);
+    vec[1] = roi(6);
+    vec[2] = roi(7);
+    vec[3] = roi(8);
+    vec[4] = roi(9);
+    vec[5] = roi(10);
+
+    // optimization
+    poseWithOpt(vec, data, poseIterations);
+
+    // update the pose hypothesis
+    roi(5) = vec[0];
+    roi(6) = vec[1];
+    roi(7) = vec[2];
+    roi(8) = vec[3];
+    roi(9) = vec[4];
+    roi(10) = vec[5];
+    rois_[i] = roi;
+  }
+}
+
+
+double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
+{
+  // set up optimization algorithm (gradient free)
+  nlopt::opt opt(nlopt::LN_NELDERMEAD, 6); 
+
+  // set optimization bounds 
+  double rotRange = 10;
+  rotRange *= PI / 180;
+  double tRangeXY = 0.1;
+  double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
+	
+  std::vector<double> lb(6);
+  lb[0] = vec[0]-rotRange; lb[1] = vec[1]-rotRange; lb[2] = vec[2]-rotRange;
+  lb[3] = vec[3]-tRangeXY; lb[4] = vec[4]-tRangeXY; lb[5] = vec[5]-tRangeZ;
+  opt.set_lower_bounds(lb);
+      
+  std::vector<double> ub(6);
+  ub[0] = vec[0]+rotRange; ub[1] = vec[1]+rotRange; ub[2] = vec[2]+rotRange;
+  ub[3] = vec[3]+tRangeXY; ub[4] = vec[4]+tRangeXY; ub[5] = vec[5]+tRangeZ;
+  opt.set_upper_bounds(ub);
+      
+  // configure NLopt
+  opt.set_min_objective(optEnergy, &data);
+  opt.set_maxeval(iterations);
+
+  // run optimization
+  double energy;
+  nlopt::result result = opt.optimize(vec, energy);
+
+  // std::cout << "IoU after optimization: " << -energy << std::endl;
+   
+  return energy;
+}
+
+
+void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt)
+{
+  if (setup_ == 0)
+    setup();
+
+  int num = rois_.size();
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
+
+  // find the closest poses hypthosis for each gt
+  std::vector<float> distances(num_gt, 1000000.0);
+  std::vector<Sophus::SE3f> poses(num_gt);
+  for (int i = 0; i < num_gt; i++)
+  {
+    for (int j = 0; j < num; j++)
+    {
+      cv::Vec<float, 11> roi = rois_[j];
+      if (int(roi[0]) != int(gt_poses[i * 8]))
+        continue;
+
+      // convert pose
+      cv::Vec<float, 3> rotation(roi[5], roi[6], roi[7]);
+      cv::Mat rmat;
+      cv::Rodrigues(rotation, rmat);
+      rmat = rmat.t();
+      Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
+
+      Eigen::Quaternionf quaternion(eigenT);
+      Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
+      const Sophus::SE3f T_co(quaternion, translation);
+
+      float distance = (gt_poses[i * 8 + 1] - quaternion.w()) * (gt_poses[i * 8 + 1] - quaternion.w()) 
+                     + (gt_poses[i * 8 + 2] - quaternion.x()) * (gt_poses[i * 8 + 2] - quaternion.x())
+                     + (gt_poses[i * 8 + 3] - quaternion.y()) * (gt_poses[i * 8 + 3] - quaternion.y())
+                     + (gt_poses[i * 8 + 4] - quaternion.z()) * (gt_poses[i * 8 + 4] - quaternion.z());
+
+      if (distance < distances[i])
+      {
+        distances[i] = distance;
+        poses[i] = T_co;
+      }
+
+    }
+  }
+
+  /*
+  for (int i = 0; i < num_gt; i++)
+  {
+    Eigen::Quaternionf quaternion(gt_poses[i * 8 + 1], gt_poses[i * 8 + 2], gt_poses[i * 8 + 3], gt_poses[i * 8 + 4]);
+    Sophus::SE3f::Point translation(gt_poses[i * 8 + 5], gt_poses[i * 8 + 6], gt_poses[i * 8 + 7]);
+    const Sophus::SE3f T_co(quaternion, translation);
+    poses[i] = T_co;
+    std::cout << i << " " << gt_poses[i * 8 + 1] << " " << gt_poses[i * 8 + 2] << " " << gt_poses[i * 8 + 3] << " " << gt_poses[i * 8 + 4] << std::endl;
+  }
+  */
+
+  // render color image
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  glEnable(GL_DEPTH_TEST);
+  glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+  for (int i = 0; i < num_gt; i++)
+  {
+
+    int class_id = int(gt_poses[i * 8]) - 1;
+
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+
+    Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
+    pangolin::OpenGlMatrix mvMatrix(mv);
+    mvMatrix.Load();
+
+    glEnable(GL_TEXTURE_2D);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    texturedTextures_[class_id].Bind();
+    texturedVertices_[class_id].Bind();
+    glVertexPointer(3,GL_FLOAT,0,0);
+    texturedCoords_[class_id].Bind();
+    glTexCoordPointer(2,GL_FLOAT,0,0);
+    texturedIndices_[class_id].Bind();
+    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+    texturedIndices_[class_id].Unbind();
+    texturedTextures_[class_id].Unbind();
+    texturedVertices_[class_id].Unbind();
+    texturedCoords_[class_id].Unbind();
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisable(GL_TEXTURE_2D);
+
+  }
+  pangolin::FinishFrame();
 }
 
 

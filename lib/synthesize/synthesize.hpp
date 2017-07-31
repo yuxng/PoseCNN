@@ -55,6 +55,15 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
                               {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
                               {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
 
+struct DataForOpt
+{
+  int imageWidth;
+  int imageHeight;
+  cv::Rect bb2D;
+  std::vector<cv::Point3f> bb3D;
+  cv::Mat_<float> camMat;
+};
+
 class Synthesizer
 {
  public:
@@ -76,7 +85,7 @@ class Synthesizer
 
   // hough voting
   void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
-                      float fx, float fy, float px, float py, float* outputs);
+                      float fx, float fy, float px, float py, float* outputs, float* gt_poses, int num_gt);
   inline void filterInliers2D(TransHyp& hyp, int maxInliers);
   inline void updateHyp2D(TransHyp& hyp, int maxPixels);
   inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
@@ -87,13 +96,26 @@ class Synthesizer
   void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
   void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 
+  // pose refinement with bounding box
+  void estimatePose_box(int height, int width, float fx, float fy, float px, float py, int poseIterations);
+  double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
+
+  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt);
+
  private:
   int counter_;
+  int setup_;
   std::string model_file_, pose_file_;
 
   // poses
   std::vector<float*> poses_;
   std::vector<int> pose_nums_;
+
+  // rois
+  std::vector<cv::Vec<float, 11> > rois_;
+
+  // 3D bounding boxes
+  std::vector<std::vector<cv::Point3f>> bb3Ds_;
 
   // 3D models
   std::vector<aiMesh*> assimpMeshes_;

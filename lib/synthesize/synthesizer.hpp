@@ -10,5 +10,5 @@ class Synthesizer
     float* vertex_targets, float* vertex_weights, float weight);
 
   void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
-    float fx, float fy, float px, float py, float* outputs);
+    float fx, float fy, float px, float py, float* outputs,  float* gt_poses, int num_gt);
 };

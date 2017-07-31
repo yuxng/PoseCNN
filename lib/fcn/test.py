@@ -627,7 +627,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     # show class label
     ax = fig.add_subplot(246)
     plt.imshow(im_labels)
-    ax.set_title('class labels')
+    ax.set_title('class labels')      
 
     if cfg.TEST.VERTEX_REG:
         # show centers
@@ -635,7 +635,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             cx = centers[i, 0]
             cy = centers[i, 1]
             if not np.isinf(cx) and not np.isinf(cy):
-                plt.plot(cx, cy, 'ro')          
+                plt.plot(cx, cy, 'ro') 
         
     # show vertex map
     ax = fig.add_subplot(247)
@@ -676,11 +676,19 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-    else:
-        # show depth
-        ax = fig.add_subplot(245)
-        plt.imshow(im_depth)
-        ax.set_title('input depth')
+
+    # show depth
+    ax = fig.add_subplot(245)
+    plt.imshow(im_depth)
+    ax.set_title('input depth')
+
+    if cfg.TEST.VERTEX_REG:
+        # show centers
+        for i in xrange(num_classes):
+            cx = centers[i, 0]
+            cy = centers[i, 1]
+            if not np.isinf(cx) and not np.isinf(cy):
+                plt.plot(cx, cy, 'ro')
 
     plt.show()
 
@@ -792,7 +800,19 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             fy = meta_data['intrinsic_matrix'][1, 1]
             px = meta_data['intrinsic_matrix'][0, 2]
             py = meta_data['intrinsic_matrix'][1, 2]
-            SYN.estimate_centers(labels, vertex_pred[0,:,:,:], imdb._extents, centers, imdb.num_classes, preemptive_batch, fx, fy, px, py)
+
+            # gt pose
+            poses = meta_data['poses']
+            num = poses.shape[2]
+            qt = np.zeros((num, 8), dtype=np.float32)
+            for j in xrange(num):
+                R = poses[:, :3, j]
+                T = poses[:, 3, j]
+                qt[j, 0] = meta_data['cls_indexes'][j]
+                qt[j, 1:5] = mat2quat(R)
+                qt[j, 5:] = T
+            SYN.estimate_centers(labels, vertex_pred[0,:,:,:], imdb._extents, centers, qt, num, imdb.num_classes, preemptive_batch, fx, fy, px, py)
+            print qt
 
         _t['im_segment'].toc()
 

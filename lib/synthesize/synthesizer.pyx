@@ -15,7 +15,7 @@ cdef extern from "synthesizer.hpp":
         Synthesizer(string, string) except +
         void setup()
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
-        void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*)
+        void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
 
 cdef class PySynthesizer:
     cdef Synthesizer *synthesizer     # hold a C++ instance which we're wrapping
@@ -44,6 +44,7 @@ cdef class PySynthesizer:
 
     def estimate_centers(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.float32_t, ndim=3] vertmap, \
                np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=2] centers, \
+               np.ndarray[np.float32_t, ndim=2] gt_poses, int num_gt, \
                int num_classes, int preemptive_batch,
                np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py):
 
@@ -51,4 +52,4 @@ cdef class PySynthesizer:
         cdef int width = labels.shape[1]
 
         return self.synthesizer.estimateCenter(<int *>labels.data, &vertmap[0, 0, 0], &extents[0, 0], \
-                                               height, width, num_classes, preemptive_batch, fx, fy, px, py, &centers[0, 0])
+                                               height, width, num_classes, preemptive_batch, fx, fy, px, py, &centers[0, 0], &gt_poses[0, 0], num_gt)

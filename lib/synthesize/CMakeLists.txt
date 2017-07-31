@@ -12,7 +12,7 @@ add_definitions(-Wall)
 add_definitions(-fPIC)
 #add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
-#include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
 
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
