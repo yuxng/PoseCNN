@@ -37,6 +37,9 @@
 #include "Hypothesis.h"
 #include "detection.h"
 #include "thread_rand.h"
+#include "iou.h"
+
+typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
 
 template <typename Derived>
 inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
@@ -57,11 +60,25 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
 
 struct DataForOpt
 {
+  int classID;
   int imageWidth;
   int imageHeight;
   cv::Rect bb2D;
   std::vector<cv::Point3f> bb3D;
   cv::Mat_<float> camMat;
+  const int* labelmap;
+
+  pangolin::OpenGlMatrixSpec projectionMatrix;
+  std::vector<Eigen::Matrix4f> transforms;
+  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers;
+  std::vector<pangolin::GlBuffer*> modelIndexBuffers;
+  df::GLRenderer<df::CanonicalVertRenderType>* renderer;
+  pangolin::View* view;
+
+  df::ManagedDeviceTensor2<int>* labels_device;
+  df::ManagedDeviceTensor2<int>* intersection_device;
+  df::ManagedDeviceTensor2<int>* union_device;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device;
 };
 
 class Synthesizer
@@ -97,7 +114,7 @@ class Synthesizer
   void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 
   // pose refinement with bounding box
-  void estimatePose_box(int height, int width, float fx, float fy, float px, float py, int poseIterations);
+  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, int poseIterations, float* outputs);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
 
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt);
@@ -112,7 +129,7 @@ class Synthesizer
   std::vector<int> pose_nums_;
 
   // rois
-  std::vector<cv::Vec<float, 11> > rois_;
+  std::vector<cv::Vec<float, 12> > rois_;
 
   // 3D bounding boxes
   std::vector<std::vector<cv::Point3f>> bb3Ds_;
@@ -132,4 +149,11 @@ class Synthesizer
   std::vector<pangolin::GlTexture> texturedTextures_;
 
   df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
+
+  // device tensors
+  df::ManagedDeviceTensor2<int>* labels_device_;
+  df::ManagedDeviceTensor2<int>* intersection_device_;
+  df::ManagedDeviceTensor2<int>* union_device_;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device_;
+
 };

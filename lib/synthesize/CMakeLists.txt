@@ -70,9 +70,11 @@ cuda_add_library(
   synthesize.cpp
   thread_rand.cpp
   Hypothesis.cpp
+  iou.cu
 )
 
 cuda_add_executable(synthesize
                     synthesize.cpp
                     thread_rand.cpp
-                    Hypothesis.cpp)
+                    Hypothesis.cpp
+                    iou.cu)

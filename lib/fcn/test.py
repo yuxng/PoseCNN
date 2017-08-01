@@ -634,8 +634,15 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         for i in xrange(num_classes):
             cx = centers[i, 0]
             cy = centers[i, 1]
+            w = centers[i, 2]
+            h = centers[i, 3]
             if not np.isinf(cx) and not np.isinf(cy):
-                plt.plot(cx, cy, 'ro') 
+                plt.plot(cx, cy, 'ro')
+
+                # show boxes
+                plt.gca().add_patch(
+                    plt.Rectangle((cx-w/2, cy-h/2), w, h, fill=False,
+                                   edgecolor='g', linewidth=3))
         
     # show vertex map
     ax = fig.add_subplot(247)
@@ -790,10 +797,15 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
         _t['im_segment'].tic()
         labels, probs, vertex_pred = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
+
+        labels = unpad_im(labels, 16)
+        # build the label image
+        im_label = imdb.labels_to_image(im, labels)
+
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
             # hough voting to compute object centers
-            centers = np.zeros((imdb.num_classes, 2), dtype=np.float32)
+            centers = np.zeros((imdb.num_classes, 4), dtype=np.float32)
             centers[:] = np.inf
             preemptive_batch = 200
             fx = meta_data['intrinsic_matrix'][0, 0]
@@ -811,19 +823,14 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 qt[j, 0] = meta_data['cls_indexes'][j]
                 qt[j, 1:5] = mat2quat(R)
                 qt[j, 5:] = T
+            # vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
             SYN.estimate_centers(labels, vertex_pred[0,:,:,:], imdb._extents, centers, qt, num, imdb.num_classes, preemptive_batch, fx, fy, px, py)
-            print qt
 
         _t['im_segment'].toc()
 
         _t['misc'].tic()
-        labels = unpad_im(labels, 16)
-        # build the label image
-        im_label = imdb.labels_to_image(im, labels)
-            
         seg = {'labels': labels}
         segmentations[i] = seg
-
         _t['misc'].toc()
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \

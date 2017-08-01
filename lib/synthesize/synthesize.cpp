@@ -22,34 +22,6 @@ void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap,
 
 }
 
-
-static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data)
-{
-  DataForOpt* dataForOpt = (DataForOpt*) data;
-
-  cv::Mat tvec(3, 1, CV_64F);
-  cv::Mat rvec(3, 1, CV_64F);
-      
-  for(int i = 0; i < 6; i++)
-  {
-    if(i > 2) 
-      tvec.at<double>(i-3, 0) = pose[i];
-    else 
-      rvec.at<double>(i, 0) = pose[i];
-  }
-	
-  jp::cv_trans_t trans(rvec, tvec);
-
-  // project the 3D bounding box according to the current pose
-  cv::Rect bb2D = getBB2D(dataForOpt->imageWidth, dataForOpt->imageHeight, dataForOpt->bb3D, dataForOpt->camMat, trans);
-
-  // compute IoU between boxes
-  float energy = -1 * getIoU(bb2D, dataForOpt->bb2D);
-
-  return energy;
-}
-
-
 Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 {
   model_file_ = model_file;
@@ -60,13 +32,21 @@ Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 
 void Synthesizer::setup()
 {
-  create_window(640.0, 480.0);
+  int width = 640;
+  int height = 480;
+  create_window(width, height);
 
   loadModels(model_file_);
   std::cout << "loaded models" << std::endl;
 
   loadPoses(pose_file_);
   std::cout << "loaded poses" << std::endl;
+
+  // create tensors
+  labels_device_ = new df::ManagedDeviceTensor2<int>({width, height});
+  intersection_device_ = new df::ManagedDeviceTensor2<int>({width, height});
+  union_device_ = new df::ManagedDeviceTensor2<int>({width, height});
+  vertex_map_device_ = new df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >({width, height});
 
   setup_ = 1;
 }
@@ -541,7 +521,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
 }
 
 // get label lists
-void Synthesizer::getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
+void Synthesizer::getLabels(const int* labelmap, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
 {
   for(int i = 0; i < num_classes; i++)
     labels.push_back( std::vector<int>() );
@@ -551,7 +531,7 @@ void Synthesizer::getLabels(const int* label_map, std::vector<std::vector<int>>&
   for(int x = 0; x < width; x++)
   for(int y = 0; y < height; y++)
   {
-    int label = label_map[y * width + x];
+    int label = labelmap[y * width + x];
     labels[label].push_back(y * width + x);
   }
 
@@ -569,6 +549,7 @@ void Synthesizer::getLabels(const int* label_map, std::vector<std::vector<int>>&
 void Synthesizer::getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes)
 {
   // for each object
+  bb3Ds.clear();
   for (int i = 1; i < num_classes; i++)
   {
     cv::Vec<float, 3> extent;
@@ -849,17 +830,19 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
 
       jp::id_t objID = it->second[h].objID;
       cv::Point2d center = it->second[h].center;
-      outputs[2 * objID] = center.x;
-      outputs[2 * objID + 1] = center.y;
+      it->second[h].compute_width_height();
+      outputs[4 * objID] = center.x;
+      outputs[4 * objID + 1] = center.y;
+      outputs[4 * objID + 2] = it->second[h].width_;
+      outputs[4 * objID + 3] = it->second[h].height_;
     
       std::cout << "Inliers: " << it->second[h].inliers;
       std::printf(" (Rate: %.1f\%)\n", it->second[h].getInlierRate() * 100);
       std::cout << "Center " << center << std::endl;
       std::cout << "---------------------------------------------------" << std::endl;
 
-      // roi (objID, x1, y1, x2, y2, rotation_x, rotation_y, rotation_z, translation_x, translation_y, translation_z)
+      // roi (objID, x1, y1, x2, y2, rotation_x, rotation_y, rotation_z, translation_x, translation_y, translation_z, score)
       // generate different pose hypotheses
-      it->second[h].compute_width_height();
       int interval = 8;
       for (int rx = 0; rx < interval; rx++)
       {
@@ -867,7 +850,7 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
         {
           for (int rz = 0; rz < interval; rz++)
           {
-            cv::Vec<float, 11> roi;
+            cv::Vec<float, 12> roi;
             roi(0) = objID;
             // bounding box
             roi(1) = std::max(center.x - it->second[h].width_ / 2, 0.0);
@@ -882,6 +865,8 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
             roi(8) = (center.x - px) / fx;
             roi(9) = (center.y - py) / fy;
             roi(10) = 1.0;
+            // score
+            roi(11) = -1.0;
             rois_.push_back(roi);
           }
         }
@@ -890,16 +875,110 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
     }
   }
 
-  int poseIterations = 100;
-  estimatePose_box(height, width, fx, fy, px, py, poseIterations);
+  int poseIterations = 10;
+  estimatePose(labelmap, height, width, fx, fy, px, py, 0.25, 6.0, poseIterations, outputs);
   visualizePose(height, width, fx, fy, px, py, 0.25, 6.0, gt_poses, num_gt);
+  usleep( 3000 * 1000 );
 }
 
 
-// pose refinement using bounding box overlaps
-void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, float px, float py, int poseIterations)
+static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data)
 {
-  int num = rois_.size();
+  DataForOpt* dataForOpt = (DataForOpt*) data;
+  // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << " " << pose[4] << " " << pose[5] << std::endl;
+
+  cv::Mat tvec(3, 1, CV_64F);
+  cv::Mat rvec(3, 1, CV_64F);
+      
+  for(int i = 0; i < 6; i++)
+  {
+    if(i > 2) 
+      tvec.at<double>(i-3, 0) = pose[i];
+    else 
+      rvec.at<double>(i, 0) = pose[i];
+  }
+	
+  jp::cv_trans_t trans(rvec, tvec);
+
+  // project the 3D bounding box according to the current pose
+  cv::Rect bb2D = getBB2D(dataForOpt->imageWidth, dataForOpt->imageHeight, dataForOpt->bb3D, dataForOpt->camMat, trans);
+
+  // project the 3D model to get the segmentation mask
+  // convert pose
+  cv::Vec<float, 3> rotation(pose[0], pose[1], pose[2]);
+  cv::Mat rmat;
+  cv::Rodrigues(rotation, rmat);
+  rmat = rmat.t();
+  Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
+
+  Eigen::Quaternionf quaternion(eigenT);
+  Sophus::SE3f::Point translation(pose[3], pose[4], pose[5]);
+  const Sophus::SE3f T_co(quaternion, translation);
+  dataForOpt->transforms.clear();
+  dataForOpt->transforms.push_back(T_co.matrix().cast<float>());
+
+  glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+  dataForOpt->renderer->setProjectionMatrix(dataForOpt->projectionMatrix);
+  dataForOpt->renderer->render(dataForOpt->attributeBuffers, dataForOpt->modelIndexBuffers, dataForOpt->transforms);
+
+  glColor3f(1, 1, 1);
+  dataForOpt->view->ActivateScissorAndClear();
+  dataForOpt->renderer->texture(0).RenderToViewportFlipY();
+
+  const pangolin::GlTextureCudaArray & vertTex = dataForOpt->renderer->texture(0);
+  pangolin::CudaScopedMappedArray scopedArray(vertTex);
+  cudaMemcpy2DFromArray(dataForOpt->vertex_map_device->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
+
+  // compute mask overlap
+  /*
+  int inter = 0;
+  int all = 0;
+  int x1 = std::round(std::min(bb2D.x, dataForOpt->bb2D.x));
+  int x2 = std::round(std::max(bb2D.x + bb2D.width, dataForOpt->bb2D.x + dataForOpt->bb2D.width));
+  int y1 = std::round(std::min(bb2D.y, dataForOpt->bb2D.y));
+  int y2 = std::round(std::max(bb2D.y + bb2D.height, dataForOpt->bb2D.y + dataForOpt->bb2D.height));
+  for (int x = x1; x <= x2; x++)
+  {
+    for (int y = y1; y <= y2; y++)
+    {
+      float vx = (*dataForOpt->vertex_map)(x, y)(0);
+      int label = std::round(vx) + 1;
+      int label_pred = dataForOpt->labelmap[y * dataForOpt->imageWidth + x];
+      if (label == dataForOpt->classID || label_pred == dataForOpt->classID)
+        all++;
+      if (label == dataForOpt->classID && label_pred == dataForOpt->classID)
+        inter++;
+    }
+  }
+  */
+  float IoU = iou(*dataForOpt->labels_device, *dataForOpt->intersection_device, *dataForOpt->union_device, *dataForOpt->vertex_map_device, dataForOpt->classID);
+  float energy = -1 * IoU;
+
+  return energy;
+}
+
+
+// pose refinement
+void Synthesizer::estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, int poseIterations, float* outputs)
+{
+  if (setup_ == 0)
+    setup();
+
+  // copy labels to device
+  df::ConstHostTensor2<int> labelImage({width, height}, labelmap);
+  labels_device_->copyFrom(labelImage);
+
+  DataForOpt data;
+  data.imageHeight = height;
+  data.imageWidth = width;
+  data.projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
+  data.labelmap = labelmap;
+  data.renderer = renderer_;
+  data.view = gtView_;
+  data.labels_device = labels_device_;
+  data.intersection_device = intersection_device_;
+  data.union_device = union_device_;
+  data.vertex_map_device = vertex_map_device_;
 
   // camera matrix
   cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
@@ -908,11 +987,15 @@ void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, fl
   camMat(2, 2) = 1.f;
   camMat(0, 2) = px;
   camMat(1, 2) = py;
+  data.camMat = camMat;
 
   // for each pose hypothesis
+  int num = rois_.size();
+  int id_prev = int(rois_[0](0));
+  float max_energy = -100;
   for(int i = 0; i < num; i++)
   {
-    cv::Vec<float, 11> roi = rois_[i];
+    cv::Vec<float, 12> roi = rois_[i];
 
     // 2D bounding box
     cv::Rect bb2D(roi(1), roi(2), roi(3) - roi(1), roi(4) - roi(2));
@@ -922,12 +1005,16 @@ void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, fl
     std::vector<cv::Point3f> bb3D = bb3Ds_[objID-1];
 
     // construct the data
-    DataForOpt data;
-    data.imageHeight = height;
-    data.imageWidth = width;
+    data.classID = objID;
     data.bb2D = bb2D;
     data.bb3D = bb3D;
-    data.camMat = camMat;
+    data.attributeBuffers.clear();
+    std::vector<pangolin::GlBuffer *> buffer;
+    buffer.push_back(&texturedVertices_[objID - 1]);
+    buffer.push_back(&canonicalVertices_[objID - 1]);
+    data.attributeBuffers.push_back(buffer);
+    data.modelIndexBuffers.clear();
+    data.modelIndexBuffers.push_back(&texturedIndices_[objID - 1]);
 
     // initialize pose
     std::vector<double> vec(6);
@@ -939,7 +1026,29 @@ void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, fl
     vec[5] = roi(10);
 
     // optimization
-    poseWithOpt(vec, data, poseIterations);
+    float energy = poseWithOpt(vec, data, poseIterations);
+
+    // convert pose to our format
+    cv::Mat tvec(3, 1, CV_64F);
+    cv::Mat rvec(3, 1, CV_64F);
+      
+    for(int i = 0; i < 6; i++)
+    {
+      if(i > 2) 
+        tvec.at<double>(i-3, 0) = vec[i];
+      else 
+        rvec.at<double>(i, 0) = vec[i];
+    }
+	
+    jp::cv_trans_t trans(rvec, tvec);
+    jp::jp_trans_t pose = jp::cv2our(trans);
+
+    // use the projected 3D box
+    cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
+    roi(1) = bb2D_proj.x;
+    roi(2) = bb2D_proj.y;
+    roi(3) = bb2D_proj.x + bb2D_proj.width;
+    roi(4) = bb2D_proj.y + bb2D_proj.height;
 
     // update the pose hypothesis
     roi(5) = vec[0];
@@ -948,7 +1057,30 @@ void Synthesizer::estimatePose_box(int height, int width, float fx, float fy, fl
     roi(8) = vec[3];
     roi(9) = vec[4];
     roi(10) = vec[5];
+    roi(11) = -energy;
     rois_[i] = roi;
+
+    if (id_prev == objID)
+    {
+      if(roi(11) > max_energy)
+      {
+        outputs[4 * objID] = (roi(1) + roi(3)) / 2;
+        outputs[4 * objID + 1] = (roi(2) + roi(4)) / 2;
+        outputs[4 * objID + 2] = roi(3) - roi(1);
+        outputs[4 * objID + 3] = roi(4) - roi(2);
+        max_energy = roi(11);
+      }
+    }
+    else
+    {
+      std::cout << "ID: " << id_prev << " score: " << max_energy << std::endl;
+      outputs[4 * objID] = (roi(1) + roi(3)) / 2;
+      outputs[4 * objID + 1] = (roi(2) + roi(4)) / 2;
+      outputs[4 * objID + 2] = roi(3) - roi(1);
+      outputs[4 * objID + 3] = roi(4) - roi(2);
+      max_energy = roi(11);
+    }
+    id_prev = objID;
   }
 }
 
@@ -959,9 +1091,9 @@ double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int 
   nlopt::opt opt(nlopt::LN_NELDERMEAD, 6); 
 
   // set optimization bounds 
-  double rotRange = 10;
+  double rotRange = 22.5;
   rotRange *= PI / 180;
-  double tRangeXY = 0.1;
+  double tRangeXY = 0.01;
   double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
 	
   std::vector<double> lb(6);
@@ -997,13 +1129,13 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
 
   // find the closest poses hypthosis for each gt
-  std::vector<float> distances(num_gt, 1000000.0);
+  std::vector<float> scores(num_gt, -100);
   std::vector<Sophus::SE3f> poses(num_gt);
   for (int i = 0; i < num_gt; i++)
   {
     for (int j = 0; j < num; j++)
     {
-      cv::Vec<float, 11> roi = rois_[j];
+      cv::Vec<float, 12> roi = rois_[j];
       if (int(roi[0]) != int(gt_poses[i * 8]))
         continue;
 
@@ -1018,18 +1150,14 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
       Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
       const Sophus::SE3f T_co(quaternion, translation);
 
-      float distance = (gt_poses[i * 8 + 1] - quaternion.w()) * (gt_poses[i * 8 + 1] - quaternion.w()) 
-                     + (gt_poses[i * 8 + 2] - quaternion.x()) * (gt_poses[i * 8 + 2] - quaternion.x())
-                     + (gt_poses[i * 8 + 3] - quaternion.y()) * (gt_poses[i * 8 + 3] - quaternion.y())
-                     + (gt_poses[i * 8 + 4] - quaternion.z()) * (gt_poses[i * 8 + 4] - quaternion.z());
-
-      if (distance < distances[i])
+      float score = roi[11];
+      if (score > scores[i])
       {
-        distances[i] = distance;
+        scores[i] = score;
         poses[i] = T_co;
       }
-
     }
+    std::cout << "ID: " << int(gt_poses[i * 8]) << " score: " << scores[i] << std::endl;
   }
 
   /*
@@ -1050,7 +1178,6 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
   for (int i = 0; i < num_gt; i++)
   {
-
     int class_id = int(gt_poses[i * 8]) - 1;
 
     glMatrixMode(GL_PROJECTION);
