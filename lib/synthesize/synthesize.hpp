@@ -18,6 +18,7 @@
 #include <Eigen/Core>
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
+#include <assimp/postprocess.h>
 #include <OpenEXR/half.h>
 
 #include <df/camera/camera.h>

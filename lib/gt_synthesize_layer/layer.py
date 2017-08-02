@@ -30,6 +30,7 @@ class GtSynthesizeLayer(object):
         self._name = name
         self._shuffle_roidb_inds()
         self._synthesizer = synthesizer.PySynthesizer(model_file, pose_file)
+        self._synthesizer.setup()
         self._write_background_images()
         self._read_camera_parameters()
 

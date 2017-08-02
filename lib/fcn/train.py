@@ -195,7 +195,7 @@ class SolverWrapper(object):
             self.snapshot(sess, iter)
 
 
-    def train_model_vertex_matching(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters):
+    def train_model_vertex_pose(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -204,10 +204,12 @@ class SolverWrapper(object):
 
         # intialize variables
         sess.run(tf.global_variables_initializer())
+        '''
         if self.pretrained_model is not None:
             print ('Loading pretrained model '
                    'weights from {:s}').format(self.pretrained_model)
             self.net.load(self.pretrained_model, sess, True)
+        '''
 
         if self.pretrained_ckpt is not None:
             print ('Loading pretrained ckpt '
@@ -216,18 +218,33 @@ class SolverWrapper(object):
 
         tf.get_default_graph().finalize()
 
+        if cfg.TRAIN.SINGLE_FRAME:
+            # data layer
+            if cfg.TRAIN.SYNTHESIZE:
+                data_layer = GtSynthesizeLayer(self.roidb, self.imdb.num_classes, self.imdb._extents, self.imdb.cache_path, self.imdb.name, cfg.CAD, cfg.POSE)
+            else:
+                data_layer = GtSingleDataLayer(self.roidb, self.imdb.num_classes, self.imdb._extents)
+        else:
+            # data layer
+            data_layer = GtDataLayer(self.roidb, self.imdb.num_classes)
+
         # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 
         last_snapshot_iter = -1
         timer = Timer()
         for iter in range(max_iters):
             timer.tic()
-            loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, loss_matching_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, train_op])
+            feed_dict = load_and_enqueue_one(sess, self.net, data_layer)
+            timer.toc()
+            time_data = timer.diff
+
+            timer.tic()
+            loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, loss_pose, learning_rate, train_op] ,feed_dict=feed_dict)
             # train_writer.add_summary(summary, iter)
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, loss_pose: %.4f, loss_match: %.4f, lr: %.8f,  time: %.2f' %\
-                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, loss_matching_value, lr, timer.diff)
+            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, loss_pose: %.4f, lr: %.8f,  time: %.2f, time data: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, loss_pose_value, lr, timer.diff, time_data)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -407,12 +424,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     pose_targets = network.get_output('poses_target')
                     pose_weights = network.get_output('poses_weight')
                     loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
-
-                    if cfg.TRAIN.MATCHING:
-                        loss_matching = network.get_output('matching_loss')[0]
-                        loss = loss_cls + loss_vertex + loss_pose + loss_matching
-                    else:
-                        loss = loss_cls + loss_vertex + loss_pose
+                    loss = loss_cls + loss_vertex + loss_pose
                 else:
                     loss = loss_cls + loss_vertex
             else:
@@ -433,11 +445,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
-    #config = tf.ConfigProto()
-    #config.gpu_options.per_process_gpu_memory_fraction = 0.95
-    #config.gpu_options.allow_growth = True
-    #with tf.Session(config=config) as sess:
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+    config = tf.ConfigProto()
+    #config.gpu_options.per_process_gpu_memory_fraction = 0.85
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
+    #with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
         sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
 
@@ -463,8 +475,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
-            if cfg.TRAIN.MATCHING:
-                sw.train_model_vertex_matching(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, loss_matching, learning_rate, max_iters)
+            if cfg.TRAIN.POSE_REG:
+                sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
             else:
                 sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters)
         else:

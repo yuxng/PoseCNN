@@ -22,7 +22,8 @@ from transforms3d.quaternions import mat2quat
 def get_minibatch(roidb, extents, synthesizer, num_classes, backgrounds, intrinsic_matrix):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
-    is_syn = [1, 0]
+    if num_images == 2:
+        is_syn = [1, 0]
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))

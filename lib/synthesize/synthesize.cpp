@@ -160,7 +160,7 @@ void Synthesizer::loadModels(const std::string filename)
 
 aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & texture_name)
 {
-    const struct aiScene * scene = aiImportFile(filename.c_str(),0); //aiProcess_JoinIdenticalVertices);
+    const struct aiScene * scene = aiImportFile(filename.c_str(), aiProcess_JoinIdenticalVertices);
     if (scene == 0) {
         throw std::runtime_error("error: " + std::string(aiGetErrorString()));
     }
@@ -178,25 +178,25 @@ aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & 
     std::cout << scene->mNumMaterials << " materials" << std::endl;
 
     std::string textureName = filename.substr(0,filename.find_last_of('/')+1);
-    for (int i = 0; i < scene->mNumMaterials; ++i) {
+    for (int i = 0; i < scene->mNumMaterials; ++i) 
+    {
         aiMaterial * material = scene->mMaterials[i];
         std::cout << "diffuse: " << material->GetTextureCount(aiTextureType_DIFFUSE) << std::endl;
         std::cout << "specular: " << material->GetTextureCount(aiTextureType_SPECULAR) << std::endl;
         std::cout << "ambient: " << material->GetTextureCount(aiTextureType_AMBIENT) << std::endl;
         std::cout << "shininess: " << material->GetTextureCount(aiTextureType_SHININESS) << std::endl;
 
-        if (material->GetTextureCount(aiTextureType_DIFFUSE)) {
-
+        if (material->GetTextureCount(aiTextureType_DIFFUSE)) 
+        {
             aiString path;
             material->GetTexture(aiTextureType_DIFFUSE,0,&path);
-
             textureName = textureName + std::string(path.C_Str());
-
         }
-
     }
 
     aiMesh * assimpMesh = scene->mMeshes[0];
+    std::cout << "number of vertices: " << assimpMesh->mNumVertices << std::endl;
+    std::cout << "number of faces: " << assimpMesh->mNumFaces << std::endl;
 
     if (!assimpMesh->HasTextureCoords(0)) {
         throw std::runtime_error("mesh does not have texture coordinates");
@@ -210,8 +210,8 @@ aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & 
 void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
   pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
 {
-    // std::cout << "loading vertices..." << std::endl;
-    // std::cout << assimpMesh->mNumVertices << std::endl;
+    std::cout << "number of vertices: " << assimpMesh->mNumVertices << std::endl;
+    std::cout << "number of faces: " << assimpMesh->mNumFaces << std::endl;
     vertices.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
     vertices.Upload(assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float)*3);
 
