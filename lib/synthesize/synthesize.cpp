@@ -22,6 +22,8 @@ void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap,
 
 }
 
+bool compareROI (cv::Vec<float, 12> roi_a, cv::Vec<float, 12> roi_b) { return (roi_a(11) > roi_b(11)); }
+
 Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 {
   model_file_ = model_file;
@@ -822,6 +824,7 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
   }
 
   rois_.clear();
+  int count = 0;
   for(auto it = hypMap.begin(); it != hypMap.end(); it++)
   {
     for(int h = 0; h < it->second.size(); h++)
@@ -843,6 +846,8 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
 
       // roi (objID, x1, y1, x2, y2, rotation_x, rotation_y, rotation_z, translation_x, translation_y, translation_z, score)
       // generate different pose hypotheses
+      std::vector<cv::Vec<float, 12> > poses;
+      rois_.push_back(poses);
       int interval = 8;
       for (int rx = 0; rx < interval; rx++)
       {
@@ -867,15 +872,15 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
             roi(10) = 1.0;
             // score
             roi(11) = -1.0;
-            rois_.push_back(roi);
+            rois_[count].push_back(roi);
           }
         }
       }
-
+      count++;
     }
   }
 
-  int poseIterations = 10;
+  int poseIterations = 20;
   estimatePose(labelmap, height, width, fx, fy, px, py, 0.25, 6.0, poseIterations, outputs);
   visualizePose(height, width, fx, fy, px, py, 0.25, 6.0, gt_poses, num_gt);
   usleep( 3000 * 1000 );
@@ -886,22 +891,6 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
 {
   DataForOpt* dataForOpt = (DataForOpt*) data;
   // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << " " << pose[4] << " " << pose[5] << std::endl;
-
-  cv::Mat tvec(3, 1, CV_64F);
-  cv::Mat rvec(3, 1, CV_64F);
-      
-  for(int i = 0; i < 6; i++)
-  {
-    if(i > 2) 
-      tvec.at<double>(i-3, 0) = pose[i];
-    else 
-      rvec.at<double>(i, 0) = pose[i];
-  }
-	
-  jp::cv_trans_t trans(rvec, tvec);
-
-  // project the 3D bounding box according to the current pose
-  cv::Rect bb2D = getBB2D(dataForOpt->imageWidth, dataForOpt->imageHeight, dataForOpt->bb3D, dataForOpt->camMat, trans);
 
   // project the 3D model to get the segmentation mask
   // convert pose
@@ -929,28 +918,6 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   pangolin::CudaScopedMappedArray scopedArray(vertTex);
   cudaMemcpy2DFromArray(dataForOpt->vertex_map_device->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
 
-  // compute mask overlap
-  /*
-  int inter = 0;
-  int all = 0;
-  int x1 = std::round(std::min(bb2D.x, dataForOpt->bb2D.x));
-  int x2 = std::round(std::max(bb2D.x + bb2D.width, dataForOpt->bb2D.x + dataForOpt->bb2D.width));
-  int y1 = std::round(std::min(bb2D.y, dataForOpt->bb2D.y));
-  int y2 = std::round(std::max(bb2D.y + bb2D.height, dataForOpt->bb2D.y + dataForOpt->bb2D.height));
-  for (int x = x1; x <= x2; x++)
-  {
-    for (int y = y1; y <= y2; y++)
-    {
-      float vx = (*dataForOpt->vertex_map)(x, y)(0);
-      int label = std::round(vx) + 1;
-      int label_pred = dataForOpt->labelmap[y * dataForOpt->imageWidth + x];
-      if (label == dataForOpt->classID || label_pred == dataForOpt->classID)
-        all++;
-      if (label == dataForOpt->classID && label_pred == dataForOpt->classID)
-        inter++;
-    }
-  }
-  */
   float IoU = iou(*dataForOpt->labels_device, *dataForOpt->intersection_device, *dataForOpt->union_device, *dataForOpt->vertex_map_device, dataForOpt->classID);
   float energy = -1 * IoU;
 
@@ -989,79 +956,83 @@ void Synthesizer::estimatePose(const int* labelmap, int height, int width, float
   camMat(1, 2) = py;
   data.camMat = camMat;
 
-  // for each pose hypothesis
+  // for each object
   int num = rois_.size();
-  int id_prev = int(rois_[0](0));
-  float max_energy = -100;
   for(int i = 0; i < num; i++)
   {
-    cv::Vec<float, 12> roi = rois_[i];
+    // for each pose hypothesis
+    float max_energy = -100;
+    for (int j = 0; j < rois_[i].size(); j++)
+    {
+      cv::Vec<float, 12> roi = rois_[i][j];
 
-    // 2D bounding box
-    cv::Rect bb2D(roi(1), roi(2), roi(3) - roi(1), roi(4) - roi(2));
+      // 2D bounding box
+      cv::Rect bb2D(roi(1), roi(2), roi(3) - roi(1), roi(4) - roi(2));
 
-    // 3D bounding box
-    int objID = int(roi(0));
-    std::vector<cv::Point3f> bb3D = bb3Ds_[objID-1];
+      // 3D bounding box
+      int objID = int(roi(0));
+      std::vector<cv::Point3f> bb3D = bb3Ds_[objID-1];
 
-    // construct the data
-    data.classID = objID;
-    data.bb2D = bb2D;
-    data.bb3D = bb3D;
-    data.attributeBuffers.clear();
-    std::vector<pangolin::GlBuffer *> buffer;
-    buffer.push_back(&texturedVertices_[objID - 1]);
-    buffer.push_back(&canonicalVertices_[objID - 1]);
-    data.attributeBuffers.push_back(buffer);
-    data.modelIndexBuffers.clear();
-    data.modelIndexBuffers.push_back(&texturedIndices_[objID - 1]);
+      // construct the data
+      data.classID = objID;
+      data.bb2D = bb2D;
+      data.bb3D = bb3D;
+      data.attributeBuffers.clear();
+      std::vector<pangolin::GlBuffer *> buffer;
+      buffer.push_back(&texturedVertices_[objID - 1]);
+      buffer.push_back(&canonicalVertices_[objID - 1]);
+      data.attributeBuffers.push_back(buffer);
+      data.modelIndexBuffers.clear();
+      data.modelIndexBuffers.push_back(&texturedIndices_[objID - 1]);
 
-    // initialize pose
-    std::vector<double> vec(6);
-    vec[0] = roi(5);
-    vec[1] = roi(6);
-    vec[2] = roi(7);
-    vec[3] = roi(8);
-    vec[4] = roi(9);
-    vec[5] = roi(10);
+      // initialize pose
+      std::vector<double> vec(6);
+      vec[0] = roi(5);
+      vec[1] = roi(6);
+      vec[2] = roi(7);
+      vec[3] = roi(8);
+      vec[4] = roi(9);
+      vec[5] = roi(10);
 
-    // optimization
-    float energy = poseWithOpt(vec, data, poseIterations);
+      // optimization
+      // clock_t start = clock();    
+      float energy = poseWithOpt(vec, data, poseIterations);
+      // clock_t stop = clock();    
+      // double elapsed = (double)(stop - start) / CLOCKS_PER_SEC;
+      // printf("Time elapsed in s: %f\n", elapsed);
 
-    // convert pose to our format
-    cv::Mat tvec(3, 1, CV_64F);
-    cv::Mat rvec(3, 1, CV_64F);
+      // convert pose to our format
+      cv::Mat tvec(3, 1, CV_64F);
+      cv::Mat rvec(3, 1, CV_64F);
       
-    for(int i = 0; i < 6; i++)
-    {
-      if(i > 2) 
-        tvec.at<double>(i-3, 0) = vec[i];
-      else 
-        rvec.at<double>(i, 0) = vec[i];
-    }
+      for(int k = 0; k < 6; k++)
+      {
+        if(k > 2) 
+          tvec.at<double>(k-3, 0) = vec[k];
+        else 
+          rvec.at<double>(k, 0) = vec[k];
+      }
 	
-    jp::cv_trans_t trans(rvec, tvec);
-    jp::jp_trans_t pose = jp::cv2our(trans);
+      jp::cv_trans_t trans(rvec, tvec);
+      jp::jp_trans_t pose = jp::cv2our(trans);
 
-    // use the projected 3D box
-    cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
-    roi(1) = bb2D_proj.x;
-    roi(2) = bb2D_proj.y;
-    roi(3) = bb2D_proj.x + bb2D_proj.width;
-    roi(4) = bb2D_proj.y + bb2D_proj.height;
+      // use the projected 3D box
+      cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
+      roi(1) = bb2D_proj.x;
+      roi(2) = bb2D_proj.y;
+      roi(3) = bb2D_proj.x + bb2D_proj.width;
+      roi(4) = bb2D_proj.y + bb2D_proj.height;
 
-    // update the pose hypothesis
-    roi(5) = vec[0];
-    roi(6) = vec[1];
-    roi(7) = vec[2];
-    roi(8) = vec[3];
-    roi(9) = vec[4];
-    roi(10) = vec[5];
-    roi(11) = -energy;
-    rois_[i] = roi;
+      // update the pose hypothesis
+      roi(5) = vec[0];
+      roi(6) = vec[1];
+      roi(7) = vec[2];
+      roi(8) = vec[3];
+      roi(9) = vec[4];
+      roi(10) = vec[5];
+      roi(11) = -energy;
+      rois_[i][j] = roi;
 
-    if (id_prev == objID)
-    {
       if(roi(11) > max_energy)
       {
         outputs[4 * objID] = (roi(1) + roi(3)) / 2;
@@ -1071,16 +1042,9 @@ void Synthesizer::estimatePose(const int* labelmap, int height, int width, float
         max_energy = roi(11);
       }
     }
-    else
-    {
-      std::cout << "ID: " << id_prev << " score: " << max_energy << std::endl;
-      outputs[4 * objID] = (roi(1) + roi(3)) / 2;
-      outputs[4 * objID + 1] = (roi(2) + roi(4)) / 2;
-      outputs[4 * objID + 2] = roi(3) - roi(1);
-      outputs[4 * objID + 3] = roi(4) - roi(2);
-      max_energy = roi(11);
-    }
-    id_prev = objID;
+
+    // sort the pose hypotheses
+    std::sort(rois_[i].begin(), rois_[i].end(), compareROI);
   }
 }
 
@@ -1129,13 +1093,13 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
 
   // find the closest poses hypthosis for each gt
-  std::vector<float> scores(num_gt, -100);
+  /*
   std::vector<Sophus::SE3f> poses(num_gt);
   for (int i = 0; i < num_gt; i++)
   {
     for (int j = 0; j < num; j++)
     {
-      cv::Vec<float, 12> roi = rois_[j];
+      cv::Vec<float, 12> roi = rois_[j][0];
       if (int(roi[0]) != int(gt_poses[i * 8]))
         continue;
 
@@ -1149,17 +1113,11 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
       Eigen::Quaternionf quaternion(eigenT);
       Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
       const Sophus::SE3f T_co(quaternion, translation);
-
-      float score = roi[11];
-      if (score > scores[i])
-      {
-        scores[i] = score;
-        poses[i] = T_co;
-      }
+      poses[i] = T_co;
+      std::cout << "ID: " << int(gt_poses[i * 8]) << " score: " << roi(11) << std::endl;
     }
-    std::cout << "ID: " << int(gt_poses[i * 8]) << " score: " << scores[i] << std::endl;
   }
-
+  */
   /*
   for (int i = 0; i < num_gt; i++)
   {
@@ -1172,42 +1130,64 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
   */
 
   // render color image
-  glColor3ub(255,255,255);
-  gtView_->ActivateScissorAndClear();
   glEnable(GL_DEPTH_TEST);
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-  for (int i = 0; i < num_gt; i++)
+  for (int i = 0; i < num; i++)
   {
-    int class_id = int(gt_poses[i * 8]) - 1;
+    for (int j = 0; j < 20; j++)
+    {
+      glColor3ub(255,255,255);
+      gtView_->ActivateScissorAndClear();
 
-    glMatrixMode(GL_PROJECTION);
-    projectionMatrix.Load();
-    glMatrixMode(GL_MODELVIEW);
+      cv::Vec<float, 12> roi = rois_[i][j];
 
-    Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
-    pangolin::OpenGlMatrix mvMatrix(mv);
-    mvMatrix.Load();
+      // convert pose
+      cv::Vec<float, 3> rotation(roi[5], roi[6], roi[7]);
+      cv::Mat rmat;
+      cv::Rodrigues(rotation, rmat);
+      rmat = rmat.t();
+      Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
 
-    glEnable(GL_TEXTURE_2D);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_[class_id].Bind();
-    texturedVertices_[class_id].Bind();
-    glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_[class_id].Bind();
-    glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_[class_id].Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_[class_id].Unbind();
-    texturedTextures_[class_id].Unbind();
-    texturedVertices_[class_id].Unbind();
-    texturedCoords_[class_id].Unbind();
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisable(GL_TEXTURE_2D);
+      Eigen::Quaternionf quaternion(eigenT);
+      Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
+      const Sophus::SE3f T_co(quaternion, translation);
 
+      int class_id = int(roi[0]) - 1;
+
+      glMatrixMode(GL_PROJECTION);
+      projectionMatrix.Load();
+      glMatrixMode(GL_MODELVIEW);
+
+      Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+      pangolin::OpenGlMatrix mvMatrix(mv);
+      mvMatrix.Load();
+
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+
+      {
+        std::string filename = std::to_string(counter_++);
+        pangolin::SaveWindowOnRender(filename);
+      }
+
+      pangolin::FinishFrame();
+    }
   }
-  pangolin::FinishFrame();
 }
 
 

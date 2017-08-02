@@ -129,7 +129,7 @@ class Synthesizer
   std::vector<int> pose_nums_;
 
   // rois
-  std::vector<cv::Vec<float, 12> > rois_;
+  std::vector<std::vector<cv::Vec<float, 12> > > rois_;
 
   // 3D bounding boxes
   std::vector<std::vector<cv::Point3f>> bb3Ds_;

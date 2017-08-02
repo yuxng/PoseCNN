@@ -51,4 +51,5 @@ float iou(const DeviceTensor2<int> & labelMap, DeviceTensor2<int> & interMap, De
   return inter_value / union_value;
 }
 
+
 }
