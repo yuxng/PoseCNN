@@ -191,13 +191,8 @@ class vgg16_convs(Network):
                 # mask the features
                 (self.feed('pool_tile', 'pool_score')
                      .multiply(name='pool')
-                     .fc(256, height=8, width=8, channel=self.num_units, name='fc6')
+                     .fc(128, height=8, width=8, channel=self.num_units, name='fc6')
                      .dropout(self.keep_prob, name='drop6')
-                     .fc(256, num_in=256, name='fc7')
+                     .fc(128, num_in=128, name='fc7')
                      .dropout(self.keep_prob, name='drop7')
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
-
-                # matching loss
-                if self.matching:
-                    (self.feed('poses_pred', 'poses_init', 'poses', 'data', 'rois', 'label_2d', 'meta_data')
-                         .matching_loss(self.filename_model, name='matching_loss'))

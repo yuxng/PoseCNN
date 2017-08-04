@@ -15,8 +15,11 @@
 #include <pangolin/pangolin.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/opencv_modules.hpp>
-
 #include <Eigen/Core>
+#include <assimp/cimport.h>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include <OpenEXR/half.h>
 
 #include <df/camera/camera.h>
 #include <df/camera/linear.h>
@@ -30,9 +33,14 @@
 #include <df/util/pangolinHelpers.h>
 #include <df/util/tensor.h>
 
-#include <assimp/cimport.h>
-#include <assimp/scene.h>
-#include <OpenEXR/half.h>
+#include "types.h"
+#include "ransac.h"
+#include "Hypothesis.h"
+#include "detection.h"
+#include "thread_rand.h"
+#include "iou.h"
+
+typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
 
 template <typename Derived>
 inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
@@ -51,14 +59,37 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
                               {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
                               {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
 
+struct DataForOpt
+{
+  int classID;
+  int imageWidth;
+  int imageHeight;
+  cv::Rect bb2D;
+  std::vector<cv::Point3f> bb3D;
+  cv::Mat_<float> camMat;
+  const int* labelmap;
+
+  pangolin::OpenGlMatrixSpec projectionMatrix;
+  std::vector<Eigen::Matrix4f> transforms;
+  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers;
+  std::vector<pangolin::GlBuffer*> modelIndexBuffers;
+  df::GLRenderer<df::CanonicalVertRenderType>* renderer;
+  pangolin::View* view;
+
+  df::ManagedDeviceTensor2<int>* labels_device;
+  df::ManagedDeviceTensor2<int>* intersection_device;
+  df::ManagedDeviceTensor2<int>* union_device;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device;
+};
+
 class Synthesizer
 {
  public:
 
-  Synthesizer() {};
   Synthesizer(std::string model_file, std::string pose_file);
   ~Synthesizer();
 
+  void setup();
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
@@ -70,16 +101,42 @@ class Synthesizer
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
     pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
 
+  // hough voting
+  void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
+                      float fx, float fy, float px, float py, float* outputs, float* gt_poses, int num_gt);
+  inline void filterInliers2D(TransHyp& hyp, int maxInliers);
+  inline void updateHyp2D(TransHyp& hyp, int maxPixels);
+  inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
+  inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
+  std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
+  inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
+  inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
+  void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
+  void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
+
+  // pose refinement with bounding box
+  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, int poseIterations, float* outputs);
+  double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
+
+  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt);
+
  private:
   int counter_;
+  int setup_;
+  std::string model_file_, pose_file_;
 
   // poses
   std::vector<float*> poses_;
   std::vector<int> pose_nums_;
 
+  // rois
+  std::vector<std::vector<cv::Vec<float, 12> > > rois_;
+
+  // 3D bounding boxes
+  std::vector<std::vector<cv::Point3f>> bb3Ds_;
+
   // 3D models
   std::vector<aiMesh*> assimpMeshes_;
-  std::vector<std::string> texture_names_;
 
   // pangoline views
   pangolin::View* gtView_;
@@ -92,4 +149,11 @@ class Synthesizer
   std::vector<pangolin::GlTexture> texturedTextures_;
 
   df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
+
+  // device tensors
+  df::ManagedDeviceTensor2<int>* labels_device_;
+  df::ManagedDeviceTensor2<int>* intersection_device_;
+  df::ManagedDeviceTensor2<int>* union_device_;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device_;
+
 };

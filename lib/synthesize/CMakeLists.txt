@@ -12,7 +12,7 @@ add_definitions(-Wall)
 add_definitions(-fPIC)
 #add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
-#include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
 
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
@@ -69,8 +69,12 @@ cuda_add_library(
   SHARED
   synthesize.cpp
   thread_rand.cpp
+  Hypothesis.cpp
+  iou.cu
 )
 
 cuda_add_executable(synthesize
                     synthesize.cpp
-                    thread_rand.cpp)
+                    thread_rand.cpp
+                    Hypothesis.cpp
+                    iou.cu)
