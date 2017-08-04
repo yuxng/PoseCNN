@@ -155,7 +155,12 @@ ext_modules = [
         sources=['synthesize/synthesizer.pyx'],
         language='c++',
         extra_objects=["synthesize/build/libsynthesizer.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function"]}
+        extra_compile_args={'gcc': ["-Wno-unused-function"],
+                            'nvcc': ['-arch=sm_35',
+                                     '--ptxas-options=-v',
+                                     '-c',
+                                     '--compiler-options',
+                                     "'-fPIC'"]}
     )
 ]
 

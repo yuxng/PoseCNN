@@ -266,11 +266,11 @@ def _get_label_blob(roidb, roidb_syn, intrinsic_matrix, num_classes, is_syn):
 
                 poses = roidb_syn[i]['poses']
                 class_indexes = roidb_syn[i]['class_indexes']
-                num = len(np.where(class_indexes > 0)[0])
+                num = len(np.where(class_indexes >= 0)[0])
                 qt = np.zeros((num, 13), dtype=np.float32)
                 for j in xrange(num):
                     qt[j, 0] = i
-                    qt[j, 1] = class_indexes[j]
+                    qt[j, 1] = class_indexes[j] + 1
                     qt[j, 2:6] = 0  # fill boxes later
                     qt[j, 6:] = poses[j, :]
             else:

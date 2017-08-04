@@ -137,7 +137,6 @@ class Synthesizer
 
   // 3D models
   std::vector<aiMesh*> assimpMeshes_;
-  std::vector<std::string> texture_names_;
 
   // pangoline views
   pangolin::View* gtView_;

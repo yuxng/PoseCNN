@@ -61,7 +61,7 @@ Synthesizer::~Synthesizer()
 // create window
 void Synthesizer::create_window(int width, int height)
 {
-  pangolin::CreateWindowAndBind("Synthesizer", 640, 480);
+  pangolin::CreateWindowAndBind("Synthesizer", width, height);
 
   gtView_ = &pangolin::Display("gt").SetAspect(640.0/480.);
 
@@ -127,6 +127,7 @@ void Synthesizer::loadModels(const std::string filename)
 {
   std::ifstream stream(filename);
   std::vector<std::string> model_names;
+  std::vector<std::string> texture_names;
   std::string name;
 
   while ( std::getline (stream, name) )
@@ -139,12 +140,12 @@ void Synthesizer::loadModels(const std::string filename)
   // load meshes
   const int num_models = model_names.size();
   assimpMeshes_.resize(num_models);
-  texture_names_.resize(num_models);
+  texture_names.resize(num_models);
 
   for (int m = 0; m < num_models; ++m)
   {
-    assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names_[m]);
-    std::cout << texture_names_[m] << std::endl;
+    assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names[m]);
+    std::cout << texture_names[m] << std::endl;
   }
 
   // buffers
@@ -155,7 +156,7 @@ void Synthesizer::loadModels(const std::string filename)
   texturedTextures_.resize(num_models);
 
   for (int m = 0; m < num_models; m++)
-    initializeBuffers(m, assimpMeshes_[m], texture_names_[m], texturedVertices_[m], canonicalVertices_[m], texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], true);
+    initializeBuffers(m, assimpMeshes_[m], texture_names[m], texturedVertices_[m], canonicalVertices_[m], texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], true);
 }
 
 aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & texture_name)
