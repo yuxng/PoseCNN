@@ -176,7 +176,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         else:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
-    # sess.run(net.enqueue_op, feed_dict=feed_dict)
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
 
     if cfg.NETWORK == 'FCN8VGG':
         labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
@@ -185,14 +185,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             if cfg.TEST.POSE_REG:
                 labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
-                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_pred')], feed_dict=feed_dict)
+                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_pred')])
                 # combine poses
                 num = rois.shape[0]
                 poses = poses_init
                 for i in xrange(num):
                     class_id = int(rois[i, 1])
                     poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
-                print poses
 
                 # average rois
                 n = 9
@@ -200,14 +199,15 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 poses_new = np.zeros((num/n, 7), dtype=np.float32);
                 for i in xrange(num/n):
                     rois_new[i, :] = np.mean(rois[n*i:n*(i+1), :], axis=0)
-                    poses_new[i, :] = np.mean(poses[n*i:n*(i+1), :], axis=0)
+                    # poses_new[i, :] = np.mean(poses[n*i:n*(i+1), :], axis=0)
+                    poses_new[i, :] = poses[n*i, :]
             else:
                 labels_2d, probs, vertex_pred = \
-                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')], feed_dict=feed_dict)
+                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')])
                 rois_new = []
                 poses_new = []
         else:
-            labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')], feed_dict=feed_dict)
+            labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
             rois_new = []
             poses_new = []
@@ -657,7 +657,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     ax.set_title('centers y')
 
     # show projection of the poses
-    if cfg.TEST.POSE_REG:
+    if cfg.TEST.POSE_REG and not cfg.TEST.SYNTHETIC:
         ax = fig.add_subplot(245, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
@@ -723,7 +723,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         return
 
     """Test a FCN on an image database."""
-    num_images = len(imdb.image_index)
+    if cfg.TEST.SYNTHETIC:
+        num_images = cfg.TRAIN.SYNNUM
+    else:
+        num_images = len(imdb.image_index)
     segmentations = [[] for _ in xrange(num_images)]
 
     # timers
@@ -747,8 +750,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         perm = xrange(num_images)
 
     if cfg.TEST.SYNTHETIC:
-        SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
-        SYN.setup()
+        perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
 
         cache_file = cfg.BACKGROUND
         if os.path.exists(cache_file):
@@ -758,20 +760,40 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     for i in perm:
 
-        # load meta data
-        meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-
         if cfg.TEST.SYNTHETIC:
-            roidb_syn = _render_synthetic_image(SYN, imdb.num_classes, backgrounds, meta_data['intrinsic_matrix'])
-            im = pad_im(roidb_syn['image'], 16)
-            im_depth = pad_im(roidb_syn['depth'], 16)
-            labels_gt = pad_im(roidb_syn['label'], 16)
-            im_label_gt = imdb.labels_to_image(im, labels_gt)
+            # rgba
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(i)
+            rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
-            class_indexes = roidb_syn['class_indexes']
-            index = np.where(class_indexes >= 0)[0]
-            meta_data['cls_indexes'] = class_indexes[index] + 1
-            meta_data['center'] = roidb_syn['centers'][class_indexes[index].astype(int), :]
+            # sample a background image
+            ind = np.random.randint(len(backgrounds), size=1)[0]
+            filename = backgrounds[ind]
+            background = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
+            # add background
+            im = np.copy(rgba[:,:,:3])
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = background[I[0], I[1], :]
+
+            # depth
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
+            im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
+            # label
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(i)
+            labels_gt = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+            if len(labels_gt.shape) == 2:
+                im_label_gt = imdb.labels_to_image(im, labels_gt)
+            else:
+                im_label_gt = np.copy(labels_gt[:,:,:3])
+                im_label_gt[:,:,0] = labels_gt[:,:,2]
+                im_label_gt[:,:,2] = labels_gt[:,:,0]
+
+            # meta data
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(i)
+            meta_data = scipy.io.loadmat(filename)
+            meta_data['vertmap'] = []
         else:
             # parse image name
             image_index = imdb.image_index[i]
@@ -798,6 +820,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 im_label_gt[:,:,0] = labels_gt[:,:,2]
                 im_label_gt[:,:,2] = labels_gt[:,:,0]
 
+            # load meta data
+            meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+
         _t['im_segment'].tic()
         labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
 
@@ -820,8 +845,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
-                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'], meta_data['center'], imdb.num_classes)
-                print 'visualization'
+                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], imdb.num_classes)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, meta_data['intrinsic_matrix'], meta_data['vertmap'])
             else:
