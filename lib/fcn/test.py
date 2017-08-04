@@ -26,7 +26,7 @@ from transforms3d.quaternions import quat2mat, mat2quat
 # from pose_estimation import ransac
 # from kinect_fusion import kfusion
 # from pose_refinement import refiner
-from synthesize import synthesizer
+# from synthesize import synthesizer
 import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 
@@ -863,9 +863,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename, is_
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
-    seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    with open(seg_file, 'wb') as f:
-        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
+    # seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    # with open(seg_file, 'wb') as f:
+    #    cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
