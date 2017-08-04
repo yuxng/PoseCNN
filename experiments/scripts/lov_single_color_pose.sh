@@ -11,7 +11,7 @@ exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
 # train FCN for single frames
-# export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
+export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16_convs.npy \
@@ -20,7 +20,7 @@ time ./tools/train_net.py --gpu 0 \
   --cfg experiments/cfgs/lov_single_color_pose.yml \
   --cad data/LOV/models.txt \
   --pose data/LOV/poses.txt \
-  --iters 40000
+  --iters 80000
 
 #if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_pose_lov_iter_40000/segmentations.pkl ]
 #then

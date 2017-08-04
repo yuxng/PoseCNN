@@ -52,6 +52,10 @@ __C.TRAIN.GAN = False
 __C.TRAIN.POSE_REG = False
 __C.TRAIN.MATCHING = False
 
+__C.TRAIN.SYNROOT = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
+__C.TRAIN.SYNITER = 0
+__C.TRAIN.SYNNUM = 80000
+
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
 __C.TRAIN.MOMENTUM = 0.9

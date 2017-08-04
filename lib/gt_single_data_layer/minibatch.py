@@ -232,9 +232,6 @@ def _get_label_blob(roidb, voxelizer):
             processed_vertex_targets.append(center_targets)
             processed_vertex_weights.append(center_weights)
 
-            print meta_data['cls_indexes']
-            print roidb[i]['gt_classes']
-
             poses = meta_data['poses']
             num = poses.shape[2]
             qt = np.zeros((num, 13), dtype=np.float32)
