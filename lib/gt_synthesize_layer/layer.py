@@ -11,7 +11,6 @@
 from fcn.config import cfg
 from gt_synthesize_layer.minibatch import get_minibatch
 import numpy as np
-from synthesize import synthesizer
 import cv2
 from utils.blob import pad_im
 import os
@@ -29,8 +28,7 @@ class GtSynthesizeLayer(object):
         self._cache_path = cache_path
         self._name = name
         self._shuffle_roidb_inds()
-        self._synthesizer = synthesizer.PySynthesizer(model_file, pose_file)
-        self._synthesizer.setup()
+        self._shuffle_syn_inds()
         self._write_background_images()
         self._read_camera_parameters()
 
@@ -38,6 +36,10 @@ class GtSynthesizeLayer(object):
         """Randomly permute the training roidb."""
         self._perm = np.random.permutation(np.arange(len(self._roidb)))
         self._cur = 0
+
+    def _shuffle_syn_inds(self):
+        self._perm_syn = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
+        self._cur_syn = 0
 
     def _get_next_minibatch_inds(self):
         """Return the roidb indices for the next minibatch."""
@@ -47,13 +49,19 @@ class GtSynthesizeLayer(object):
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
         self._cur += cfg.TRAIN.IMS_PER_BATCH
 
-        return db_inds
+        if self._cur_syn + cfg.TRAIN.IMS_PER_BATCH >= cfg.TRAIN.SYNNUM:
+            self._shuffle_syn_inds()
+
+        db_inds_syn = self._perm_syn[self._cur_syn:self._cur_syn + cfg.TRAIN.IMS_PER_BATCH]
+        self._cur_syn += cfg.TRAIN.IMS_PER_BATCH
+
+        return db_inds, db_inds_syn
 
     def _get_next_minibatch(self):
         """Return the blobs to be used for the next minibatch."""
-        db_inds = self._get_next_minibatch_inds()
+        db_inds, db_inds_syn = self._get_next_minibatch_inds()
         minibatch_db = [self._roidb[i] for i in db_inds]
-        return get_minibatch(minibatch_db, self._extents, self._synthesizer, self._num_classes, self._backgrounds, self._intrinsic_matrix)
+        return get_minibatch(minibatch_db, self._extents, self._num_classes, self._backgrounds, self._intrinsic_matrix, db_inds_syn)
             
     def forward(self):
         """Get blobs and copy them into this layer's top blob vector."""
