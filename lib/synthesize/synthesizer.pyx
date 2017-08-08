@@ -16,6 +16,7 @@ cdef extern from "synthesizer.hpp":
         void setup()
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
+        void estimatePose(int*, int, int, float, float, float, float, float, float, int, float*, float*, float*, int)
 
 cdef class PySynthesizer:
     cdef Synthesizer *synthesizer     # hold a C++ instance which we're wrapping
@@ -53,3 +54,14 @@ cdef class PySynthesizer:
 
         return self.synthesizer.estimateCenter(<int *>labels.data, &vertmap[0, 0, 0], &extents[0, 0], \
                                                height, width, num_classes, preemptive_batch, fx, fy, px, py, &centers[0, 0], &gt_poses[0, 0], num_gt)
+
+    def estimate_poses(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.float32_t, ndim=2] rois, \
+               np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] poses_new, \
+               np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py, np.float32_t znear, np.float32_t zfar, int iters):
+
+        cdef int height = labels.shape[0]
+        cdef int width = labels.shape[1]
+        cdef int num_roi = rois.shape[0]
+
+        return self.synthesizer.estimatePose(<int *>labels.data, height, width, fx, fy, px, py, znear, zfar, num_roi, &rois[0, 0], &poses[0, 0], \
+                                               &poses_new[0, 0], iters)

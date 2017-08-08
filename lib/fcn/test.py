@@ -19,15 +19,15 @@ import cPickle
 import os
 import math
 import tensorflow as tf
-import scipy.io
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
 # from normals import gpu_normals
 # from pose_estimation import ransac
 # from kinect_fusion import kfusion
 # from pose_refinement import refiner
-import matplotlib.pyplot as plt
+from synthesize import synthesizer
 # from mpl_toolkits.mplot3d import Axes3D
+import scipy.io
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -192,27 +192,18 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 for i in xrange(num):
                     class_id = int(rois[i, 1])
                     poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
-
-                # average rois
-                n = 9
-                rois_new = np.zeros((num/n, 6), dtype=np.float32);
-                poses_new = np.zeros((num/n, 7), dtype=np.float32);
-                for i in xrange(num/n):
-                    rois_new[i, :] = np.mean(rois[n*i:n*(i+1), :], axis=0)
-                    # poses_new[i, :] = np.mean(poses[n*i:n*(i+1), :], axis=0)
-                    poses_new[i, :] = poses[n*i, :]
             else:
                 labels_2d, probs, vertex_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')])
-                rois_new = []
-                poses_new = []
+                rois = []
+                poses = []
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
-            rois_new = []
-            poses_new = []
+            rois = []
+            poses = []
 
-    return labels_2d[0,:,:].astype(np.int32), probs[0,:,:,:], vertex_pred, rois_new, poses_new
+    return labels_2d[0,:,:].astype(np.int32), probs[0,:,:,:], vertex_pred, rois, poses
 
 
 def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxelizer, pose_world2live, pose_live2world):
@@ -602,9 +593,9 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, rois, poses, intrinsic_matrix, vertmap_gt):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt):
     """Visual debugging of detections."""
-
+    import matplotlib.pyplot as plt
     fig = plt.figure()
 
     # show image
@@ -665,11 +656,6 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             cls = int(rois[i, 1])
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0:
-                # projection
-                RT = np.zeros((3, 4), dtype=np.float32)
-                RT[:3, :3] = quat2mat(poses[i, :4])
-                RT[:, 3] = poses[i, 4:]
-
                 num = len(index[0])
                 # extract 3D points
                 x3d = np.ones((4, num), dtype=np.float32)
@@ -677,12 +663,44 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x3d[1, :] = vertmap_gt[index[0], index[1], 1]
                 x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
+                # projection
+                RT = np.zeros((3, 4), dtype=np.float32)
+                RT[:3, :3] = quat2mat(poses[i, :4])
+                RT[:, 3] = poses[i, 4:]
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-          
                 plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+
         ax.set_title('projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
+        ax = fig.add_subplot(241, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(rois.shape[0]):
+            cls = int(rois[i, 1])
+            index = np.where(labels_gt == cls)
+            if len(index[0]) > 0:
+                num = len(index[0])
+                # extract 3D points
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                # projection
+                RT = np.zeros((3, 4), dtype=np.float32)
+                RT[:3, :3] = quat2mat(poses_new[i, :4])
+                RT[:, 3] = poses_new[i, 4:7]
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+
+        #ax.set_title('projection')
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
@@ -758,6 +776,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 backgrounds = cPickle.load(fid)
             print 'backgrounds loaded from {}'.format(cache_file)
 
+    SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
     for i in perm:
 
         if cfg.TEST.SYNTHETIC:
@@ -833,6 +852,18 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
 
+            # pose refinement
+            fx = meta_data['intrinsic_matrix'][0, 0]
+            fy = meta_data['intrinsic_matrix'][1, 1]
+            px = meta_data['intrinsic_matrix'][0, 2]
+            py = meta_data['intrinsic_matrix'][1, 2]
+            znear = 0.25
+            zfar = 6.0
+            iters = 100
+            poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
+            SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
+            print poses_new
+
         _t['im_segment'].toc()
 
         _t['misc'].tic()
@@ -847,7 +878,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             if cfg.TEST.VERTEX_REG:
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], imdb.num_classes)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, meta_data['intrinsic_matrix'], meta_data['vertmap'])
+                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], meta_data['vertmap'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

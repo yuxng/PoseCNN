@@ -277,6 +277,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                 for j in xrange(num):
                     R = poses[:, :3, j]
                     T = poses[:, 3, j]
+                    # print R, T
 
                     qt[j, 0] = k
                     qt[j, 1] = roidb[i]['gt_classes'][j]

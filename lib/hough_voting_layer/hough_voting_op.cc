@@ -37,7 +37,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Houghvoting")
     .Attr("T: {float, double}")
-    .Attr("preemptive_batch: int")
+    .Attr("is_train: int")
     .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("bottom_extents: T")
@@ -72,7 +72,7 @@ struct DataForOpt
 void getProbs(const float* probability, std::vector<jp::img_stat_t>& probs, int width, int height, int num_classes);
 void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes);
 void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
-void getBb3Ds(float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
+void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
 void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_stat_t>& probs, int imageWidth, int imageHeight);
 inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
 std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
@@ -83,9 +83,9 @@ inline void filterInliers2D(TransHyp& hyp, int maxInliers);
 inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
 static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
-void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, int preemptive_batch,
+void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::vector<cv::Point3f>> bb3Ds, int batch, int height, int width, int num_classes, int is_train,
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs);
-void compute_target_weight(float* target, float* weight, const float* poses_gt, int num_gt, int num_classes, std::vector<cv::Vec<float, 13> > outputs);
+void compute_target_weight(int height, int width, float* target, float* weight, std::vector<std::vector<cv::Point3f>> bb3Ds, const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> > outputs);
 
 template <typename Device, typename T>
 class HoughvotingOp : public OpKernel {
@@ -93,11 +93,11 @@ class HoughvotingOp : public OpKernel {
   explicit HoughvotingOp(OpKernelConstruction* context) : OpKernel(context) {
     // Get the pool height
     OP_REQUIRES_OK(context,
-                   context->GetAttr("preemptive_batch", &preemptive_batch_));
+                   context->GetAttr("is_train", &is_train_));
     // Check that pooled_height is positive
-    OP_REQUIRES(context, preemptive_batch_ >= 0,
-                errors::InvalidArgument("Need preemptive_batch >= 0, got ",
-                                        preemptive_batch_));
+    OP_REQUIRES(context, is_train_ >= 0,
+                errors::InvalidArgument("Need is_train >= 0, got ",
+                                        is_train_));
   }
 
   // bottom_label: (batch_size, height, width)
@@ -145,17 +145,22 @@ class HoughvotingOp : public OpKernel {
     std::vector<cv::Vec<float, 13> > outputs;
     const float* extents = bottom_extents.flat<float>().data();
 
+    // bb3Ds
+    std::vector<std::vector<cv::Point3f>> bb3Ds;
+    getBb3Ds(extents, bb3Ds, num_classes);
+
     int index_meta_data = 0;
+    float fx, fy, px, py;
     for (int n = 0; n < batch_size; n++)
     {
       const int* labelmap = bottom_label.flat<int>().data() + n * height * width;
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * 2 * num_classes;
-      float fx = meta_data(index_meta_data + 0);
-      float fy = meta_data(index_meta_data + 4);
-      float px = meta_data(index_meta_data + 2);
-      float py = meta_data(index_meta_data + 5);
+      fx = meta_data(index_meta_data + 0);
+      fy = meta_data(index_meta_data + 4);
+      px = meta_data(index_meta_data + 2);
+      py = meta_data(index_meta_data + 5);
 
-      estimateCenter(labelmap, vertmap, extents, n, height, width, num_classes, preemptive_batch_, fx, fy, px, py, outputs);
+      estimateCenter(labelmap, vertmap, bb3Ds, n, height, width, num_classes, is_train_, fx, fy, px, py, outputs);
 
       index_meta_data += num_meta_data;
     }
@@ -208,10 +213,10 @@ class HoughvotingOp : public OpKernel {
         top_pose[n * 7 + i] = roi(6 + i);
     }
 
-    compute_target_weight(top_target, top_weight, gt, num_gt, num_classes, outputs);
+    compute_target_weight(height, width, top_target, top_weight, bb3Ds, gt, num_gt, num_classes, fx, fy, px, py, outputs);
   }
  private:
-  int preemptive_batch_;
+  int is_train_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvoting").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotingOp<CPUDevice, float>);
@@ -419,14 +424,24 @@ inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std:
  * @param maxIt Each hypotheses should be at least this often refined.
  * @return std::vector< Ransac3D::TransHyp*, std::allocator< void > > List of hypotheses to be processed further.
 */
-std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt)
+std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt, int is_train)
 {
   std::vector<TransHyp*> workingQueue;
-      
-  for(auto it = hypMap.begin(); it != hypMap.end(); it++)
-  for(int h = 0; h < it->second.size(); h++)
-    if(it->second.size() > 1 || it->second[h].refSteps < maxIt) //exclude a hypothesis if it is the only one remaining for an object and it has been refined enough already
-      workingQueue.push_back(&(it->second[h]));
+
+  if (is_train)
+  {      
+    for(auto it = hypMap.begin(); it != hypMap.end(); it++)
+    for(int h = 0; h < it->second.size(); h++)
+      if(it->second[h].refSteps < maxIt)
+        workingQueue.push_back(&(it->second[h]));
+  }
+  else
+  {
+    for(auto it = hypMap.begin(); it != hypMap.end(); it++)
+    for(int h = 0; h < it->second.size(); h++)
+      if(it->second.size() > 1 || it->second[h].refSteps < maxIt) //exclude a hypothesis if it is the only one remaining for an object and it has been refined enough already
+        workingQueue.push_back(&(it->second[h]));
+  }
 
   return workingQueue;
 }
@@ -519,35 +534,36 @@ inline void filterInliers2D(TransHyp& hyp, int maxInliers)
 }
 
 
-void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int batch, int height, int width, int num_classes, int preemptive_batch,
+void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::vector<cv::Point3f>> bb3Ds, int batch, int height, int width, int num_classes, int is_train,
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs)
-{
-  // probs
-  // std::vector<jp::img_stat_t> probs;
-  // getProbs(probability, probs, width, height, num_classes);
-
-  // vertexs
-  // std::vector<jp::img_center_t> vertexs;
-  // getCenters(vertmap, vertexs, width, height, num_classes);
-      
+{     
   //set parameters, see documentation of GlobalProperties
   int maxIterations = 10000000;
   float minArea = 400; // a hypothesis covering less projected area (2D bounding box) can be discarded (too small to estimate anything reasonable)
   float inlierThreshold3D = 0.5;
-  int ransacIterations = 256;  // 256
+  int ransacIterations;  // 256
   int poseIterations = 100;
-  int preemptiveBatch = preemptive_batch;  // 1000
+  int preemptiveBatch;  // 1000
   int maxPixels = 1000;  // 1000
-  int refIt = 8;  // 8
+  int refIt;  // 8
+
+  if (is_train)
+  {
+    ransacIterations = 256;
+    preemptiveBatch = 100;
+    refIt = 4;
+  }
+  else
+  {
+    ransacIterations = 256;
+    preemptiveBatch = 200;
+    refIt = 8;
+  }
 
   // labels
   std::vector<std::vector<int>> labels;
   std::vector<int> object_ids;
   getLabels(labelmap, labels, object_ids, width, height, num_classes, minArea);
-
-  // bb3Ds
-  std::vector<std::vector<cv::Point3f>> bb3Ds;
-  getBb3Ds(extents, bb3Ds, num_classes);
 
   // camera matrix
   cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
@@ -562,10 +578,6 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
 	
   int imageWidth = width;
   int imageHeight = height;
-
-  // create samplers for choosing pixel positions according to probability maps
-  // std::vector<Sampler2D> samplers;
-  // createSamplers(samplers, probs, imageWidth, imageHeight);
 		
   // hold for each object a list of pose hypothesis, these are optimized until only one remains per object
   std::map<jp::id_t, std::vector<TransHyp>> hypMap;
@@ -600,7 +612,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     if(!samplePoint2D(objID, eyePts, objPts, pt2, vertmap, width, num_classes))
       continue;
 
-    // reconstruct camera
+    // reconstruct
     std::vector<std::pair<cv::Point2d, cv::Point2d>> pts2D;
     for(unsigned j = 0; j < eyePts.size(); j++)
     {
@@ -626,7 +638,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     break;
   }
 
-  // create a list of all objects where hypptheses have been found
+  // create a list of all objects where hyptheses have been found
   std::vector<jp::id_t> objList;
   for(std::pair<jp::id_t, std::vector<TransHyp>> hypPair : hypMap)
   {
@@ -634,7 +646,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
   }
 
   // create a working queue of all hypotheses to process
-  std::vector<TransHyp*> workingQueue = getWorkingQueue(hypMap, refIt);
+  std::vector<TransHyp*> workingQueue = getWorkingQueue(hypMap, refIt, is_train);
 	
   // main preemptive RANSAC loop, it will stop if there is max one hypothesis per object remaining which has been refined a minimal number of times
   while(!workingQueue.empty())
@@ -655,7 +667,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
 	hypMap[objID].erase(hypMap[objID].begin() + hypMap[objID].size() / 2, hypMap[objID].end());
       }
     }
-    workingQueue = getWorkingQueue(hypMap, refIt);
+    workingQueue = getWorkingQueue(hypMap, refIt, is_train);
 	    
     // refine
     #pragma omp parallel for
@@ -665,14 +677,13 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
       workingQueue[h]->refSteps++;
     }
     
-    workingQueue = getWorkingQueue(hypMap, refIt);
+    workingQueue = getWorkingQueue(hypMap, refIt, is_train);
   }
 
   #pragma omp parallel for
   for(auto it = hypMap.begin(); it != hypMap.end(); it++)
   for(int h = 0; h < it->second.size(); h++)
   {
-    // std::cout << "Estimated Hypothesis for Object " << (int) it->second[h].objID << ":" << std::endl;
 
     cv::Vec<float, 13> roi;
     roi(0) = batch;
@@ -778,71 +789,6 @@ void estimateCenter(const int* labelmap, const float* vertmap, const float* exte
     */
 
     outputs.push_back(roi);
-
-    // add jittering rois
-    float x1 = roi(2);
-    float y1 = roi(3);
-    float x2 = roi(4);
-    float y2 = roi(5);
-    float ww = x2 - x1;
-    float hh = y2 - y1;
-
-    // (-1, -1)
-    roi(2) = x1 - 0.05 * ww;
-    roi(3) = y1 - 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (+1, -1)
-    roi(2) = x1 + 0.05 * ww;
-    roi(3) = y1 - 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (-1, +1)
-    roi(2) = x1 - 0.05 * ww;
-    roi(3) = y1 + 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (+1, +1)
-    roi(2) = x1 + 0.05 * ww;
-    roi(3) = y1 + 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (0, -1)
-    roi(2) = x1;
-    roi(3) = y1 - 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (-1, 0)
-    roi(2) = x1 - 0.05 * ww;
-    roi(3) = y1;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (0, +1)
-    roi(2) = x1;
-    roi(3) = y1 + 0.05 * hh;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
-    // (+1, 0)
-    roi(2) = x1 + 0.05 * ww;
-    roi(3) = y1;
-    roi(4) = roi(2) + ww;
-    roi(5) = roi(3) + hh;
-    outputs.push_back(roi);
-
   }
 }
 
@@ -882,7 +828,7 @@ double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
   // set optimization bounds 
   double rotRange = 180;
   rotRange *= PI / 180;
-  double tRangeXY = 0.1;
+  double tRangeXY = 0.01;
   double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
 	
   std::vector<double> lb(6);
@@ -910,9 +856,38 @@ double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
 
 
 // compute the pose target and weight
-void compute_target_weight(float* target, float* weight, const float* poses_gt, int num_gt, int num_classes, std::vector<cv::Vec<float, 13> > outputs)
+void compute_target_weight(int height, int width, float* target, float* weight, std::vector<std::vector<cv::Point3f>> bb3Ds, 
+  const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> > outputs)
 {
   int num = outputs.size();
+  float threshold = 0.2;
+
+  // camera matrix
+  cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
+  camMat(0, 0) = fx;
+  camMat(1, 1) = fy;
+  camMat(2, 2) = 1.f;
+  camMat(0, 2) = px;
+  camMat(1, 2) = py;
+
+  // compute the gt boxes
+  std::vector<cv::Rect> bb2Ds_gt(num_gt);
+  for (int i = 0; i < num_gt; i++)
+  {
+    Eigen::Quaternionf quaternion(poses_gt[i * 13 + 6], poses_gt[i * 13 + 7], poses_gt[i * 13 + 8], poses_gt[i * 13 + 9]);
+    Eigen::Matrix3f rmatrix = quaternion.toRotationMatrix();
+    cv::Mat rmat_trans = cv::Mat(3, 3, CV_32F, rmatrix.data());
+    cv::Mat rmat;
+    cv::transpose(rmat_trans, rmat);
+    cv::Point3d tvec(poses_gt[i * 13 + 10], poses_gt[i * 13 + 11], poses_gt[i * 13 + 12]);
+    jp::jp_trans_t pose(rmat, tvec);
+
+    jp::cv_trans_t trans = jp::our2cv(pose);
+
+    int objID = int(poses_gt[i * 13 + 1]);
+    std::vector<cv::Point3f> bb3D = bb3Ds[objID-1];
+    bb2Ds_gt[i] = getBB2D(width, height, bb3D, camMat, trans);
+  }
 
   for (int i = 0; i < num; i++)
   {
@@ -934,6 +909,17 @@ void compute_target_weight(float* target, float* weight, const float* poses_gt, 
     }
 
     if (gt_ind == -1)
+      continue;
+
+    // compute bounding box overlap
+    float x1 = roi(2);
+    float y1 = roi(3);
+    float x2 = roi(4);
+    float y2 = roi(5);
+    cv::Rect bb2D(x1, y1, x2-x1, y2-y1);
+
+    float overlap = getIoU(bb2D, bb2Ds_gt[gt_ind]);
+    if (overlap < threshold)
       continue;
 
     target[i * 4 * num_classes + 4 * class_id + 0] = poses_gt[gt_ind * 13 + 6];

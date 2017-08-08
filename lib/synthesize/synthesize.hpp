@@ -16,6 +16,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/opencv_modules.hpp>
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -61,15 +62,9 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
 
 struct DataForOpt
 {
+  int num_roi;
   int classID;
-  int imageWidth;
-  int imageHeight;
-  cv::Rect bb2D;
-  std::vector<cv::Point3f> bb3D;
-  cv::Mat_<float> camMat;
-  const int* labelmap;
 
-  pangolin::OpenGlMatrixSpec projectionMatrix;
   std::vector<Eigen::Matrix4f> transforms;
   std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers;
   std::vector<pangolin::GlBuffer*> modelIndexBuffers;
@@ -115,10 +110,11 @@ class Synthesizer
   void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 
   // pose refinement with bounding box
-  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, int poseIterations, float* outputs);
+  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
+                    int num_roi, float* rois, float* poses, float* outputs, int poseIterations);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
 
-  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt);
+  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
 
  private:
   int counter_;
