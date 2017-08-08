@@ -102,6 +102,7 @@ if __name__ == '__main__':
     cfg.RIG = args.rig_name
     cfg.CAD = args.cad_name
     cfg.POSE = args.pose_name
+    cfg.IS_TRAIN = True
 
     from networks.factory import get_network
     network = get_network(args.network_name)

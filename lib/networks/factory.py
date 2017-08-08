@@ -20,7 +20,7 @@ from fcn.config import cfg
 if cfg.TRAIN.SINGLE_FRAME:
     if cfg.NETWORK == 'VGG16':
         __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, \
-                                                     cfg.TRAIN.VERTEX_REG, cfg.TRAIN.POSE_REG, cfg.TRAIN.MATCHING, cfg.TRAIN.TRAINABLE, cfg.CAD)
+                                                     cfg.TRAIN.VERTEX_REG, cfg.TRAIN.POSE_REG, cfg.TRAIN.MATCHING, cfg.TRAIN.TRAINABLE, cfg.CAD, cfg.IS_TRAIN)
     if cfg.NETWORK == 'VGG16GAN':
         __sets['vgg16_gan'] = networks.vgg16_gan(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, cfg.TRAIN.VERTEX_REG, cfg.TRAIN.TRAINABLE)
     if cfg.NETWORK == 'DCGAN':

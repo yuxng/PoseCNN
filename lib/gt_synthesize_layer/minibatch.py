@@ -95,7 +95,7 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
 
             if cfg.TRAIN.CHROMATIC:
                 filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])
-                label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+                label = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
         else:
             # depth raw
             im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
@@ -277,6 +277,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                 for j in xrange(num):
                     R = poses[:, :3, j]
                     T = poses[:, 3, j]
+                    # print R, T
 
                     qt[j, 0] = k
                     qt[j, 1] = roidb[i]['gt_classes'][j]

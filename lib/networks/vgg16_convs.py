@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, pose_reg=False, matching=False, trainable=True, filename_model=''):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, pose_reg=False, matching=False, trainable=True, filename_model='', is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
@@ -12,6 +12,10 @@ class vgg16_convs(Network):
         self.pose_reg = pose_reg
         self.matching = matching
         self.filename_model = filename_model
+        if is_train:
+            self.is_train = 1
+        else:
+            self.is_train = 0
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
@@ -154,7 +158,7 @@ class vgg16_convs(Network):
             if self.pose_reg:
 
                 (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                     .hough_voting(100, name='hough'))
+                     .hough_voting(self.is_train, name='hough'))
 
                 self.layers['rois'] = self.get_output('hough')[0]
                 self.layers['poses_init'] = self.get_output('hough')[1]

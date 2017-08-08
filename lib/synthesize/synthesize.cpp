@@ -880,11 +880,6 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
       count++;
     }
   }
-
-  int poseIterations = 20;
-  estimatePose(labelmap, height, width, fx, fy, px, py, 0.25, 6.0, poseIterations, outputs);
-  visualizePose(height, width, fx, fy, px, py, 0.25, 6.0, gt_poses, num_gt);
-  usleep( 3000 * 1000 );
 }
 
 
@@ -894,21 +889,13 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << " " << pose[4] << " " << pose[5] << std::endl;
 
   // project the 3D model to get the segmentation mask
-  // convert pose
-  cv::Vec<float, 3> rotation(pose[0], pose[1], pose[2]);
-  cv::Mat rmat;
-  cv::Rodrigues(rotation, rmat);
-  rmat = rmat.t();
-  Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
-
-  Eigen::Quaternionf quaternion(eigenT);
-  Sophus::SE3f::Point translation(pose[3], pose[4], pose[5]);
+  Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
+  Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
   const Sophus::SE3f T_co(quaternion, translation);
   dataForOpt->transforms.clear();
   dataForOpt->transforms.push_back(T_co.matrix().cast<float>());
 
   glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
-  dataForOpt->renderer->setProjectionMatrix(dataForOpt->projectionMatrix);
   dataForOpt->renderer->render(dataForOpt->attributeBuffers, dataForOpt->modelIndexBuffers, dataForOpt->transforms);
 
   glColor3f(1, 1, 1);
@@ -927,20 +914,20 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
 
 
 // pose refinement
-void Synthesizer::estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, int poseIterations, float* outputs)
+void Synthesizer::estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
+                               int num_roi, float* rois, float* poses, float* outputs, int poseIterations)
 {
   if (setup_ == 0)
     setup();
+
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
+  renderer_->setProjectionMatrix(projectionMatrix);
 
   // copy labels to device
   df::ConstHostTensor2<int> labelImage({width, height}, labelmap);
   labels_device_->copyFrom(labelImage);
 
   DataForOpt data;
-  data.imageHeight = height;
-  data.imageWidth = width;
-  data.projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
-  data.labelmap = labelmap;
   data.renderer = renderer_;
   data.view = gtView_;
   data.labels_device = labels_device_;
@@ -948,127 +935,80 @@ void Synthesizer::estimatePose(const int* labelmap, int height, int width, float
   data.union_device = union_device_;
   data.vertex_map_device = vertex_map_device_;
 
-  // camera matrix
-  cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
-  camMat(0, 0) = fx;
-  camMat(1, 1) = fy;
-  camMat(2, 2) = 1.f;
-  camMat(0, 2) = px;
-  camMat(1, 2) = py;
-  data.camMat = camMat;
-
   // for each object
-  int num = rois_.size();
-  for(int i = 0; i < num; i++)
+  for(int i = 0; i < num_roi; i++)
   {
-    // for each pose hypothesis
-    float max_energy = -100;
-    for (int j = 0; j < rois_[i].size(); j++)
-    {
-      cv::Vec<float, 12> roi = rois_[i][j];
+    int objID = int(rois[i * 6 + 1]);
 
-      // 2D bounding box
-      cv::Rect bb2D(roi(1), roi(2), roi(3) - roi(1), roi(4) - roi(2));
+    // construct the data
+    data.classID = objID;
+    data.attributeBuffers.clear();
+    std::vector<pangolin::GlBuffer *> buffer;
+    buffer.push_back(&texturedVertices_[objID - 1]);
+    buffer.push_back(&canonicalVertices_[objID - 1]);
+    data.attributeBuffers.push_back(buffer);
+    data.modelIndexBuffers.clear();
+    data.modelIndexBuffers.push_back(&texturedIndices_[objID - 1]);
 
-      // 3D bounding box
-      int objID = int(roi(0));
-      std::vector<cv::Point3f> bb3D = bb3Ds_[objID-1];
+    // initialize pose
+    std::vector<double> vec(7);
+    vec[0] = poses[i * 7 + 0];
+    vec[1] = poses[i * 7 + 1];
+    vec[2] = poses[i * 7 + 2];
+    vec[3] = poses[i * 7 + 3];
+    vec[4] = poses[i * 7 + 4];
+    vec[5] = poses[i * 7 + 5];
+    vec[6] = poses[i * 7 + 6];
 
-      // construct the data
-      data.classID = objID;
-      data.bb2D = bb2D;
-      data.bb3D = bb3D;
-      data.attributeBuffers.clear();
-      std::vector<pangolin::GlBuffer *> buffer;
-      buffer.push_back(&texturedVertices_[objID - 1]);
-      buffer.push_back(&canonicalVertices_[objID - 1]);
-      data.attributeBuffers.push_back(buffer);
-      data.modelIndexBuffers.clear();
-      data.modelIndexBuffers.push_back(&texturedIndices_[objID - 1]);
+    // optimization
+    // clock_t start = clock();    
+    float energy = poseWithOpt(vec, data, poseIterations);
+    // clock_t stop = clock();    
+    // double elapsed = (double)(stop - start) / CLOCKS_PER_SEC;
+    // printf("Time elapsed in s: %f\n", elapsed);
 
-      // initialize pose
-      std::vector<double> vec(6);
-      vec[0] = roi(5);
-      vec[1] = roi(6);
-      vec[2] = roi(7);
-      vec[3] = roi(8);
-      vec[4] = roi(9);
-      vec[5] = roi(10);
-
-      // optimization
-      // clock_t start = clock();    
-      float energy = poseWithOpt(vec, data, poseIterations);
-      // clock_t stop = clock();    
-      // double elapsed = (double)(stop - start) / CLOCKS_PER_SEC;
-      // printf("Time elapsed in s: %f\n", elapsed);
-
-      // convert pose to our format
-      cv::Mat tvec(3, 1, CV_64F);
-      cv::Mat rvec(3, 1, CV_64F);
-      
-      for(int k = 0; k < 6; k++)
-      {
-        if(k > 2) 
-          tvec.at<double>(k-3, 0) = vec[k];
-        else 
-          rvec.at<double>(k, 0) = vec[k];
-      }
-	
-      jp::cv_trans_t trans(rvec, tvec);
-      jp::jp_trans_t pose = jp::cv2our(trans);
-
-      // use the projected 3D box
-      cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
-      roi(1) = bb2D_proj.x;
-      roi(2) = bb2D_proj.y;
-      roi(3) = bb2D_proj.x + bb2D_proj.width;
-      roi(4) = bb2D_proj.y + bb2D_proj.height;
-
-      // update the pose hypothesis
-      roi(5) = vec[0];
-      roi(6) = vec[1];
-      roi(7) = vec[2];
-      roi(8) = vec[3];
-      roi(9) = vec[4];
-      roi(10) = vec[5];
-      roi(11) = -energy;
-      rois_[i][j] = roi;
-
-      if(roi(11) > max_energy)
-      {
-        outputs[4 * objID] = (roi(1) + roi(3)) / 2;
-        outputs[4 * objID + 1] = (roi(2) + roi(4)) / 2;
-        outputs[4 * objID + 2] = roi(3) - roi(1);
-        outputs[4 * objID + 3] = roi(4) - roi(2);
-        max_energy = roi(11);
-      }
-    }
-
-    // sort the pose hypotheses
-    std::sort(rois_[i].begin(), rois_[i].end(), compareROI);
+    outputs[i * 8 + 0] = vec[0];
+    outputs[i * 8 + 1] = vec[1];
+    outputs[i * 8 + 2] = vec[2];
+    outputs[i * 8 + 3] = vec[3];
+    outputs[i * 8 + 4] = vec[4];
+    outputs[i * 8 + 5] = vec[5];
+    outputs[i * 8 + 6] = vec[6];
+    outputs[i * 8 + 7] = -energy;
   }
+
+  visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs, num_roi);
 }
 
 
 double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
 {
   // set up optimization algorithm (gradient free)
-  nlopt::opt opt(nlopt::LN_NELDERMEAD, 6); 
+  nlopt::opt opt(nlopt::LN_NELDERMEAD, 7); 
 
   // set optimization bounds 
-  double rotRange = 22.5;
-  rotRange *= PI / 180;
+  double rotRange = 0.1;
   double tRangeXY = 0.01;
-  double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
+  double tRangeZ = 0.2; // pose uncertainty is larger in Z direction
 	
-  std::vector<double> lb(6);
-  lb[0] = vec[0]-rotRange; lb[1] = vec[1]-rotRange; lb[2] = vec[2]-rotRange;
-  lb[3] = vec[3]-tRangeXY; lb[4] = vec[4]-tRangeXY; lb[5] = vec[5]-tRangeZ;
+  std::vector<double> lb(7);
+  lb[0] = vec[0] - rotRange;
+  lb[1] = vec[1] - rotRange;
+  lb[2] = vec[2] - rotRange;
+  lb[3] = vec[3] - rotRange;
+  lb[4] = vec[4] - tRangeXY;
+  lb[5] = vec[5] - tRangeXY;
+  lb[6] = vec[6] - tRangeZ;
   opt.set_lower_bounds(lb);
       
-  std::vector<double> ub(6);
-  ub[0] = vec[0]+rotRange; ub[1] = vec[1]+rotRange; ub[2] = vec[2]+rotRange;
-  ub[3] = vec[3]+tRangeXY; ub[4] = vec[4]+tRangeXY; ub[5] = vec[5]+tRangeZ;
+  std::vector<double> ub(7);
+  ub[0] = vec[0] + rotRange;
+  ub[1] = vec[1] + rotRange;
+  ub[2] = vec[2] + rotRange;
+  ub[3] = vec[3] + rotRange;
+  ub[4] = vec[4] + tRangeXY;
+  ub[5] = vec[5] + tRangeXY;
+  ub[6] = vec[6] + tRangeZ;
   opt.set_upper_bounds(ub);
       
   // configure NLopt
@@ -1085,7 +1025,7 @@ double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int 
 }
 
 
-void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* gt_poses, int num_gt)
+void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi)
 {
   if (setup_ == 0)
     setup();
@@ -1093,102 +1033,53 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
   int num = rois_.size();
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
 
-  // find the closest poses hypthosis for each gt
-  /*
-  std::vector<Sophus::SE3f> poses(num_gt);
-  for (int i = 0; i < num_gt; i++)
-  {
-    for (int j = 0; j < num; j++)
-    {
-      cv::Vec<float, 12> roi = rois_[j][0];
-      if (int(roi[0]) != int(gt_poses[i * 8]))
-        continue;
-
-      // convert pose
-      cv::Vec<float, 3> rotation(roi[5], roi[6], roi[7]);
-      cv::Mat rmat;
-      cv::Rodrigues(rotation, rmat);
-      rmat = rmat.t();
-      Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
-
-      Eigen::Quaternionf quaternion(eigenT);
-      Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
-      const Sophus::SE3f T_co(quaternion, translation);
-      poses[i] = T_co;
-      std::cout << "ID: " << int(gt_poses[i * 8]) << " score: " << roi(11) << std::endl;
-    }
-  }
-  */
-  /*
-  for (int i = 0; i < num_gt; i++)
-  {
-    Eigen::Quaternionf quaternion(gt_poses[i * 8 + 1], gt_poses[i * 8 + 2], gt_poses[i * 8 + 3], gt_poses[i * 8 + 4]);
-    Sophus::SE3f::Point translation(gt_poses[i * 8 + 5], gt_poses[i * 8 + 6], gt_poses[i * 8 + 7]);
-    const Sophus::SE3f T_co(quaternion, translation);
-    poses[i] = T_co;
-    std::cout << i << " " << gt_poses[i * 8 + 1] << " " << gt_poses[i * 8 + 2] << " " << gt_poses[i * 8 + 3] << " " << gt_poses[i * 8 + 4] << std::endl;
-  }
-  */
-
   // render color image
   glEnable(GL_DEPTH_TEST);
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-  for (int i = 0; i < num; i++)
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  float threshold = 0.1;
+
+  for (int i = 0; i < num_roi; i++)
   {
-    for (int j = 0; j < 20; j++)
-    {
-      glColor3ub(255,255,255);
-      gtView_->ActivateScissorAndClear();
+    if (outputs[i * 8 + 7] < threshold)
+      continue;
+    Eigen::Quaternionf quaternion(outputs[i * 8 + 0], outputs[i * 8 + 1], outputs[i * 8 + 2], outputs[i * 8 + 3]);
+    Sophus::SE3f::Point translation(outputs[i * 8 + 4], outputs[i * 8 + 5], outputs[i * 8 + 6]);
+    const Sophus::SE3f T_co(quaternion, translation);
 
-      cv::Vec<float, 12> roi = rois_[i][j];
+    int class_id = int(rois[i * 6 + 1]) - 1;
 
-      // convert pose
-      cv::Vec<float, 3> rotation(roi[5], roi[6], roi[7]);
-      cv::Mat rmat;
-      cv::Rodrigues(rotation, rmat);
-      rmat = rmat.t();
-      Eigen::Matrix3f eigenT = Eigen::Map<Eigen::Matrix3f>( (float*)rmat.data );
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
 
-      Eigen::Quaternionf quaternion(eigenT);
-      Sophus::SE3f::Point translation(roi[8], roi[9], roi[10]);
-      const Sophus::SE3f T_co(quaternion, translation);
+    Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+    pangolin::OpenGlMatrix mvMatrix(mv);
+    mvMatrix.Load();
 
-      int class_id = int(roi[0]) - 1;
-
-      glMatrixMode(GL_PROJECTION);
-      projectionMatrix.Load();
-      glMatrixMode(GL_MODELVIEW);
-
-      Eigen::Matrix4f mv = T_co.cast<float>().matrix();
-      pangolin::OpenGlMatrix mvMatrix(mv);
-      mvMatrix.Load();
-
-      glEnable(GL_TEXTURE_2D);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-      texturedTextures_[class_id].Bind();
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedCoords_[class_id].Bind();
-      glTexCoordPointer(2,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedTextures_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      texturedCoords_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-      glDisable(GL_TEXTURE_2D);
-
-      {
-        std::string filename = std::to_string(counter_++);
-        pangolin::SaveWindowOnRender(filename);
-      }
-
-      pangolin::FinishFrame();
-    }
+    glEnable(GL_TEXTURE_2D);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    texturedTextures_[class_id].Bind();
+    texturedVertices_[class_id].Bind();
+    glVertexPointer(3,GL_FLOAT,0,0);
+    texturedCoords_[class_id].Bind();
+    glTexCoordPointer(2,GL_FLOAT,0,0);
+    texturedIndices_[class_id].Bind();
+    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+    texturedIndices_[class_id].Unbind();
+    texturedTextures_[class_id].Unbind();
+    texturedVertices_[class_id].Unbind();
+    texturedCoords_[class_id].Unbind();
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisable(GL_TEXTURE_2D);
   }
+
+  pangolin::FinishFrame();
+  std::string filename = std::to_string(counter_++);
+  pangolin::SaveWindowOnRender(filename);
 }
 
 
