@@ -33,10 +33,7 @@ def get_minibatch(roidb, voxelizer, extents):
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        if cfg.TRAIN.GAN:
-            _vis_minibatch_gan(im_rescale_blob, depth_blob, label_blob, vertex_image_blob)
-        else:
-            _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
+        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob)
 
     blobs = {'data_image_color': im_blob,
              'data_image_color_rescale': im_rescale_blob,
@@ -430,7 +427,26 @@ def _get_gan_labels(im_label, class_colors, num_classes):
     return labels_true, labels_false, labels_color
 
 
-def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
+def _get_bb3D(extent)
+    bb = np.zeros((3, 8), dtype=np.float32)
+    
+    xHalf = extent[0] * 0.5
+    yHalf = extent[1] * 0.5
+    zHalf = extent[2] * 0.5
+    
+    bb[:, 0] = [xHalf, yHalf, zHalf]
+    bb[:, 1] = [-xHalf, yHalf, zHalf]
+    bb[:, 2] = [xHalf, -yHalf, zHalf]
+    bb[:, 3] = [-xHalf, -yHalf, zHalf]
+    bb[:, 4] = [xHalf, yHalf, -zHalf]
+    bb[:, 5] = [-xHalf, yHalf, -zHalf]
+    bb[:, 6] = [xHalf, -yHalf, -zHalf]
+    bb[:, 7] = [-xHalf, -yHalf, -zHalf]
+    
+    return bb
+
+
+def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -443,6 +459,27 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im = im.astype(np.uint8)
         fig.add_subplot(231)
         plt.imshow(im)
+
+        # project the 3D box to image
+        metadata = meta_data_blob[i, 0, 0, :]
+        intrinsic_matrix = metadata[:9].reshape((3,3))
+        for j in xrange(pose_blob.shape[0]):
+            if pose_blob[j, 0] != i:
+                continue
+
+            class_id = int(pose_blob[j, 1])
+            bb3d = _get_bb3D(extents[class_id-1, :])
+            x3d = np.ones((4, 8), dtype=np.float32)
+            x3d[0:3, :] = bb3d
+            
+            # projection
+            RT = np.zeros((3, 4), dtype=np.float32)
+            RT[:3, :3] = quat2mat(pose_blob[j, 6:10])
+            RT[:, 3] = pose_blob[j, 10:]
+            x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+            x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+            x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+            plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
@@ -480,46 +517,5 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
             plt.imshow(center[:,:,1])
         else:
             plt.imshow(l)
-
-        plt.show()
-
-
-def _vis_minibatch_gan(im_blob, depth_blob, label_blob, vertex_image_blob):
-    """Visualize a mini-batch for debugging."""
-    import matplotlib.pyplot as plt
-
-    for i in xrange(im_blob.shape[0]):
-        fig = plt.figure()
-        # show image
-        im = im_blob[i, :, :, :].copy()
-        im = (im + 1) * 127.5
-        im = im[:, :, (2, 1, 0)]
-        im = im.astype(np.uint8)
-        fig.add_subplot(221)
-        plt.imshow(im)
-
-        # show depth image
-        depth = depth_blob[i, :, :, 0]
-        fig.add_subplot(222)
-        plt.imshow(abs(depth))
-
-        # show label
-        label = label_blob[i, :, :, :]
-        height = label.shape[0]
-        width = label.shape[1]
-        num_classes = label.shape[2]
-        l = np.zeros((height, width), dtype=np.int32)
-        for k in xrange(num_classes):
-            index = np.where(label[:,:,k] > 0)
-            l[index] = k
-        fig.add_subplot(223)
-        plt.imshow(l)
-
-        # show vertex image
-        im = vertex_image_blob[i, :, :, :].copy()
-        im = (im + 1) * 127.5
-        im = im.astype(np.uint8)
-        fig.add_subplot(224)
-        plt.imshow(im)
 
         plt.show()
