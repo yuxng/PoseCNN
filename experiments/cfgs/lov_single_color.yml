@@ -23,6 +23,6 @@ TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
   VERTEX_REG: True
-  VISUALIZE: True
+  VISUALIZE: False
   POSE_REG: False
   SYNTHETIC: False

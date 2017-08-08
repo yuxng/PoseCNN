@@ -463,6 +463,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, meta_data_bl
         # project the 3D box to image
         metadata = meta_data_blob[i, 0, 0, :]
         intrinsic_matrix = metadata[:9].reshape((3,3))
+        print intrinsic_matrix
         for j in xrange(pose_blob.shape[0]):
             if pose_blob[j, 0] != i:
                 continue
@@ -479,7 +480,13 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, meta_data_bl
             x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
             x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
             x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-            plt.plot(x2d[0, :], x2d[1, :], '.', color='r')
+
+            x1 = np.min(x2d[0, :])
+            x2 = np.max(x2d[0, :])
+            y1 = np.min(x2d[1, :])
+            y2 = np.max(x2d[1, :])
+            plt.gca().add_patch(
+                plt.Rectangle((x1, y1), x2-x1, y2-y1, fill=False, edgecolor='g', linewidth=3))
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
