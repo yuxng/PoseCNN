@@ -16,7 +16,7 @@ from utils.blob import im_list_to_blob, pad_im, chromatic_transform
 from utils.se3 import *
 import scipy.io
 from normals import gpu_normals
-from transforms3d.quaternions import mat2quat
+from transforms3d.quaternions import mat2quat, quat2mat
 
 
 def get_minibatch(roidb, voxelizer, extents):
@@ -33,7 +33,7 @@ def get_minibatch(roidb, voxelizer, extents):
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob)
+        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
 
     blobs = {'data_image_color': im_blob,
              'data_image_color_rescale': im_rescale_blob,
@@ -427,7 +427,7 @@ def _get_gan_labels(im_label, class_colors, num_classes):
     return labels_true, labels_false, labels_color
 
 
-def _get_bb3D(extent)
+def _get_bb3D(extent):
     bb = np.zeros((3, 8), dtype=np.float32)
     
     xHalf = extent[0] * 0.5
@@ -468,7 +468,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, meta_data_bl
                 continue
 
             class_id = int(pose_blob[j, 1])
-            bb3d = _get_bb3D(extents[class_id-1, :])
+            bb3d = _get_bb3D(extents[class_id, :])
             x3d = np.ones((4, 8), dtype=np.float32)
             x3d[0:3, :] = bb3d
             
@@ -479,7 +479,7 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, meta_data_bl
             x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
             x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
             x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-            plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+            plt.plot(x2d[0, :], x2d[1, :], '.', color='r')
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
