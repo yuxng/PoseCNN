@@ -666,8 +666,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
-                RT[:3, :3] = quat2mat(poses_new[i, :4])
-                RT[:, 3] = poses_new[i, 4:7]
+                RT[:3, :3] = quat2mat(poses[i, :4])
+                RT[:, 3] = poses[i, 4:]
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
@@ -677,7 +677,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-        '''
+        
         ax = fig.add_subplot(241, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
@@ -705,7 +705,6 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-        '''
     else:
         # show depth
         ax = fig.add_subplot(245)

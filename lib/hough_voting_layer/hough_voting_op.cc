@@ -473,7 +473,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
   else
   {
     ransacIterations = 256;
-    preemptiveBatch = 200;
+    preemptiveBatch = 100;
     refIt = 8;
   }
 
