@@ -48,11 +48,10 @@ class SolverWrapper(object):
 
         infix = ('_' + cfg.TRAIN.SNAPSHOT_INFIX
                  if cfg.TRAIN.SNAPSHOT_INFIX != '' else '')
-        # filename = (cfg.TRAIN.SNAPSHOT_PREFIX + infix + '_iter_{:d}'.format(iter+1) + '.ckpt')
-        filename = (cfg.TRAIN.SNAPSHOT_PREFIX + infix + '.ckpt')
+        filename = (cfg.TRAIN.SNAPSHOT_PREFIX + infix + '_iter_{:d}'.format(iter+1) + '.ckpt')
         filename = os.path.join(self.output_dir, filename)
 
-        self.saver.save(sess, filename, write_meta_graph=False)
+        self.saver.save(sess, filename)
         print 'Wrote snapshot to: {:s}'.format(filename)
 
     def restore(self, session, save_file):

@@ -21,13 +21,14 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
+from synthesize import synthesizer
+import scipy.io
+
 # from normals import gpu_normals
 # from pose_estimation import ransac
 # from kinect_fusion import kfusion
 # from pose_refinement import refiner
-from synthesize import synthesizer
 # from mpl_toolkits.mplot3d import Axes3D
-import scipy.io
 
 def _get_image_blob(im, im_depth, meta_data):
     """Converts an image into a network input.
@@ -665,8 +666,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
-                RT[:3, :3] = quat2mat(poses[i, :4])
-                RT[:, 3] = poses[i, 4:]
+                RT[:3, :3] = quat2mat(poses_new[i, :4])
+                RT[:, 3] = poses_new[i, 4:7]
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
@@ -676,7 +677,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-
+        '''
         ax = fig.add_subplot(241, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
@@ -704,6 +705,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
+        '''
     else:
         # show depth
         ax = fig.add_subplot(245)
@@ -862,7 +864,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             iters = 100
             poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
             SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
-            print poses_new
 
         _t['im_segment'].toc()
 

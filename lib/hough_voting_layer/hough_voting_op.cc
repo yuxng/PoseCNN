@@ -69,11 +69,8 @@ struct DataForOpt
   cv::Mat_<float> camMat;
 };
 
-void getProbs(const float* probability, std::vector<jp::img_stat_t>& probs, int width, int height, int num_classes);
-void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes);
 void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
-void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_stat_t>& probs, int imageWidth, int imageHeight);
 inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
 std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
 inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
@@ -213,7 +210,8 @@ class HoughvotingOp : public OpKernel {
         top_pose[n * 7 + i] = roi(6 + i);
     }
 
-    compute_target_weight(height, width, top_target, top_weight, bb3Ds, gt, num_gt, num_classes, fx, fy, px, py, outputs);
+    if (is_train_)
+      compute_target_weight(height, width, top_target, top_weight, bb3Ds, gt, num_gt, num_classes, fx, fy, px, py, outputs);
   }
  private:
   int is_train_;
@@ -269,54 +267,6 @@ class HoughvotingGradOp : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("HoughvotingGrad").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotingGradOp<CPUDevice, float>);
 
 
-// get probs
-void getProbs(const float* probability, std::vector<jp::img_stat_t>& probs, int width, int height, int num_classes)
-{
-  // for each object
-  for (int i = 1; i < num_classes; i++)
-  {
-    jp::img_stat_t img(height, width);
-
-    #pragma omp parallel for
-    for(int x = 0; x < width; x++)
-    for(int y = 0; y < height; y++)
-    {
-      int offset = i + num_classes * (y * width + x);
-      img(y, x) = probability[offset];
-    }
-
-    probs.push_back(img);
-  }
-}
-
-
-// get centers
-void getCenters(const float* vertmap, std::vector<jp::img_center_t>& vertexs, int width, int height, int num_classes)
-{
-  // for each object
-  for (int i = 1; i < num_classes; i++)
-  {
-    jp::img_center_t img(height, width);
-
-    #pragma omp parallel for
-    for(int x = 0; x < width; x++)
-    for(int y = 0; y < height; y++)
-    {
-      int channel = 2 * i;
-      int offset = channel + 2 * num_classes * (y * width + x);
-
-      jp::coord2_t obj;
-      obj(0) = vertmap[offset];
-      obj(1) = vertmap[offset + 1];
-
-      img(y, x) = obj;
-    }
-
-    vertexs.push_back(img);
-  }
-}
-
-
 // get label lists
 void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
 {
@@ -355,39 +305,6 @@ void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds
 
     bb3Ds.push_back(getBB3D(extent));
   }
-}
-
-
-/**
- * @brief Creates a list of samplers that return pixel positions according to probability maps.
- * 
- * This method generates numberOfObjects+1 samplers. The first sampler is a sampler 
- * for accumulated object probabilities. It samples pixel positions according to the 
- * probability of the pixel being any object (1-backgroundProbability). The 
- * following samplers correspond to the probabilities for individual objects.
- * 
- * @param samplers Output parameter. List of samplers.
- * @param probs Probability maps according to which should be sampled. One per object. The accumulated probability will be calculated in this method.
- * @param imageWidth Width of input images.
- * @param imageHeight Height of input images.
- * @return void
-*/
-void createSamplers(std::vector<Sampler2D>& samplers, const std::vector<jp::img_stat_t>& probs, int imageWidth, int imageHeight)
-{	
-  samplers.clear();
-  jp::img_stat_t objProb = jp::img_stat_t::zeros(imageHeight, imageWidth);
-	
-  // calculate accumulated probability (any object vs background)
-  #pragma omp parallel for
-  for(unsigned x = 0; x < objProb.cols; x++)
-  for(unsigned y = 0; y < objProb.rows; y++)
-  for(auto prob : probs)
-    objProb(y, x) += prob(y, x);
-	
-  // create samplers
-  samplers.push_back(Sampler2D(objProb));
-  for(auto prob : probs)
-    samplers.push_back(Sampler2D(prob));
 }
 
 
@@ -789,6 +706,73 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     */
 
     outputs.push_back(roi);
+
+    if (is_train)
+    {
+      // add jittering rois
+      float x1 = roi(2);
+      float y1 = roi(3);
+      float x2 = roi(4);
+      float y2 = roi(5);
+      float ww = x2 - x1;
+      float hh = y2 - y1;
+
+      // (-1, -1)
+      roi(2) = x1 - 0.05 * ww;
+      roi(3) = y1 - 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (+1, -1)
+      roi(2) = x1 + 0.05 * ww;
+      roi(3) = y1 - 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (-1, +1)
+      roi(2) = x1 - 0.05 * ww;
+      roi(3) = y1 + 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (+1, +1)
+      roi(2) = x1 + 0.05 * ww;
+      roi(3) = y1 + 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (0, -1)
+      roi(2) = x1;
+      roi(3) = y1 - 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (-1, 0)
+      roi(2) = x1 - 0.05 * ww;
+      roi(3) = y1;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (0, +1)
+      roi(2) = x1;
+      roi(3) = y1 + 0.05 * hh;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+
+      // (+1, 0)
+      roi(2) = x1 + 0.05 * ww;
+      roi(3) = y1;
+      roi(4) = roi(2) + ww;
+      roi(5) = roi(3) + hh;
+      outputs.push_back(roi);
+    }
   }
 }
 
@@ -881,7 +865,6 @@ void compute_target_weight(int height, int width, float* target, float* weight, 
     cv::transpose(rmat_trans, rmat);
     cv::Point3d tvec(poses_gt[i * 13 + 10], poses_gt[i * 13 + 11], poses_gt[i * 13 + 12]);
     jp::jp_trans_t pose(rmat, tvec);
-
     jp::cv_trans_t trans = jp::our2cv(pose);
 
     int objID = int(poses_gt[i * 13 + 1]);
