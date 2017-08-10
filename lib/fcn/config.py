@@ -53,6 +53,8 @@ __C.TRAIN.POSE_REG = False
 __C.TRAIN.MATCHING = False
 
 __C.TRAIN.SYNROOT = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
+if not os.path.exists(__C.TRAIN.SYNROOT):
+    __C.TRAIN.SYNROOT = '/home/yuxiang/Projects/Deep_Pose/data/LOV/data_syn/'
 __C.TRAIN.SYNITER = 0
 __C.TRAIN.SYNNUM = 80000
 
