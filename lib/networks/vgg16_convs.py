@@ -166,15 +166,14 @@ class vgg16_convs(Network):
                 self.layers['poses_weight'] = self.get_output('hough')[3]
 
                 # roi pooling
-                (self.feed('conv5_3', 'rois')
-                     .roi_pool(8, 8, 1.0 / 16.0, 0, name='pool_conv5')
-                     .conv(1, 1, self.num_units, 1, 1, name='pool_conv5_embed', c_i=512))
+                (self.feed('upscore', 'rois')
+                     .roi_pool(8, 8, 1.0, 0, name='pool_score_label'))
 
-                (self.feed('conv4_3', 'rois')
-                     .roi_pool(8, 8, 1.0 / 8.0, 0, name='pool_conv4')
-                     .conv(1, 1, self.num_units, 1, 1, name='pool_conv4_embed', c_i=512))
+                (self.feed('upscore_vertex', 'rois')
+                     .roi_pool(8, 8, 1.0, 0, name='pool_score_vertex')
+                     .conv(1, 1, self.num_units, 1, 1, name='pool_score_vertex_embed', c_i=128))
 
-                (self.feed('pool_conv4_embed', 'pool_conv5_embed')
+                (self.feed('pool_score_label', 'pool_score_vertex_embed')
                      .add(name='pool_score'))
 
                 (self.feed('prob_normalized', 'rois')

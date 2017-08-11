@@ -316,10 +316,22 @@ class Network(object):
 
     @layer
     def concat(self, inputs, axis, name):
+        if isinstance(inputs[0], tuple):
+            inputs[0] = inputs[0][0]
+
+        if isinstance(inputs[1], tuple):
+            inputs[1] = inputs[1][0]
+
         return tf.concat(axis=axis, values=inputs, name=name)
 
     @layer
     def add(self, inputs, name):
+        if isinstance(inputs[0], tuple):
+            inputs[0] = inputs[0][0]
+
+        if isinstance(inputs[1], tuple):
+            inputs[1] = inputs[1][0]
+
         return tf.add_n(inputs, name=name)
 
     @layer
