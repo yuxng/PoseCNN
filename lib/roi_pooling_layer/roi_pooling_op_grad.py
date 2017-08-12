@@ -7,8 +7,11 @@ def _roi_pool_shape(op):
   """Shape function for the RoiPool op.
 
   """
-  dims_data = op.inputs[0].get_shape().as_list()
-  channels = dims_data[3]
+  try:
+      dims_data = op.inputs[0].get_shape().as_list()
+      channels = dims_data[3]
+  except:
+      channels = 3
 
   dims_rois = op.inputs[1].get_shape().as_list()
   num_rois = dims_rois[0]

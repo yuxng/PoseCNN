@@ -83,7 +83,7 @@ class GtSynthesizeLayer(object):
             return
 
         print "building background images"
-        num = 200
+        num = 1000
         perm = np.random.permutation(np.arange(len(self._roidb)))
         perm = perm[:num]
         print len(perm)
@@ -131,7 +131,7 @@ class GtSynthesizeLayer(object):
         if not os.path.exists(outdir):
             os.mkdir(outdir)
 
-        num = 200
+        num = 1000
         perm = np.random.permutation(np.arange(len(self._roidb)))
         perm = perm[:num]
         print len(perm)
