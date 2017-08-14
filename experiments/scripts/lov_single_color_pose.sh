@@ -14,7 +14,7 @@ echo Logging output to "$LOG"
 export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
-  --weights data/imagenet_models/vgg16_convs.npy \
+  --weights data/imagenet_models/vgg16.npy \
   --ckpt output/lov/lov_train/vgg16_fcn_color_single_frame_synthesize_lov.ckpt \
   --imdb lov_train \
   --cfg experiments/cfgs/lov_single_color_pose.yml \

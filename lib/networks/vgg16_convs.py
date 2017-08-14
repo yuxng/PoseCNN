@@ -166,6 +166,15 @@ class vgg16_convs(Network):
                 self.layers['poses_weight'] = self.get_output('hough')[3]
 
                 # roi pooling
+                (self.feed('conv5_3', 'rois')
+                     .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5')
+                     .fc(4096, height=7, width=7, channel=512, name='fc6')
+                     .dropout(self.keep_prob_queue, name='drop6')
+                     .fc(4096, num_in=4096, name='fc7')
+                     .dropout(self.keep_prob_queue, name='drop7')
+                     .fc(4 * self.num_classes, relu=False, name='poses_pred'))
+                '''
+                # roi pooling
                 (self.feed('upscore', 'rois')
                      .roi_pool(8, 8, 1.0, 0, name='pool_score_label'))
 
@@ -188,3 +197,4 @@ class vgg16_convs(Network):
                      .fc(256, num_in=256, name='fc7')
                      .dropout(self.keep_prob_queue, name='drop7')
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
+                '''
