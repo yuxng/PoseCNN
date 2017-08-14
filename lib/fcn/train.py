@@ -51,7 +51,7 @@ class SolverWrapper(object):
         filename = (cfg.TRAIN.SNAPSHOT_PREFIX + infix + '_iter_{:d}'.format(iter+1) + '.ckpt')
         filename = os.path.join(self.output_dir, filename)
 
-        self.saver.save(sess, filename)
+        self.saver.save(sess, filename, write_meta_graph=False)
         print 'Wrote snapshot to: {:s}'.format(filename)
 
     def restore(self, session, save_file):

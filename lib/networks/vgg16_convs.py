@@ -31,7 +31,7 @@ class vgg16_convs(Network):
                 self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
 
         # define a queue
-        queue_size = 50
+        queue_size = 25
         if input_format == 'RGBD':
             if vertex_reg:
                 if pose_reg:
@@ -173,35 +173,16 @@ class vgg16_convs(Network):
                 (self.feed('conv5_3', 'rois')
                      .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5'))
 
-                (self.feed('pool_tile', 'pool5')
+                (self.feed('conv4_3', 'rois')
+                     .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4'))
+
+                (self.feed('pool4', 'pool5')
+                     .add(name='pool_score'))
+
+                (self.feed('pool_tile', 'pool_score')
                      .multiply(name='pool')
                      .fc(4096, height=7, width=7, channel=512, name='fc6')
                      .dropout(self.keep_prob_queue, name='drop6')
                      .fc(4096, num_in=4096, name='fc7')
                      .dropout(self.keep_prob_queue, name='drop7')
                      .fc(4 * self.num_classes, relu=False, name='poses_pred'))
-                '''
-                # roi pooling
-                (self.feed('upscore', 'rois')
-                     .roi_pool(8, 8, 1.0, 0, name='pool_score_label'))
-
-                (self.feed('upscore_vertex', 'rois')
-                     .roi_pool(8, 8, 1.0, 0, name='pool_score_vertex')
-                     .conv(1, 1, self.num_units, 1, 1, name='pool_score_vertex_embed', c_i=128))
-
-                (self.feed('pool_score_label', 'pool_score_vertex_embed')
-                     .add(name='pool_score'))
-
-                (self.feed('prob_normalized', 'rois')
-                     .roi_pool(8, 8, 1.0, 1, name='pool_prob')
-                     .tile(self.num_units, name='pool_tile'))
-
-                # mask the features
-                (self.feed('pool_tile', 'pool_score')
-                     .multiply(name='pool')
-                     .fc(256, height=8, width=8, channel=self.num_units, name='fc6')
-                     .dropout(self.keep_prob_queue, name='drop6')
-                     .fc(256, num_in=256, name='fc7')
-                     .dropout(self.keep_prob_queue, name='drop7')
-                     .fc(4 * self.num_classes, relu=False, name='poses_pred'))
-                '''
