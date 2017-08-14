@@ -21,7 +21,7 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
-from synthesize import synthesizer
+#from synthesize import synthesizer
 import scipy.io
 
 # from normals import gpu_normals
@@ -666,8 +666,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
-                RT[:3, :3] = quat2mat(poses_new[i, :4])
-                RT[:, 3] = poses_new[i, 4:7]
+                RT[:3, :3] = quat2mat(poses[i, :4])
+                RT[:, 3] = poses[i, 4:7]
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
@@ -778,7 +778,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 backgrounds = cPickle.load(fid)
             print 'backgrounds loaded from {}'.format(cache_file)
 
-    SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+    # SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
     for i in perm:
 
         if cfg.TEST.SYNTHETIC:
@@ -863,7 +863,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             zfar = 6.0
             iters = 100
             poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
-            SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
+            # SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
 
         _t['im_segment'].toc()
 
