@@ -230,6 +230,8 @@ def _get_label_blob(roidb, voxelizer):
             processed_vertex_weights.append(center_weights)
 
             poses = meta_data['poses']
+            if len(poses.shape) == 2:
+                poses = np.reshape(poses, (3, 4, 1))
             num = poses.shape[2]
             qt = np.zeros((num, 13), dtype=np.float32)
             for j in xrange(num):
@@ -237,8 +239,8 @@ def _get_label_blob(roidb, voxelizer):
                 T = poses[:, 3, j]
 
                 qt[j, 0] = i
-                qt[j, 1] = roidb[i]['gt_classes'][j]
-                qt[j, 2:6] = roidb[i]['boxes'][j, :]
+                qt[j, 1] = meta_data['cls_indexes'][j, 0]
+                qt[j, 2:6] = 0  # fill box later, roidb[i]['boxes'][j, :]
                 qt[j, 6:10] = mat2quat(R)
                 qt[j, 10:] = T
 
@@ -251,15 +253,15 @@ def _get_label_blob(roidb, voxelizer):
         processed_depth.append(depth)
 
         # voxelization
-        points = voxelizer.backproject_camera(im_depth, meta_data)
-        voxelizer.voxelized = False
-        voxelizer.voxelize(points)
-        RT_world = meta_data['rotation_translation_matrix']
+        # points = voxelizer.backproject_camera(im_depth, meta_data)
+        # voxelizer.voxelized = False
+        # voxelizer.voxelize(points)
+        # RT_world = meta_data['rotation_translation_matrix']
 
         # compute camera poses
-        RT_live = meta_data['rotation_translation_matrix']
-        pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
-        pose_live2world = se3_inverse(pose_world2live)
+        # RT_live = meta_data['rotation_translation_matrix']
+        # pose_world2live = se3_mul(RT_live, se3_inverse(RT_world))
+        # pose_live2world = se3_inverse(pose_world2live)
 
         # construct the meta data
         """
@@ -276,14 +278,14 @@ def _get_label_blob(roidb, voxelizer):
         mdata = np.zeros(48, dtype=np.float32)
         mdata[0:9] = K.flatten()
         mdata[9:18] = Kinv.flatten()
-        mdata[18:30] = pose_world2live.flatten()
-        mdata[30:42] = pose_live2world.flatten()
-        mdata[42] = voxelizer.step_x
-        mdata[43] = voxelizer.step_y
-        mdata[44] = voxelizer.step_z
-        mdata[45] = voxelizer.min_x
-        mdata[46] = voxelizer.min_y
-        mdata[47] = voxelizer.min_z
+        # mdata[18:30] = pose_world2live.flatten()
+        # mdata[30:42] = pose_live2world.flatten()
+        # mdata[42] = voxelizer.step_x
+        # mdata[43] = voxelizer.step_y
+        # mdata[44] = voxelizer.step_z
+        # mdata[45] = voxelizer.min_x
+        # mdata[46] = voxelizer.min_y
+        # mdata[47] = voxelizer.min_z
         if cfg.FLIP_X:
             mdata[0] = -1 * mdata[0]
             mdata[9] = -1 * mdata[9]

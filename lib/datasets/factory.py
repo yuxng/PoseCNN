@@ -14,6 +14,7 @@ import datasets.shapenet_single
 import datasets.gmu_scene
 import datasets.rgbd_scene
 import datasets.lov
+import datasets.linemod
 import numpy as np
 
 # shapenet dataset
@@ -49,6 +50,14 @@ for split in ['train', 'val', 'debug']:
     print name
     __sets[name] = (lambda split=split:
             datasets.lov(split))
+
+# linemod dataset
+for split in ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher', 'test']:
+    name = 'linemod_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.linemod(split))
+
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

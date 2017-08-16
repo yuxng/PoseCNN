@@ -624,7 +624,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     plt.imshow(im_labels)
     ax.set_title('class labels')      
 
-    if cfg.TEST.VERTEX_REG:
+    if cfg.TEST.POSE_REG:
         # show centers
         for i in xrange(rois.shape[0]):
             cx = (rois[i, 2] + rois[i, 4]) / 2
@@ -712,7 +712,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         plt.imshow(im_depth)
         ax.set_title('input depth')
 
-        if cfg.TEST.VERTEX_REG:
+        if cfg.TEST.POSE_REG:
             # show centers
             for i in xrange(rois.shape[0]):
                 cx = (rois[i, 2] + rois[i, 4]) / 2
@@ -854,16 +854,20 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         if cfg.TEST.VERTEX_REG:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
 
-            # pose refinement
-            fx = meta_data['intrinsic_matrix'][0, 0]
-            fy = meta_data['intrinsic_matrix'][1, 1]
-            px = meta_data['intrinsic_matrix'][0, 2]
-            py = meta_data['intrinsic_matrix'][1, 2]
-            znear = 0.25
-            zfar = 6.0
-            iters = 100
-            poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
-            # SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
+            if cfg.TEST.POSE_REG:
+                # pose refinement
+                fx = meta_data['intrinsic_matrix'][0, 0]
+                fy = meta_data['intrinsic_matrix'][1, 1]
+                px = meta_data['intrinsic_matrix'][0, 2]
+                py = meta_data['intrinsic_matrix'][1, 2]
+                znear = 0.25
+                zfar = 6.0
+                iters = 100
+                poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
+                # SYN.estimate_poses(labels, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
+            else:
+                poses_new = []
+                meta_data['vertmap'] = []
 
         _t['im_segment'].toc()
 
