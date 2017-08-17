@@ -52,11 +52,12 @@ for split in ['train', 'val', 'debug']:
             datasets.lov(split))
 
 # linemod dataset
-for split in ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher', 'test']:
-    name = 'linemod_{}'.format(split)
-    print name
-    __sets[name] = (lambda split=split:
-            datasets.linemod(split))
+for cls in ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher']:
+    for split in ['train', 'test']:
+        name = 'linemod_{}_{}'.format(cls, split)
+        print name
+        __sets[name] = (lambda cls=cls, split=split:
+                datasets.linemod(cls, split))
 
 
 def get_imdb(name):

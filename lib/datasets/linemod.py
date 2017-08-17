@@ -9,23 +9,21 @@ import numpy as np
 import cv2
 
 class linemod(datasets.imdb):
-    def __init__(self, image_set, linemod_path = None):
-        datasets.imdb.__init__(self, 'linemod_' + image_set)
+    def __init__(self, cls, image_set, linemod_path = None):
+        datasets.imdb.__init__(self, 'linemod_' + cls + '_' + image_set)
+        self._cls = cls
         self._image_set = image_set
         self._linemod_path = self._get_default_path() if linemod_path is None \
                             else linemod_path
         self._data_path = os.path.join(self._linemod_path, 'data')
 
-        if image_set == 'test':
-            self._classes = ('__background__', 'ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
-            self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), (128, 0, 0), (0, 128, 0)]
-            self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1]
-        else:
-            self._classes = ('__background__', image_set)
-            self._class_colors = [(255, 255, 255), (255, 0, 0)]
-            self._class_weights = [1, 100]
+        self._classes = ('__background__', cls)
+        self._class_colors = [(255, 255, 255), (255, 0, 0)]
+        self._class_weights = [1, 100]
+        self._classes_all = ('__background__', 'ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
 
         self._extents = self._load_object_extents()
+        self._points = self._load_object_points()
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -105,7 +103,10 @@ class linemod(datasets.imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        image_set_file = os.path.join(self._linemod_path, self._image_set + '.txt')
+        if self._image_set == 'train':
+            image_set_file = os.path.join(self._linemod_path, self._cls + '.txt')
+        else:
+            image_set_file = os.path.join(self._linemod_path, self._image_set + '.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
@@ -120,6 +121,16 @@ class linemod(datasets.imdb):
         return os.path.join(datasets.ROOT_DIR, 'data', 'LINEMOD')
 
 
+    def _load_object_points(self):
+
+        point_file = os.path.join(self._linemod_path, 'models', self._cls + '.xyz')
+        assert os.path.exists(point_file), \
+                'Path does not exist: {}'.format(point_file)
+
+        points = np.loadtxt(point_file)
+        return points
+
+
     def _load_object_extents(self):
 
         extent_file = os.path.join(self._linemod_path, 'extents.txt')
@@ -127,15 +138,13 @@ class linemod(datasets.imdb):
                 'Path does not exist: {}'.format(extent_file)
 
         extents = np.zeros((self.num_classes, 3), dtype=np.float32)
-        if self._image_set == 'test':
-            extents[1:, :] = np.loadtxt(extent_file)
-        else:
-            extents_all = np.loadtxt(extent_file)
-            classes_all = ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher']
-            for i in xrange(len(classes_all)):
-                if self._image_set == classes_all[i]:
-                    extents[1, :] = extents_all[i, :]
-                    break
+
+        extents_all = np.loadtxt(extent_file)
+        classes_all = ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher']
+        for i in xrange(len(classes_all)):
+            if self._cls == classes_all[i]:
+                extents[1, :] = extents_all[i, :]
+                break
 
         return extents
 
@@ -328,6 +337,6 @@ class linemod(datasets.imdb):
 
 
 if __name__ == '__main__':
-    d = datasets.linemod('ape')
+    d = datasets.linemod('ape', 'train')
     res = d.roidb
     from IPython import embed; embed()

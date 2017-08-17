@@ -29,7 +29,7 @@ def get_minibatch(roidb, voxelizer, extents):
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
-        gan_z_blob = _get_label_blob(roidb, voxelizer)
+        gan_z_blob = _get_label_blob(roidb, voxelizer, im_scales)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -184,7 +184,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index, labels
 
 
-def _get_label_blob(roidb, voxelizer):
+def _get_label_blob(roidb, voxelizer, im_scales):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -200,6 +200,8 @@ def _get_label_blob(roidb, voxelizer):
         pose_blob = []
 
     for i in xrange(num_images):
+        im_scale = im_scales[i]
+
         # load meta data
         meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
         im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
@@ -220,12 +222,13 @@ def _get_label_blob(roidb, voxelizer):
                 im = im[:, ::-1]
             else:
                 im = im[:, ::-1, :]
+        im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
-            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+            center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], im_scale * meta_data['center'], num_classes)
             processed_vertex_targets.append(center_targets)
             processed_vertex_weights.append(center_weights)
 
@@ -250,6 +253,7 @@ def _get_label_blob(roidb, voxelizer):
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
         depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        depth = cv2.resize(depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         processed_depth.append(depth)
 
         # voxelization
@@ -273,7 +277,8 @@ def _get_label_blob(roidb, voxelizer):
         voxel step size: meta_data[42, 43, 44]
         voxel min value: meta_data[45, 46, 47]
         """
-        K = np.matrix(meta_data['intrinsic_matrix'])
+        K = np.matrix(meta_data['intrinsic_matrix']) * im_scale
+        K[2, 2] = 1
         Kinv = np.linalg.pinv(K)
         mdata = np.zeros(48, dtype=np.float32)
         mdata[0:9] = K.flatten()

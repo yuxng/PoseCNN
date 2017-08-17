@@ -7,7 +7,7 @@ class vgg16_convs(Network):
         self.input_format = input_format
         self.num_classes = num_classes
         self.num_units = num_units
-        self.scale = 1 / scales[0]
+        self.scale = 1.0
         self.vertex_reg = vertex_reg
         self.pose_reg = pose_reg
         self.matching = matching
@@ -25,27 +25,20 @@ class vgg16_convs(Network):
         if vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 2 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 2 * num_classes])
-            if pose_reg:
-                self.poses = tf.placeholder(tf.float32, shape=[None, 13])
-                self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
-                self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
+            self.poses = tf.placeholder(tf.float32, shape=[None, 13])
+            self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
+            self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
 
         # define a queue
         queue_size = 25
         if input_format == 'RGBD':
             if vertex_reg:
-                if pose_reg:
-                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                    self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
-                                                 self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meat_data])
-                    data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
-                    self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
-                                        'poses': poses, 'extents': extents, 'meta_data': meta_data})
-                else:
-                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                    self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
-                    data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
-                    self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
+                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meat_data])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
+                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
+                                    'poses': poses, 'extents': extents, 'meta_data': meta_data})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
@@ -53,17 +46,11 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if vertex_reg:
-                if pose_reg:
-                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                    self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
-                    data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
-                    self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
-                                        'poses': poses, 'extents': extents, 'meta_data': meta_data})
-                else:
-                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                    self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights])
-                    data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights = q.dequeue()
-                    self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights})
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
+                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
+                                    'poses': poses, 'extents': extents, 'meta_data': meta_data})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
@@ -155,16 +142,16 @@ class vgg16_convs(Network):
                  .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
                  .conv(1, 1, 2 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
+
+            (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
+                 .hough_voting(self.is_train, name='hough'))
+
+            self.layers['rois'] = self.get_output('hough')[0]
+            self.layers['poses_init'] = self.get_output('hough')[1]
+            self.layers['poses_target'] = self.get_output('hough')[2]
+            self.layers['poses_weight'] = self.get_output('hough')[3]
+
             if self.pose_reg:
-
-                (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                     .hough_voting(self.is_train, name='hough'))
-
-                self.layers['rois'] = self.get_output('hough')[0]
-                self.layers['poses_init'] = self.get_output('hough')[1]
-                self.layers['poses_target'] = self.get_output('hough')[2]
-                self.layers['poses_weight'] = self.get_output('hough')[3]
-
                 # roi pooling without masking
                 (self.feed('conv5_3', 'rois')
                      .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5'))
