@@ -90,11 +90,16 @@ class Synthesizer
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               float* vertex_targets, float* vertex_weights, float weight);
+  void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+              unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
   void loadModels(std::string filename);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
-    pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
+    pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors,
+    pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
+
+  jp::jp_trans_t quat2our(const Sophus::SE3d T_co);
 
   // hough voting
   void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
@@ -140,6 +145,7 @@ class Synthesizer
   // buffers
   std::vector<pangolin::GlBuffer> texturedVertices_;
   std::vector<pangolin::GlBuffer> canonicalVertices_;
+  std::vector<pangolin::GlBuffer> vertexColors_;
   std::vector<pangolin::GlBuffer> texturedIndices_;
   std::vector<pangolin::GlBuffer> texturedCoords_;
   std::vector<pangolin::GlTexture> texturedTextures_;

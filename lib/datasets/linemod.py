@@ -104,9 +104,9 @@ class linemod(datasets.imdb):
         Load the indexes listed in this dataset's image set file.
         """
         if self._image_set == 'train':
-            image_set_file = os.path.join(self._linemod_path, self._cls + '.txt')
+            image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '.txt')
         else:
-            image_set_file = os.path.join(self._linemod_path, self._image_set + '.txt')
+            image_set_file = os.path.join(self._linemod_path, 'indexes', self._image_set + '.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 

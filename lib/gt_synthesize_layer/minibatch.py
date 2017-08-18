@@ -255,6 +255,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                 processed_vertex_weights.append(center_weights)
 
                 poses = meta_data['poses']
+                if len(poses.shape) == 2:
+                    poses = np.reshape(poses, (3, 4, 1))
                 num = poses.shape[2]
                 qt = np.zeros((num, 13), dtype=np.float32)
                 for j in xrange(num):
@@ -272,6 +274,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                 processed_vertex_weights.append(center_weights)
 
                 poses = meta_data['poses']
+                if len(poses.shape) == 2:
+                    poses = np.reshape(poses, (3, 4, 1))
                 num = poses.shape[2]
                 qt = np.zeros((num, 13), dtype=np.float32)
                 for j in xrange(num):
@@ -280,8 +284,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                     # print R, T
 
                     qt[j, 0] = k
-                    qt[j, 1] = roidb[i]['gt_classes'][j]
-                    qt[j, 2:6] = roidb[i]['boxes'][j, :]
+                    qt[j, 1] = meta_data['cls_indexes'][j, 0]
+                    qt[j, 2:6] = 0  # fill box later, roidb[i]['boxes'][j, :]
                     qt[j, 6:10] = mat2quat(R)
                     qt[j, 10:] = T
 

@@ -15,6 +15,7 @@ cdef extern from "synthesizer.hpp":
         Synthesizer(string, string) except +
         void setup()
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
+        void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
         void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
         void estimatePose(int*, int, int, float, float, float, float, float, float, int, float*, float*, float*, int)
 
@@ -41,6 +42,18 @@ cdef class PySynthesizer:
 
         return self.synthesizer.render(width, height, fx, fy, px, py, znear, zfar, color_buff, &depth[0, 0], \
                    &vertmap[0, 0, 0], &class_indexes[0], &poses[0, 0], &centers[0, 0], &vertex_targets[0, 0, 0], &vertex_weights[0, 0, 0], weight)
+
+
+    def render_one(self, np.ndarray[np.uint8_t, ndim=3] color, np.ndarray[np.float32_t, ndim=2] depth, np.ndarray[np.float32_t, ndim=3] vertmap, \
+               np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] centers, np.ndarray[np.float32_t, ndim=2] extents, \
+               float fx, float fy, float px, float py, float znear, float zfar, int which_class):
+
+        cdef unsigned char* color_buff = <unsigned char*> color.data
+        cdef int height = color.shape[0]
+        cdef int width = color.shape[1]
+
+        return self.synthesizer.render_one(which_class, width, height, fx, fy, px, py, znear, zfar, color_buff, &depth[0, 0], \
+                   &vertmap[0, 0, 0], &poses[0, 0], &centers[0, 0], &extents[0, 0])
 
 
     def estimate_centers(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.float32_t, ndim=3] vertmap, \

@@ -151,12 +151,22 @@ void Synthesizer::loadModels(const std::string filename)
   // buffers
   texturedVertices_.resize(num_models);
   canonicalVertices_.resize(num_models);
+  vertexColors_.resize(num_models);
   texturedIndices_.resize(num_models);
   texturedCoords_.resize(num_models);
   texturedTextures_.resize(num_models);
 
   for (int m = 0; m < num_models; m++)
-    initializeBuffers(m, assimpMeshes_[m], texture_names[m], texturedVertices_[m], canonicalVertices_[m], texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], true);
+  {
+    bool is_textured;
+    if (texture_names[m] == "")
+      is_textured = false;
+    else
+      is_textured = true;
+
+    initializeBuffers(m, assimpMeshes_[m], texture_names[m], texturedVertices_[m], canonicalVertices_[m], vertexColors_[m], 
+                      texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], is_textured);
+  }
 }
 
 aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & texture_name)
@@ -199,17 +209,18 @@ aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & 
     std::cout << "number of vertices: " << assimpMesh->mNumVertices << std::endl;
     std::cout << "number of faces: " << assimpMesh->mNumFaces << std::endl;
 
-    if (!assimpMesh->HasTextureCoords(0)) {
-        throw std::runtime_error("mesh does not have texture coordinates");
-    }
+    if (!assimpMesh->HasTextureCoords(0))
+      texture_name = "";
+    else
+      texture_name = textureName;
 
-    texture_name = textureName;
     return assimpMesh;
 }
 
 
 void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
-  pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
+  pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors,
+  pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
 {
     std::cout << "number of vertices: " << assimpMesh->mNumVertices << std::endl;
     std::cout << "number of faces: " << assimpMesh->mNumFaces << std::endl;
@@ -251,6 +262,18 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
           texCoords2[i] = make_float2(assimpMesh->mTextureCoords[0][i].x,1.0 - assimpMesh->mTextureCoords[0][i].y);
       }
       texCoords.Upload(texCoords2.data(),assimpMesh->mNumVertices*sizeof(float)*2);
+    }
+    else
+    {
+      // vertex colors
+      std::vector<float3> colors3(assimpMesh->mNumVertices);
+      for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++) 
+      {
+          aiColor4D & color = assimpMesh->mColors[0][i];
+          colors3[i] = make_float3(color.r, color.g, color.b);
+      }
+      colors.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
+      colors.Upload(colors3.data(), assimpMesh->mNumVertices*sizeof(float)*3);
     }
 }
 
@@ -522,6 +545,245 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
 
   counter_++;
 }
+
+
+jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
+{
+  Eigen::Matrix4d mv = T_co.matrix();
+
+  // map data types
+  cv::Mat rmat(3, 3, CV_64F);
+  for (int i = 0; i < 3; i++)
+  {
+    for (int j = 0; j < 3; j++)
+      rmat.at<double>(i,j) = mv(i, j);
+  }
+
+  cv::Point3d tpt(mv(0, 3), mv(1, 3), mv(2, 3));
+
+  // result may be reconstructed behind the camera
+  if(cv::determinant(rmat) < 0)
+  {
+    tpt = -tpt;
+    rmat = -rmat;
+  }
+	
+  return jp::jp_trans_t(rmat, tpt);  
+}
+
+
+// render for one class
+void Synthesizer::render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+              unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
+{
+  bool is_textured = false;
+  int is_save = 0;
+
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
+  pangolin::OpenGlMatrixSpec projectionMatrix_reverse = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
+
+  // show gt pose
+  glEnable(GL_DEPTH_TEST);
+  glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+
+  int num_classes = pose_nums_.size();
+  // sample the number of objects in the scene
+  int num;
+  if (irand(0, 2) == 0)
+    num = 1;
+  else
+    num = 2;
+
+  // sample object classes
+  std::vector<int> class_ids(num);
+  class_ids[0] = which_class;
+  if (num > 1)
+  {
+    while (1)
+    {
+      int class_id = irand(0, num_classes);
+      if (class_id != which_class)
+      {
+        class_ids[1] = class_id;
+        break;
+      }
+    }
+  }
+
+  // sample the poses
+  std::vector<Sophus::SE3d> poses(num);
+
+  // sample the target object
+  int class_id = class_ids[0];
+  int seed = irand(0, pose_nums_[class_id]);
+  float* pose = poses_[class_id] + seed * 7;
+
+  Eigen::Quaterniond quaternion_first(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+  Sophus::SE3d::Point translation_first(pose[4] + drand(-0.2, 0.2), pose[5]  + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
+  const Sophus::SE3d T_co_first(quaternion_first, translation_first);
+
+  poses[0] = T_co_first;
+  if (poses_return)
+  {
+    poses_return[0] = quaternion_first.w();
+    poses_return[1] = quaternion_first.x();
+    poses_return[2] = quaternion_first.y();
+    poses_return[3] = quaternion_first.z();
+    poses_return[4] = translation_first(0);
+    poses_return[5] = translation_first(1);
+    poses_return[6] = translation_first(2);
+  }
+
+  if (num > 1)
+  {
+    // sample the second object
+    class_id = class_ids[1];
+    seed = irand(0, pose_nums_[class_id]);
+    pose = poses_[class_id] + seed * 7;
+    Eigen::Quaterniond quaternion_second(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+    Sophus::SE3d::Point translation_second;
+    float extent = (extents[3 * (class_id + 1)] + extents[3 * (class_id + 1) + 1] + extents[3 * (class_id + 1) + 2]) / 3;
+
+    // sample the center location
+    int flag = irand(0, 2);
+    if (flag == 0)
+      flag = -1;
+    translation_second(0) = translation_first(0) + flag * extent * drand(0.2, 0.4);
+
+    flag = irand(0, 2);
+    if (flag == 0)
+      flag = -1;
+    translation_second(1) = translation_first(1) + flag * extent * drand(0.2, 0.4);
+
+    translation_second(2) = translation_first(2) - drand(0.1, 0.2);
+    const Sophus::SE3d T_co_second(quaternion_second, translation_second);
+    poses[1] = T_co_second;
+  }
+
+  // render vertmap
+  std::vector<Eigen::Matrix4f> transforms(num);
+  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
+  std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+
+  for (int i = 0; i < num; i++)
+  {
+    int class_id = class_ids[i];
+    transforms[i] = poses[i].matrix().cast<float>();
+    attributeBuffers[i].push_back(&texturedVertices_[class_id]);
+    attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+    modelIndexBuffers[i] = &texturedIndices_[class_id];
+  }
+
+  glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+  renderer_->setProjectionMatrix(projectionMatrix_reverse);
+  renderer_->render(attributeBuffers, modelIndexBuffers, transforms);
+
+  glColor3f(1, 1, 1);
+  gtView_->ActivateScissorAndClear();
+  renderer_->texture(0).RenderToViewportFlipY();
+
+  if (vertmap)
+  {
+    renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
+    if (is_save)
+    {
+      std::string filename = std::to_string(counter_) + ".vertmap";
+      writeHalfPrecisionVertMap(filename, vertmap, height*width);
+    }
+
+    // compute object 2D center
+    if (centers_return)
+    {
+      float tx = poses_return[4];
+      float ty = poses_return[5];
+      float tz = poses_return[6];
+      centers_return[0] = fx * (tx / tz) + px;
+      centers_return[1] = fy * (ty / tz) + py;
+    }
+  }
+
+  // render color image
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  for (int i = 0; i < num; i++)
+  {
+    int class_id = class_ids[i];
+
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+
+    Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
+    pangolin::OpenGlMatrix mvMatrix(mv);
+    mvMatrix.Load();
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    texturedVertices_[class_id].Bind();
+    glVertexPointer(3,GL_FLOAT,0,0);
+    glEnableClientState(GL_COLOR_ARRAY);
+    vertexColors_[class_id].Bind();
+    glColorPointer(3,GL_FLOAT,0,0);
+    texturedIndices_[class_id].Bind();
+    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+    texturedIndices_[class_id].Unbind();
+    texturedVertices_[class_id].Unbind();
+    vertexColors_[class_id].Unbind();
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+  }
+
+  // read color image
+  if (color)
+  {
+    glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
+    if (is_save)
+    {
+      cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
+      cv::Mat output;
+      cv::flip(C, output, 0);
+      std::string filename = std::to_string(counter_) + "_color.png";
+      cv::imwrite(filename.c_str(), output);
+    }
+  }
+  
+  // read depth image
+  if (depth)
+  {
+    glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
+
+    if (is_save)
+    {
+      // write depth
+      cv::Mat D = cv::Mat(height, width, CV_32FC1, depth);
+      cv::Mat DD = cv::Mat(height, width, CV_16UC1);
+      for (int x = 0; x < width; x++)
+      { 
+        for (int y = 0; y < height; y++)
+        {
+          if (D.at<float>(y, x) == 1)
+            DD.at<short>(y, x) = 0;
+          else
+            DD.at<short>(y, x) = short(10000 * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * D.at<float>(y, x) - 1)));
+        }
+      }
+
+      std::string filename = std::to_string(counter_) + "_depth.png";
+      cv::Mat output;
+      cv::flip(DD, output, 0);
+      cv::imwrite(filename.c_str(), output);
+    }
+  }
+
+  if (is_save)
+  {
+    std::string filename = std::to_string(counter_++);
+    pangolin::SaveWindowOnRender(filename);
+  }
+  pangolin::FinishFrame();
+
+  counter_++;
+}
+
 
 // get label lists
 void Synthesizer::getLabels(const int* labelmap, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea)
