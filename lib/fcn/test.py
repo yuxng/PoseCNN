@@ -13,6 +13,7 @@ from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
+from utils.pose_error import *
 import numpy as np
 import cv2
 import cPickle
@@ -189,7 +190,8 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 poses = poses_init
                 for i in xrange(num):
                     class_id = int(rois[i, 1])
-                    poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
+                    if class_id >= 0:
+                        poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
             else:
                 labels_2d, probs, vertex_pred, rois = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois')])
@@ -872,7 +874,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             num = poses_gt.shape[2]
 
             for k in xrange(rois.shape[0]):
-                cls = imdb.classes[int(rois[k, 1])]
+                cls_index = int(rois[k, 1])
+                cls = imdb.classes[cls_index]
                 print cls
                 print 'estimated pose'
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -884,6 +887,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                     if cls == imdb._classes_all[meta_data['cls_indexes'][j, 0]]:
                         print 'gt pose'
                         print poses_gt[:, :, j]
+
+                        # compute pose error
+                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        print 'error: {}'.format(error)
+                        print 0.1 * np.linalg.norm(imdb._extents[cls_index, :])
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:

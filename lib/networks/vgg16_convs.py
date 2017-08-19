@@ -142,7 +142,6 @@ class vgg16_convs(Network):
                  .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
                  .conv(1, 1, 2 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
-
             (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
                  .hough_voting(self.is_train, name='hough'))
 

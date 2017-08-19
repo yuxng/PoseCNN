@@ -162,6 +162,20 @@ class HoughvotingOp : public OpKernel {
       index_meta_data += num_meta_data;
     }
 
+    if (outputs.size() == 0)
+    {
+      std::cout << "no detection" << std::endl;
+      // add a dummy detection to the output
+      cv::Vec<float, 13> roi;
+      roi(0) = 0;
+      roi(1) = -1;
+      roi(2) = 0;
+      roi(3) = 0;
+      roi(4) = 1;
+      roi(5) = 1;
+      outputs.push_back(roi);
+    }
+
     // Create output tensors
     // top_box
     int dims[2];

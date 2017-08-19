@@ -28,7 +28,7 @@ def get_minibatch(roidb, extents, num_classes, backgrounds, intrinsic_matrix, db
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
-        = _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn)
+        = _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
@@ -64,14 +64,6 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
         else:
             is_syn = True
         i = k / 2
-
-        # meta data
-        fx = intrinsic_matrix[0, 0]
-        fy = intrinsic_matrix[1, 1]
-        cx = intrinsic_matrix[0, 2]
-        cy = intrinsic_matrix[1, 2]
-        znear = 0.25
-        zfar = 6.0
 
         if is_syn:
             # depth raw
@@ -123,9 +115,9 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
         im_orig = im.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
         im_scale = cfg.TRAIN.SCALES_BASE[scale_ind]
-        # im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         im_scales.append(im_scale)
-        processed_ims.append(im_orig)
+        processed_ims.append(im)
 
         # depth
         im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
@@ -136,8 +128,8 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
 
         im_orig = im_depth.astype(np.float32, copy=True)
         im_orig -= cfg.PIXEL_MEANS
-        # im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_depth.append(im_orig)
+        im_depth = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_depth.append(im_depth)
 
         # normals
         '''
@@ -192,7 +184,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index, labels
 
 
-def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
+def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -212,6 +204,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
         else:
             is_syn = True
         i = k / 2
+        im_scale = im_scales[i]
 
         if is_syn:
             filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(db_inds_syn[i])
@@ -244,13 +237,14 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                 im = im[:, ::-1]
             else:
                 im = im[:, ::-1, :]
+        im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG:
             if is_syn:
-                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'].flatten(), meta_data['center'], num_classes)
+                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'].flatten(), im_scale * meta_data['center'], num_classes)
                 processed_vertex_targets.append(center_targets)
                 processed_vertex_weights.append(center_weights)
 
@@ -269,7 +263,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
                     qt[j, 6:10] = mat2quat(R)
                     qt[j, 10:] = T
             else:
-                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], meta_data['center'], num_classes)
+                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], im_scale * meta_data['center'], num_classes)
                 processed_vertex_targets.append(center_targets)
                 processed_vertex_weights.append(center_weights)
 
@@ -294,7 +288,9 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
         # depth
         if roidb[i]['flipped']:
             im_depth = im_depth[:, ::-1]
-        processed_depth.append(im_depth)
+        depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        depth = cv2.resize(depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_depth.append(depth)
 
         # voxelization
         # points = voxelizer.backproject_camera(im_depth, meta_data)
@@ -317,7 +313,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn):
         voxel step size: meta_data[42, 43, 44]
         voxel min value: meta_data[45, 46, 47]
         """
-        K = intrinsic_matrix
+        K = np.matrix(meta_data['intrinsic_matrix']) * im_scale
+        K[2, 2] = 1
         Kinv = np.linalg.pinv(K)
         mdata = np.zeros(48, dtype=np.float32)
         mdata[0:9] = K.flatten()

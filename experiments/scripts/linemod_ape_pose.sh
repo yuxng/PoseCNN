@@ -28,6 +28,6 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/linemod/linemod_ape_train/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_10000.ckpt \
-  --imdb linemod_ape_train \
+  --model output/linemod/linemod_ape_train/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_20000.ckpt \
+  --imdb linemod_ape_test \
   --cfg experiments/cfgs/linemod_ape_pose.yml
