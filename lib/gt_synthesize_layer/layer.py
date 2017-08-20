@@ -41,27 +41,44 @@ class GtSynthesizeLayer(object):
         self._perm_syn = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
         self._cur_syn = 0
 
-    def _get_next_minibatch_inds(self):
+    def _get_next_minibatch_inds(self, is_syn):
         """Return the roidb indices for the next minibatch."""
-        if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
-            self._shuffle_roidb_inds()
 
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
-        self._cur += cfg.TRAIN.IMS_PER_BATCH
-
-        if self._cur_syn + cfg.TRAIN.IMS_PER_BATCH >= cfg.TRAIN.SYNNUM:
-            self._shuffle_syn_inds()
+        if is_syn == 0:
+            self._cur += cfg.TRAIN.IMS_PER_BATCH
+            if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
+                self._shuffle_roidb_inds()
 
         db_inds_syn = self._perm_syn[self._cur_syn:self._cur_syn + cfg.TRAIN.IMS_PER_BATCH]
-        self._cur_syn += cfg.TRAIN.IMS_PER_BATCH
+        if is_syn:
+            self._cur_syn += cfg.TRAIN.IMS_PER_BATCH
+            if self._cur_syn + cfg.TRAIN.IMS_PER_BATCH >= cfg.TRAIN.SYNNUM:
+                self._shuffle_syn_inds()
 
         return db_inds, db_inds_syn
 
     def _get_next_minibatch(self):
         """Return the blobs to be used for the next minibatch."""
-        db_inds, db_inds_syn = self._get_next_minibatch_inds()
+
+        ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, 4)
+        if ratio == 0:
+            ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), 4)
+            r = np.random.randint(ratio+1, size=1)[0]
+            if r == 0:
+                is_syn = 0
+            else:
+                is_syn = 1
+        else:
+            r = np.random.randint(ratio+1, size=1)[0]
+            if r == 0:
+                is_syn = 1
+            else:
+                is_syn = 0
+
+        db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
         minibatch_db = [self._roidb[i] for i in db_inds]
-        return get_minibatch(minibatch_db, self._extents, self._num_classes, self._backgrounds, self._intrinsic_matrix, db_inds_syn)
+        return get_minibatch(minibatch_db, self._extents, self._num_classes, self._backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn)
             
     def forward(self):
         """Get blobs and copy them into this layer's top blob vector."""
@@ -122,7 +139,15 @@ class GtSynthesizeLayer(object):
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
                 self._backgrounds = cPickle.load(fid)
-            print '{} backgrounds loaded from {}'.format(self._name, cache_file)
+
+            if self._name != 'lov_train':
+                cache_file_lov = os.path.join(self._cache_path, 'lov_train_backgrounds.pkl')
+                if os.path.exists(cache_file_lov):
+                    with open(cache_file_lov, 'rb') as fid:
+                        backgrounds_lov = cPickle.load(fid)
+                        self._backgrounds = self._backgrounds + backgrounds_lov
+
+            print '{} backgrounds loaded from {}, {} images'.format(self._name, cache_file, len(self._backgrounds))
             return
 
         print "building background images"

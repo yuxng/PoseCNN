@@ -129,6 +129,7 @@ class Synthesizer
   // poses
   std::vector<float*> poses_;
   std::vector<int> pose_nums_;
+  std::vector<bool> is_textured_;
 
   // rois
   std::vector<std::vector<cv::Vec<float, 12> > > rois_;

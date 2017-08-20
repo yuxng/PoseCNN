@@ -99,6 +99,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           height_ = 2 * h;
         }
 
+        float compute_distance(const float* vertmap, int num_classes, int width)
+        {
+          float distance = 0;
+          for(int i = 0; i < inliers; i++)
+          {
+            int x = int(inlierPts2D[i].second.x);
+            int y = int(inlierPts2D[i].second.y);
+            int offset = 3 * objID + 3 * num_classes * (y * width + x);
+            distance += vertmap[offset + 2];
+          }
+          return distance / inliers;
+        }
+
         void compute_box()
         {
           float x1 = 100000;

@@ -155,6 +155,7 @@ void Synthesizer::loadModels(const std::string filename)
   texturedIndices_.resize(num_models);
   texturedCoords_.resize(num_models);
   texturedTextures_.resize(num_models);
+  is_textured_.resize(num_models);
 
   for (int m = 0; m < num_models; m++)
   {
@@ -163,6 +164,7 @@ void Synthesizer::loadModels(const std::string filename)
       is_textured = false;
     else
       is_textured = true;
+    is_textured_[m] = is_textured;
 
     initializeBuffers(m, assimpMeshes_[m], texture_names[m], texturedVertices_[m], canonicalVertices_[m], vertexColors_[m], 
                       texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], is_textured);
@@ -589,10 +591,10 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int num_classes = pose_nums_.size();
   // sample the number of objects in the scene
   int num;
-  if (irand(0, 2) == 0)
-    num = 1;
-  else
+  if (irand(0, 8) == 0)
     num = 2;
+  else
+    num = 1;
 
   // sample object classes
   std::vector<int> class_ids(num);
@@ -1201,6 +1203,8 @@ void Synthesizer::estimatePose(const int* labelmap, int height, int width, float
   for(int i = 0; i < num_roi; i++)
   {
     int objID = int(rois[i * 6 + 1]);
+    if (objID < 0)
+      continue;
 
     // construct the data
     data.classID = objID;
@@ -1320,23 +1324,42 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
     pangolin::OpenGlMatrix mvMatrix(mv);
     mvMatrix.Load();
 
-    glEnable(GL_TEXTURE_2D);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_[class_id].Bind();
-    texturedVertices_[class_id].Bind();
-    glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_[class_id].Bind();
-    glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_[class_id].Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_[class_id].Unbind();
-    texturedTextures_[class_id].Unbind();
-    texturedVertices_[class_id].Unbind();
-    texturedCoords_[class_id].Unbind();
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisable(GL_TEXTURE_2D);
+    if (is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+    }
   }
 
   pangolin::FinishFrame();

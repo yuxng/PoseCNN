@@ -98,7 +98,7 @@ class HoughvotingOp : public OpKernel {
   }
 
   // bottom_label: (batch_size, height, width)
-  // bottom_vertex: (batch_size, height, width, 2 * num_classes)
+  // bottom_vertex: (batch_size, height, width, 3 * num_classes)
   // top_box: (num, 6) i.e., batch_index, cls, x1, y1, x2, y2
   void Compute(OpKernelContext* context) override 
   {
@@ -134,7 +134,7 @@ class HoughvotingOp : public OpKernel {
     // width
     int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_vertex.dim_size(3) / 2;
+    int num_classes = bottom_vertex.dim_size(3) / 3;
     int num_meta_data = bottom_meta_data.dim_size(3);
     int num_gt = bottom_gt.dim_size(0);
 
@@ -151,7 +151,7 @@ class HoughvotingOp : public OpKernel {
     for (int n = 0; n < batch_size; n++)
     {
       const int* labelmap = bottom_label.flat<int>().data() + n * height * width;
-      const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * 2 * num_classes;
+      const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * 3 * num_classes;
       fx = meta_data(index_meta_data + 0);
       fy = meta_data(index_meta_data + 4);
       px = meta_data(index_meta_data + 2);
@@ -261,7 +261,7 @@ class HoughvotingGradOp : public OpKernel {
     // width
     int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_vertex.dim_size(3) / 2;
+    int num_classes = bottom_vertex.dim_size(3) / 3;
 
     // construct the output shape
     TensorShape output_shape = bottom_label.shape();
@@ -324,8 +324,8 @@ void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds
 
 inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes)
 {
-  int channel = 2 * objID;
-  int offset = channel + 2 * num_classes * (pt.y * width + pt.x);
+  int channel = 3 * objID;
+  int offset = channel + 3 * num_classes * (pt.y * width + pt.x);
 
   jp::coord2_t mode;
   mode(0) = vertmap[offset];
@@ -622,48 +622,27 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
 
     cv::Point2d center = it->second[h].center;
     it->second[h].compute_width_height();
-    roi(2) = std::max(center.x - it->second[h].width_ / 2, 0.0);
-    roi(3) = std::max(center.y - it->second[h].height_ / 2, 0.0);
-    roi(4) = std::min(center.x + it->second[h].width_ / 2, double(width));
-    roi(5) = std::min(center.y + it->second[h].height_ / 2, double(height));
+    float scale = 0.1;
+    roi(2) = center.x - it->second[h].width_ * (0.5 + scale);
+    roi(3) = center.y - it->second[h].height_ * (0.5 + scale);
+    roi(4) = center.x + it->second[h].width_ * (0.5 + scale);
+    roi(5) = center.y + it->second[h].height_ * (0.5 + scale);
 
     // initial pose estimation
-    // 2D bounding box
-    cv::Rect bb2D(roi(2), roi(3), roi(4) - roi(2), roi(5) - roi(3));
-
-    // 2D center
-    float cx = (roi(2) + roi(4)) / 2;
-    float cy = (roi(3) + roi(5)) / 2;
 
     // backproject the center
-    float rx = (cx - px) / fx;
-    float ry = (cy - py) / fy;
-
-    // 3D bounding box
-    int objID = int(roi(1));
-    std::vector<cv::Point3f> bb3D = bb3Ds[objID-1];
-
-    // construct the data
-    DataForOpt data;
-    data.imageHeight = height;
-    data.imageWidth = width;
-    data.bb2D = bb2D;
-    data.bb3D = bb3D;
-    data.camMat = camMat;
-    data.rx = rx;
-    data.ry = ry;
+    float rx = (center.x - px) / fx;
+    float ry = (center.y - py) / fy;
+    float distance = it->second[h].compute_distance(vertmap, num_classes, width);
 
     // initialize pose
     std::vector<double> vec(6);
     vec[0] = 0.0;
     vec[1] = 0.0;
     vec[2] = 0.0;
-    vec[3] = data.rx;
-    vec[4] = data.ry;
-    vec[5] = 1.0;
-
-    // optimization
-    poseWithOpt(vec, data, poseIterations);
+    vec[3] = rx;
+    vec[4] = ry;
+    vec[5] = distance;
 
     // convert pose to our format
     cv::Mat tvec(3, 1, CV_64F);
@@ -679,15 +658,6 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
 	
     jp::cv_trans_t trans(rvec, tvec);
     jp::jp_trans_t pose = jp::cv2our(trans);
-
-    // use the projected 3D box
-    cv::Rect bb2D_proj = getBB2D(width, height, bb3D, camMat, trans);
-
-    float scale = 0.1;
-    roi(2) = bb2D_proj.x - scale * bb2D_proj.width;
-    roi(3) = bb2D_proj.y - scale * bb2D_proj.height;
-    roi(4) = bb2D_proj.x + (1 + scale) * bb2D_proj.width;
-    roi(5) = bb2D_proj.y + (1 + scale) * bb2D_proj.height;
 
     // convert to quarternion
     cv::Mat pose_t;
@@ -827,7 +797,7 @@ double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
   double rotRange = 180;
   rotRange *= PI / 180;
   double tRangeXY = 0.01;
-  double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
+  double tRangeZ = 0.01; // pose uncertainty is larger in Z direction
 	
   std::vector<double> lb(6);
   lb[0] = vec[0]-rotRange; lb[1] = vec[1]-rotRange; lb[2] = vec[2]-rotRange;

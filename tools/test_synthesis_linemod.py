@@ -74,7 +74,7 @@ if __name__ == '__main__':
     which_class = 0
     classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
 
-    num_images = 10000
+    num_images = 80000
     height = 480
     width = 640
     fx = 572.41140
