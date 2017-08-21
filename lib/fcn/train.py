@@ -17,6 +17,7 @@ import os
 import tensorflow as tf
 import sys
 import threading
+import math
 
 class SolverWrapper(object):
     """A simple wrapper around Caffe's solver.
@@ -316,7 +317,7 @@ def loss_quaternion(pose_pred, pose_targets, pose_weights):
 
     with tf.name_scope('loss'):
         prediction = tf.nn.l2_normalize( tf.multiply(pose_weights, pose_pred), dim = 1)
-        distances = 1 -  tf.square( tf.reduce_sum(tf.multiply(prediction, pose_targets), reduction_indices=[1]) )
+        distances = 1 - tf.square( tf.reduce_sum(tf.multiply(prediction, pose_targets), reduction_indices=[1]) )
         weights = tf.reduce_mean(pose_weights, reduction_indices=[1])
         loss = tf.div( tf.reduce_sum(tf.multiply(weights, distances)), tf.reduce_sum(weights) )
 

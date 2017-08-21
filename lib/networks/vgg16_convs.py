@@ -164,4 +164,5 @@ class vgg16_convs(Network):
                      .dropout(self.keep_prob_queue, name='drop6')
                      .fc(4096, num_in=4096, name='fc7')
                      .dropout(self.keep_prob_queue, name='drop7')
-                     .fc(4 * self.num_classes, relu=False, name='poses_pred'))
+                     .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
+                     .tanh(name='poses_pred'))
