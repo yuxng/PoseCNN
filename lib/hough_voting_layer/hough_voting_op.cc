@@ -640,8 +640,8 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     vec[0] = 0.0;
     vec[1] = 0.0;
     vec[2] = 0.0;
-    vec[3] = rx;
-    vec[4] = ry;
+    vec[3] = rx * distance;
+    vec[4] = ry * distance;
     vec[5] = distance;
 
     // convert pose to our format

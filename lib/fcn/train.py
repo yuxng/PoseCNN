@@ -312,6 +312,17 @@ def loss_cross_entropy_single_frame(scores, labels):
     return loss
 
 
+def loss_quaternion(pose_pred, pose_targets, pose_weights):
+
+    with tf.name_scope('loss'):
+        prediction = tf.nn.l2_normalize( tf.multiply(pose_weights, pose_pred), dim = 1)
+        distances = 1 -  tf.square( tf.reduce_sum(tf.multiply(prediction, pose_targets), reduction_indices=[1]) )
+        weights = tf.reduce_mean(pose_weights, reduction_indices=[1])
+        loss = tf.div( tf.reduce_sum(tf.multiply(weights, distances)), tf.reduce_sum(weights) )
+
+    return loss
+
+
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
@@ -336,7 +347,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     pose_pred = network.get_output('poses_pred')
                     pose_targets = network.get_output('poses_target')
                     pose_weights = network.get_output('poses_weight')
-                    loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
+                    # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
+                    loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
                     loss = loss_cls + loss_vertex + loss_pose
                 else:
                     loss = loss_cls + loss_vertex

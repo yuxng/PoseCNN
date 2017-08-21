@@ -658,7 +658,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     ax.set_title('centers z')
 
     # show projection of the poses
-    if cfg.TEST.POSE_REG and not cfg.TEST.SYNTHETIC:
+    if cfg.TEST.POSE_REG:
         ax = fig.add_subplot(257, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
@@ -905,6 +905,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         # compute pose error
                         error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         print 'error: {}'.format(error)
+
+                        error_quat = qe(RT[:3, :3], poses_gt[:3, :3, j])
+                        print 'error quat: {}'.format(error_quat)
 
                         #error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         #print 'error new: {}'.format(error_new)

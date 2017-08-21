@@ -6,7 +6,7 @@ import hough_voting_op
 def _hough_voting_shape(op):
 
   dims_vertex = op.inputs[1].get_shape().as_list()
-  num_classes = dims_vertex[3] / 2
+  num_classes = dims_vertex[3] / 3
 
   output_shape_0 = tf.TensorShape([None, 6])
   output_shape_1 = tf.TensorShape([None, 7])
