@@ -23,8 +23,8 @@ class vgg16_convs(Network):
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
         if vertex_reg:
-            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
-            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
+            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 6 * num_classes])
+            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 6 * num_classes])
             self.poses = tf.placeholder(tf.float32, shape=[None, 13])
             self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
             self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
@@ -140,7 +140,7 @@ class vgg16_convs(Network):
                  .add(name='add_score_vertex')
                  .dropout(self.keep_prob_queue, name='dropout_vertex')
                  .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
-                 .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
+                 .conv(1, 1, 6 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
             (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
                  .hough_voting(self.is_train, name='hough'))

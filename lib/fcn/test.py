@@ -595,7 +595,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, points):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -622,7 +622,12 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     
     ax = fig.add_subplot(336)
     plt.imshow(center_map_gt[:,:,2])
-    ax.set_title('gt centers z')
+    index = np.where(center_map_gt[:,:,2] > 0)
+    if len(index[0]) > 0:
+        z_gt = center_map_gt[index[0][0], index[1][0], 2]
+        ax.set_title('gt centers z: {:6f}'.format(z_gt))
+    else:
+        ax.set_title('gt centers z')
 
     # show class label
     ax = fig.add_subplot(333)
@@ -655,7 +660,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     
     ax = fig.add_subplot(339)
     plt.imshow(center_map[:,:,2])
-    ax.set_title('centers z')
+    ax.set_title('centers z: {:6f}'.format(poses[0, 6]))
 
     # show projection of the poses
     if cfg.TEST.POSE_REG:
@@ -666,12 +671,12 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             cls = int(rois[i, 1])
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0:
-                num = points.shape[0]
+                num = len(index[0])
                 # extract 3D points
                 x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = points[:, 0]
-                x3d[1, :] = points[:, 1]
-                x3d[2, :] = points[:, 2]
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -906,8 +911,16 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         print 'error: {}'.format(error)
 
-                        error_quat = qe(RT[:3, :3], poses_gt[:3, :3, j])
-                        print 'error quat: {}'.format(error_quat)
+                        error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                        print 'rotation error: {}'.format(error_rotation)
+
+                        error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+                        print 'translation error: {}'.format(error_translation)
+
+                        # compute pose error if distance the same as gt
+                        RT[2, 3] = poses_gt[2, 3, j]
+                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        print 'error if distance as gt: {}'.format(error)
 
                         #error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         #print 'error new: {}'.format(error_new)
@@ -920,7 +933,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], imdb._points)
+                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], meta_data['vertmap'])
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

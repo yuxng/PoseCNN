@@ -134,7 +134,7 @@ class HoughvotingOp : public OpKernel {
     // width
     int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_vertex.dim_size(3) / 3;
+    int num_classes = bottom_vertex.dim_size(3) / VERTEX_CHANNELS;
     int num_meta_data = bottom_meta_data.dim_size(3);
     int num_gt = bottom_gt.dim_size(0);
 
@@ -151,7 +151,7 @@ class HoughvotingOp : public OpKernel {
     for (int n = 0; n < batch_size; n++)
     {
       const int* labelmap = bottom_label.flat<int>().data() + n * height * width;
-      const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * 3 * num_classes;
+      const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * VERTEX_CHANNELS * num_classes;
       fx = meta_data(index_meta_data + 0);
       fy = meta_data(index_meta_data + 4);
       px = meta_data(index_meta_data + 2);
@@ -261,7 +261,7 @@ class HoughvotingGradOp : public OpKernel {
     // width
     int width = bottom_label.dim_size(2);
     // num of classes
-    int num_classes = bottom_vertex.dim_size(3) / 3;
+    int num_classes = bottom_vertex.dim_size(3) / VERTEX_CHANNELS;
 
     // construct the output shape
     TensorShape output_shape = bottom_label.shape();
@@ -324,8 +324,8 @@ void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds
 
 inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes)
 {
-  int channel = 3 * objID;
-  int offset = channel + 3 * num_classes * (pt.y * width + pt.x);
+  int channel = VERTEX_CHANNELS * objID;
+  int offset = channel + VERTEX_CHANNELS * num_classes * (pt.y * width + pt.x);
 
   jp::coord2_t mode;
   mode(0) = vertmap[offset];

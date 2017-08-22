@@ -119,8 +119,12 @@ if __name__ == '__main__':
             qt[:, :3, j] = quat2mat(poses[ind, :4])
             qt[:, 3, j] = poses[ind, 4:]
 
+        # process the vertmap
+        vertmap_syn[:, :, 0] = vertmap_syn[:, :, 0] - np.round(vertmap_syn[:, :, 0])
+        vertmap_syn[np.isnan(vertmap_syn)] = 0
+
         # metadata
-        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], \
+        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], 'vertmap': vertmap_syn, \
                     'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': 10000.0}
 
         # save image
@@ -137,4 +141,4 @@ if __name__ == '__main__':
 
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
-        scipy.io.savemat(filename, metadata)
+        scipy.io.savemat(filename, metadata, do_compression=True)

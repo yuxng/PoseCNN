@@ -29,7 +29,7 @@ class GtSynthesizeLayer(object):
         self._name = name
         self._shuffle_roidb_inds()
         self._shuffle_syn_inds()
-        self._write_background_images()
+        self._build_background_images()
         self._read_camera_parameters()
 
     def _shuffle_roidb_inds(self):
@@ -92,39 +92,41 @@ class GtSynthesizeLayer(object):
 
     def _build_background_images(self):
 
-        cache_file = os.path.join(self._cache_path, self._name + '_backgrounds.pkl')
+        cache_file = os.path.join(self._cache_path, 'backgrounds.pkl')
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
                 self._backgrounds = cPickle.load(fid)
             print '{} backgrounds loaded from {}'.format(self._name, cache_file)
             return
 
-        print "building background images"
-        num = 1000
-        perm = np.random.permutation(np.arange(len(self._roidb)))
-        perm = perm[:num]
-        print len(perm)
+        backgrounds = []
+        root = os.path.join(self._cache_path, '../SUN2012/data/Images')
+        subdirs = os.listdir(root)
 
-        backgrounds = [None]*num
-        kernel = np.ones((50, 50), np.uint8)
-        for i in xrange(num):
-            index = perm[i]
-            # rgba
-            rgba = pad_im(cv2.imread(self._roidb[index]['image'], cv2.IMREAD_UNCHANGED), 16)
-            if rgba.shape[2] == 4:
-                im = np.copy(rgba[:,:,:3])
-                alpha = rgba[:,:,3]
-                I = np.where(alpha == 0)
-                im[I[0], I[1], :] = 0
-            else:
-                im = rgba
+        for i in xrange(len(subdirs)):
+            subdir = subdirs[i]
+            names = os.listdir(os.path.join(root, subdir))
 
-            # generate background image
-            mask = pad_im(cv2.imread(self._roidb[index]['label'], cv2.IMREAD_UNCHANGED), 16)
-            index = np.where(mask > 0)
-            mask[index[0], index[1]] = 1
-            mask = cv2.dilate(mask, kernel)
-            backgrounds[i] = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
+            for j in xrange(len(names)):
+                name = names[j]
+                if os.path.isdir(os.path.join(root, subdir, name)):
+                    files = os.listdir(os.path.join(root, subdir, name))
+                    for k in range(len(files)):
+                        if os.path.isdir(os.path.join(root, subdir, name, files[k])):
+                            filenames = os.listdir(os.path.join(root, subdir, name, files[k]))
+                            for l in range(len(filenames)):
+                               filename = os.path.join(root, subdir, name, files[k], filenames[l])
+                               backgrounds.append(filename)
+                        else:
+                            filename = os.path.join(root, subdir, name, files[k])
+                            backgrounds.append(filename)
+                else:
+                    filename = os.path.join(root, subdir, name)
+                    backgrounds.append(filename)
+
+        for i in xrange(len(backgrounds)):
+            if not os.path.isfile(backgrounds[i]):
+                print 'file not exist {}'.format(backgrounds[i])
 
         self._backgrounds = backgrounds
         print "build background images finished"

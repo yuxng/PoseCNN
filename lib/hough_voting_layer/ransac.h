@@ -31,6 +31,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <nlopt.hpp>
 #include <omp.h>
 #include <cfloat>
+
+#define VERTEX_CHANNELS 6
+
     /**
      * @brief Struct that bundels data that is held per pose hypothesis during optimization.
      */
@@ -106,7 +109,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           {
             int x = int(inlierPts2D[i].second.x);
             int y = int(inlierPts2D[i].second.y);
-            int offset = 3 * objID + 3 * num_classes * (y * width + x);
+            int offset = VERTEX_CHANNELS * objID + VERTEX_CHANNELS * num_classes * (y * width + x);
             distance += vertmap[offset + 2];
           }
           return distance / inliers;

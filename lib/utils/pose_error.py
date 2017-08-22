@@ -74,21 +74,6 @@ def re(R_est, R_gt):
     error = 180.0 * error / np.pi # [rad] -> [deg]
     return error
 
-def qe(R_est, R_gt):
-    """
-    Rotational Error.
-
-    :param R_est: Rotational element of the estimated pose (3x1 vector).
-    :param R_gt: Rotational element of the ground truth pose (3x1 vector).
-    :return: Error of t_est w.r.t. t_gt.
-    """
-    assert(R_est.shape == R_gt.shape == (3, 3))
-    q_est = mat2quat(R_est)
-    q_gt = mat2quat(R_gt)
-
-    error = np.average(np.absolute(q_est - q_gt))
-    return error
-
 def te(t_est, t_gt):
     """
     Translational Error.
