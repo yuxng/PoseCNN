@@ -799,6 +799,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print 'backgrounds loaded from {}'.format(cache_file)
 
     # SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+    count_correct = 0
+    count_all = 0
     for i in perm:
 
         if cfg.TEST.SYNTHETIC:
@@ -867,6 +869,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
 
         labels = unpad_im(labels, 16)
+        im_scale = cfg.TEST.SCALES_BASE[0]
+        labels_new = cv2.resize(labels, None, None, fx=1.0/im_scale, fy=1.0/im_scale, interpolation=cv2.INTER_NEAREST)
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
@@ -875,7 +879,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             if cfg.TEST.POSE_REG:
                 # pose refinement
-                im_scale = cfg.TEST.SCALES_BASE[0]
                 fx = meta_data['intrinsic_matrix'][0, 0]
                 fy = meta_data['intrinsic_matrix'][1, 1]
                 px = meta_data['intrinsic_matrix'][0, 2]
@@ -883,8 +886,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 znear = 0.25
                 zfar = 6.0
                 iters = 100
-                poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)
-                labels_new = cv2.resize(labels, None, None, fx=1.0/im_scale, fy=1.0/im_scale, interpolation=cv2.INTER_NEAREST)
+                poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)        
                 # SYN.estimate_poses(labels_new, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
             else:
                 poses_new = []
@@ -892,7 +894,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         _t['im_segment'].toc()
 
         _t['misc'].tic()
-        seg = {'labels': labels}
+        seg = {'labels': labels_new}
         segmentations[i] = seg
         _t['misc'].toc()
 
@@ -938,13 +940,17 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         print 'translation error: {}'.format(error_translation)
 
                         # compute pose error if distance the same as gt
-                        RT[2, 3] = poses_gt[2, 3, j]
-                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                        print 'error if distance as gt: {}'.format(error)
+                        # RT[2, 3] = poses_gt[2, 3, j]
+                        # error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        # print 'error if distance as gt: {}'.format(error)
 
                         #error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         #print 'error new: {}'.format(error_new)
                         print 0.1 * np.linalg.norm(imdb._extents[cls_index, :])
+
+                        count_all += 1
+                        if error < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
+                            count_correct += 1
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG:
@@ -964,6 +970,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
+
+    if cfg.TEST.POSE_REG:
+        print 'correct poses: {}, all poses: {}, accuracy: {}'.format(count_correct, count_all, float(count_correct) / float(count_all))
 
 def _render_synthetic_image(SYN, num_classes, backgrounds, intrinsic_matrix):
     """Builds an input blob from the images in the roidb at the specified
