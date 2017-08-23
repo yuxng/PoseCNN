@@ -72,13 +72,21 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
             ind = np.random.randint(len(backgrounds), size=1)[0]
             filename = backgrounds[ind]
             background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-            background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            try:
+                background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            except:
+                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+
+            if len(background.shape) != 3:
+                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
 
             # add background
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = background[I[0], I[1], :]
+            im[I[0], I[1], :] = background[I[0], I[1], :3]
 
             if cfg.TRAIN.CHROMATIC:
                 filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])

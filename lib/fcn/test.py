@@ -151,8 +151,8 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
     label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
 
     pose_blob = np.zeros((1, 13), dtype=np.float32)
-    vertex_target_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
-    vertex_weight_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
+    vertex_target_blob = np.zeros((1, height, width, 6*num_classes), dtype=np.float32)
+    vertex_weight_blob = np.zeros((1, height, width, 6*num_classes), dtype=np.float32)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
@@ -193,9 +193,8 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                     if class_id >= 0:
                         poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
             else:
-                labels_2d, probs, vertex_pred, rois = \
-                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois')])
-                poses = []
+                labels_2d, probs, vertex_pred, rois, poses = \
+                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
@@ -522,14 +521,15 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
 
 # compute the voting label image in 2D
-def _vote_centers(im_label, cls_indexes, centers, poses, num_classes):
+def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, extents):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 3), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 6), dtype=np.float32)
 
     center = np.zeros((2, 1), dtype=np.float32)
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
+        I = np.where(im_label == i)
         if len(x) > 0:
             ind = np.where(cls_indexes == i)[0]
             center[0] = centers[ind, 0]
@@ -544,6 +544,7 @@ def _vote_centers(im_label, cls_indexes, centers, poses, num_classes):
             vertex_targets[y, x, 0] = R[0,:]
             vertex_targets[y, x, 1] = R[1,:]
             vertex_targets[y, x, 2] = z
+            vertex_targets[y, x, 3:6] = _scale_vertmap(vertmap, I, extents[i, :])
 
     return vertex_targets
 
@@ -552,35 +553,31 @@ def _vote_centers(im_label, cls_indexes, centers, poses, num_classes):
 def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
-    vertmap = np.zeros((height, width, 3), dtype=np.float32)
+    vertmap = np.zeros((height, width, 6), dtype=np.float32)
     # centermap = np.zeros((height, width, 3), dtype=np.float32)
 
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
         if len(I[0]) > 0:
-            start = 3 * i
-            end = 3 * i + 3
+            start = 6 * i
+            end = 6 * i + 6
             vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
 
-            # start = 2 * i
-            # end = 2 * i + 2
-            # centermap[I[0], I[1], :2] = vertex_pred[0, I[0], I[1], start:end]
-
     return vertmap
-    #return _unscale_vertmap(vertmap, im_label, extents, num_classes)
-    #return vertmap, centermap  
 
 
-def scale_vertmap(vertmap):
-    vmin = vertmap.min()
-    vmax = vertmap.max()
-    if vmax - vmin > 0:
-        a = 1.0 / (vmax - vmin)
-        b = -1.0 * vmin / (vmax - vmin)
-    else:
-        a = 0
-        b = 0
-    return a * vertmap + b
+def _scale_vertmap(vertmap, index, extents):
+    for i in range(3):
+        vmin = -extents[i] / 2
+        vmax = extents[i] / 2
+        if vmax - vmin > 0:
+            a = 1.0 / (vmax - vmin)
+            b = -1.0 * vmin / (vmax - vmin)
+        else:
+            a = 0
+            b = 0
+        vertmap[index[0], index[1], i] = a * vertmap[index[0], index[1], i] + b
+    return vertmap[index[0], index[1], :]
 
 
 def _unscale_vertmap(vertmap, labels, extents, num_classes):
@@ -601,26 +598,26 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     fig = plt.figure()
 
     # show image
-    ax = fig.add_subplot(331)
+    ax = fig.add_subplot(3, 6, 1)
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
 
     # show gt class labels
-    ax = fig.add_subplot(332)
+    ax = fig.add_subplot(3, 6, 2)
     plt.imshow(im_labels_gt)
     ax.set_title('gt class labels')
 
     # show gt vertex map
-    ax = fig.add_subplot(334)
+    ax = fig.add_subplot(3, 6, 7)
     plt.imshow(center_map_gt[:,:,0])
     ax.set_title('gt centers x')
 
-    ax = fig.add_subplot(335)
+    ax = fig.add_subplot(3, 6, 8)
     plt.imshow(center_map_gt[:,:,1])
     ax.set_title('gt centers y')
     
-    ax = fig.add_subplot(336)
+    ax = fig.add_subplot(3, 6, 9)
     plt.imshow(center_map_gt[:,:,2])
     index = np.where(center_map_gt[:,:,2] > 0)
     if len(index[0]) > 0:
@@ -629,8 +626,20 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     else:
         ax.set_title('gt centers z')
 
+    ax = fig.add_subplot(3, 6, 10)
+    plt.imshow(center_map_gt[:,:,3])
+    ax.set_title('gt vertex x')
+
+    ax = fig.add_subplot(3, 6, 11)
+    plt.imshow(center_map_gt[:,:,4])
+    ax.set_title('gt vertex y')
+
+    ax = fig.add_subplot(3, 6, 12)
+    plt.imshow(center_map_gt[:,:,5])
+    ax.set_title('gt vertex z')
+
     # show class label
-    ax = fig.add_subplot(333)
+    ax = fig.add_subplot(3, 6, 3)
     plt.imshow(im_labels)
     ax.set_title('class labels')      
 
@@ -650,21 +659,33 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                                    edgecolor='g', linewidth=3))
         
     # show vertex map
-    ax = fig.add_subplot(337)
+    ax = fig.add_subplot(3, 6, 13)
     plt.imshow(center_map[:,:,0])
     ax.set_title('centers x')
 
-    ax = fig.add_subplot(338)
+    ax = fig.add_subplot(3, 6, 14)
     plt.imshow(center_map[:,:,1])
     ax.set_title('centers y')
     
-    ax = fig.add_subplot(339)
+    ax = fig.add_subplot(3, 6, 15)
     plt.imshow(center_map[:,:,2])
     ax.set_title('centers z: {:6f}'.format(poses[0, 6]))
 
+    ax = fig.add_subplot(3, 6, 16)
+    plt.imshow(center_map[:,:,3])
+    ax.set_title('vertex x')
+
+    ax = fig.add_subplot(3, 6, 17)
+    plt.imshow(center_map[:,:,4])
+    ax.set_title('vertex y')
+
+    ax = fig.add_subplot(3, 6, 18)
+    plt.imshow(center_map[:,:,5])
+    ax.set_title('vertex z')
+
     # show projection of the poses
     if cfg.TEST.POSE_REG:
-        ax = fig.add_subplot(257, aspect='equal')
+        ax = fig.add_subplot(3, 6, 4, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
         for i in xrange(rois.shape[0]):
@@ -813,7 +834,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             # meta data
             filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(i)
             meta_data = scipy.io.loadmat(filename)
-            meta_data['vertmap'] = []
         else:
             # parse image name
             image_index = imdb.image_index[i]
@@ -931,7 +951,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))
-                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes)
+                vertmap_gt = meta_data['vertmap'].copy()
+                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], meta_data['vertmap'])
             else:
