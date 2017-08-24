@@ -61,9 +61,9 @@ class GtSynthesizeLayer(object):
     def _get_next_minibatch(self):
         """Return the blobs to be used for the next minibatch."""
 
-        ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, 4)
+        ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, cfg.TRAIN.SYN_RATIO)
         if ratio == 0:
-            ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), 4)
+            ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), cfg.TRAIN.SYN_RATIO)
             r = np.random.randint(ratio+1, size=1)[0]
             if r == 0:
                 is_syn = 0

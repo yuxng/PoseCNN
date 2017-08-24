@@ -22,6 +22,7 @@ TRAIN:
   SYNTHESIZE: True
   SYNROOT: '/var/Projects/Deep_Pose/data/LINEMOD/data_syn/ape/'
   SYNNUM: 80000
+  SYN_RATIO: 4
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.5]

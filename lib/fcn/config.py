@@ -57,6 +57,7 @@ if not os.path.exists(__C.TRAIN.SYNROOT):
     __C.TRAIN.SYNROOT = '/home/yuxiang/Projects/Deep_Pose/data/LOV/data_syn/'
 __C.TRAIN.SYNITER = 0
 __C.TRAIN.SYNNUM = 80000
+__C.TRAIN.SYN_RATIO = 1
 
 # learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
