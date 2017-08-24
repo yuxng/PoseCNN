@@ -151,8 +151,8 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
     label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
 
     pose_blob = np.zeros((1, 13), dtype=np.float32)
-    vertex_target_blob = np.zeros((1, height, width, 6*num_classes), dtype=np.float32)
-    vertex_weight_blob = np.zeros((1, height, width, 6*num_classes), dtype=np.float32)
+    vertex_target_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
+    vertex_weight_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
 
     # forward pass
     if cfg.INPUT == 'RGBD':
@@ -524,7 +524,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, extents):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 6), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 3), dtype=np.float32)
 
     center = np.zeros((2, 1), dtype=np.float32)
     for i in xrange(1, num_classes):
@@ -544,7 +544,6 @@ def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, e
             vertex_targets[y, x, 0] = R[0,:]
             vertex_targets[y, x, 1] = R[1,:]
             vertex_targets[y, x, 2] = z
-            vertex_targets[y, x, 3:6] = _scale_vertmap(vertmap, I, extents[i, :])
 
     return vertex_targets
 
@@ -553,14 +552,14 @@ def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, e
 def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
-    vertmap = np.zeros((height, width, 6), dtype=np.float32)
+    vertmap = np.zeros((height, width, 3), dtype=np.float32)
     # centermap = np.zeros((height, width, 3), dtype=np.float32)
 
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
         if len(I[0]) > 0:
-            start = 6 * i
-            end = 6 * i + 6
+            start = 3 * i
+            end = 3 * i + 3
             vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
 
     return vertmap
@@ -598,26 +597,26 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     fig = plt.figure()
 
     # show image
-    ax = fig.add_subplot(3, 6, 1)
+    ax = fig.add_subplot(3, 4, 1)
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
 
     # show gt class labels
-    ax = fig.add_subplot(3, 6, 2)
+    ax = fig.add_subplot(3, 4, 5)
     plt.imshow(im_labels_gt)
     ax.set_title('gt class labels')
 
     # show gt vertex map
-    ax = fig.add_subplot(3, 6, 7)
+    ax = fig.add_subplot(3, 4, 6)
     plt.imshow(center_map_gt[:,:,0])
     ax.set_title('gt centers x')
 
-    ax = fig.add_subplot(3, 6, 8)
+    ax = fig.add_subplot(3, 4, 7)
     plt.imshow(center_map_gt[:,:,1])
     ax.set_title('gt centers y')
     
-    ax = fig.add_subplot(3, 6, 9)
+    ax = fig.add_subplot(3, 4, 8)
     plt.imshow(center_map_gt[:,:,2])
     index = np.where(center_map_gt[:,:,2] > 0)
     if len(index[0]) > 0:
@@ -626,20 +625,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     else:
         ax.set_title('gt centers z')
 
-    ax = fig.add_subplot(3, 6, 10)
-    plt.imshow(center_map_gt[:,:,3])
-    ax.set_title('gt vertex x')
-
-    ax = fig.add_subplot(3, 6, 11)
-    plt.imshow(center_map_gt[:,:,4])
-    ax.set_title('gt vertex y')
-
-    ax = fig.add_subplot(3, 6, 12)
-    plt.imshow(center_map_gt[:,:,5])
-    ax.set_title('gt vertex z')
-
     # show class label
-    ax = fig.add_subplot(3, 6, 3)
+    ax = fig.add_subplot(3, 4, 9)
     plt.imshow(im_labels)
     ax.set_title('class labels')      
 
@@ -659,33 +646,21 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                                    edgecolor='g', linewidth=3))
         
     # show vertex map
-    ax = fig.add_subplot(3, 6, 13)
+    ax = fig.add_subplot(3, 4, 10)
     plt.imshow(center_map[:,:,0])
     ax.set_title('centers x')
 
-    ax = fig.add_subplot(3, 6, 14)
+    ax = fig.add_subplot(3, 4, 11)
     plt.imshow(center_map[:,:,1])
     ax.set_title('centers y')
     
-    ax = fig.add_subplot(3, 6, 15)
+    ax = fig.add_subplot(3, 4, 12)
     plt.imshow(center_map[:,:,2])
     ax.set_title('centers z: {:6f}'.format(poses[0, 6]))
 
-    ax = fig.add_subplot(3, 6, 16)
-    plt.imshow(center_map[:,:,3])
-    ax.set_title('vertex x')
-
-    ax = fig.add_subplot(3, 6, 17)
-    plt.imshow(center_map[:,:,4])
-    ax.set_title('vertex y')
-
-    ax = fig.add_subplot(3, 6, 18)
-    plt.imshow(center_map[:,:,5])
-    ax.set_title('vertex z')
-
     # show projection of the poses
     if cfg.TEST.POSE_REG:
-        ax = fig.add_subplot(3, 6, 4, aspect='equal')
+        ax = fig.add_subplot(3, 4, 2, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
         for i in xrange(rois.shape[0]):
@@ -712,35 +687,6 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
-        ''' 
-        ax = fig.add_subplot(241, aspect='equal')
-        plt.imshow(im)
-        ax.invert_yaxis()
-        for i in xrange(rois.shape[0]):
-            cls = int(rois[i, 1])
-            index = np.where(labels_gt == cls)
-            if len(index[0]) > 0:
-                num = len(index[0])
-                # extract 3D points
-                x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
-
-                # projection
-                RT = np.zeros((3, 4), dtype=np.float32)
-                RT[:3, :3] = quat2mat(poses_new[i, :4])
-                RT[:, 3] = poses_new[i, 4:7]
-                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
-                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
-                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
-
-        #ax.set_title('projection')
-        ax.invert_yaxis()
-        ax.set_xlim([0, im.shape[1]])
-        ax.set_ylim([im.shape[0], 0])
-        '''
 
     plt.show()
 

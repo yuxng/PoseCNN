@@ -32,7 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <omp.h>
 #include <cfloat>
 
-#define VERTEX_CHANNELS 6
+#define VERTEX_CHANNELS 3
 
     /**
      * @brief Struct that bundels data that is held per pose hypothesis during optimization.

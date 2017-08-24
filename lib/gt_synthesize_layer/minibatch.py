@@ -350,8 +350,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     if cfg.TRAIN.VERTEX_REG:
-        vertex_target_blob = np.zeros((num_images, height, width, 6 * num_classes), dtype=np.float32)
-        vertex_weight_blob = np.zeros((num_images, height, width, 6 * num_classes), dtype=np.float32)
+        vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
+        vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
     else:
         vertex_target_blob = []
         vertex_weight_blob = []
@@ -371,7 +371,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
 def _vote_centers(im_label, cls_indexes, center, poses, num_classes, vertmap, extents):
     width = im_label.shape[1]
     height = im_label.shape[0]
-    vertex_targets = np.zeros((height, width, 6*num_classes), dtype=np.float32)
+    vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
 
     c = np.zeros((2, 1), dtype=np.float32)
@@ -389,13 +389,12 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes, vertmap, ex
             # normalization
             R = np.divide(R, np.tile(N, (2,1)))
             # assignment
-            start = 6 * i
-            end = start + 6
-            vertex_targets[y, x, 6*i+0] = R[0,:]
-            vertex_targets[y, x, 6*i+1] = R[1,:]
-            vertex_targets[y, x, 6*i+2] = z
-            vertex_targets[y, x, 6*i+3:6*i+6] = _scale_vertmap(vertmap, I, extents[i, :])
-            vertex_weights[y, x, start:end] = 10.0
+            vertex_targets[y, x, 3*i+0] = R[0,:]
+            vertex_targets[y, x, 3*i+1] = R[1,:]
+            vertex_targets[y, x, 3*i+2] = z
+            vertex_weights[y, x, 3*i+0] = 1.0
+            vertex_weights[y, x, 3*i+1] = 1.0
+            vertex_weights[y, x, 3*i+2] = 10.0
 
     return vertex_targets, vertex_weights
 
@@ -426,38 +425,6 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def _get_vertex_regression_labels(im_label, vertmap, extents, num_classes):
-    height = im_label.shape[0]
-    width = im_label.shape[1]
-    vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
-    vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
-
-    vertmap = _unscale_vertmap(vertmap, im_label, extents, num_classes)
-
-    # compute the azimuth and elevation of each 3D point
-    r = np.linalg.norm(vertmap, axis=2)
-    # sin of elevation, sin, cos of azimuth
-    elevation_sin = np.zeros_like(r)
-    index = np.where(r != 0)
-    elevation_sin[index[0], index[1]] = np.sin(np.pi/2 - np.arccos(np.divide(vertmap[index[0],index[1],2], r[index[0], index[1]])))
-    azimuth_sin = np.sin(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
-    azimuth_cos = np.cos(np.arctan2(vertmap[:, :, 1], vertmap[:, :, 0]))
-    
-    for i in xrange(1, num_classes):
-        I = np.where(im_label == i)
-        if len(I[0]) > 0:
-            start = 2 * i
-            end = start + 2
-            vertex_targets[I[0], I[1], start] = r[I[0], I[1]]
-            vertex_targets[I[0], I[1], start+1] = elevation_sin[I[0], I[1]]
-            # vertex_targets[I[0], I[1], start+2] = azimuth_sin[I[0], I[1]]
-            # vertex_targets[I[0], I[1], start+3] = azimuth_cos[I[0], I[1]]
-
-            vertex_weights[I[0], I[1], start:end] = 10.0
-
-    return vertex_targets, vertex_weights
-
-
 def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
@@ -469,13 +436,13 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         im += cfg.PIXEL_MEANS
         im = im[:, :, (2, 1, 0)]
         im = im.astype(np.uint8)
-        ax = fig.add_subplot(3, 3, 1)
+        ax = fig.add_subplot(2, 3, 1)
         plt.imshow(im)
         ax.set_title('color') 
 
         # show depth image
         depth = depth_blob[i, :, :, 0]
-        ax = fig.add_subplot(3, 3, 2)
+        ax = fig.add_subplot(2, 3, 2)
         plt.imshow(abs(depth))
         ax.set_title('depth') 
 
@@ -496,35 +463,24 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         if cfg.TRAIN.VERTEX_REG:
             vertex_target = vertex_target_blob[i, :, :, :]
             center = np.zeros((height, width, 3), dtype=np.float32)
-            vertmap = np.zeros((height, width, 3), dtype=np.float32)
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
             if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
-                center[index[0], index[1], :] = vertex_target[index[0], index[1], 6*k:6*k+3]
-                vertmap[index[0], index[1], :] = vertex_target[index[0], index[1], 6*k+3:6*k+6]
-        ax = fig.add_subplot(3, 3, 3)
+                center[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
+        ax = fig.add_subplot(2, 3, 3)
         ax.set_title('label') 
         if cfg.TRAIN.VERTEX_REG:
             plt.imshow(l)
-            ax = fig.add_subplot(3, 3, 4)
+            ax = fig.add_subplot(2, 3, 4)
             plt.imshow(center[:,:,0])
             ax.set_title('center x') 
-            ax = fig.add_subplot(3, 3, 5)
+            ax = fig.add_subplot(2, 3, 5)
             plt.imshow(center[:,:,1])
             ax.set_title('center y') 
-            ax = fig.add_subplot(3, 3, 6)
+            ax = fig.add_subplot(2, 3, 6)
             plt.imshow(center[:,:,2])
             ax.set_title('z')
-            ax = fig.add_subplot(3, 3, 7)
-            plt.imshow(vertmap[:,:,0])
-            ax.set_title('vertmap x') 
-            ax = fig.add_subplot(3, 3, 8)
-            plt.imshow(vertmap[:,:,1])
-            ax.set_title('vertmap y') 
-            ax = fig.add_subplot(3, 3, 9)
-            plt.imshow(vertmap[:,:,2])
-            ax.set_title('vertmap z') 
         else:
             plt.imshow(l)
 

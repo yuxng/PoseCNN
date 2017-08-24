@@ -11,7 +11,7 @@ exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
 # train FCN for single frames
-#export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
+export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 #time ./tools/train_net.py --gpu 0 \
 #  --network vgg16_convs \
 #  --weights data/imagenet_models/vgg16_convs.npy \
@@ -28,5 +28,5 @@ echo Logging output to "$LOG"
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
   --model output/linemod/linemod_ape_train/vgg16_fcn_color_single_frame_linemod_ape_iter_40000.ckpt \
-  --imdb linemod_ape_test \
+  --imdb linemod_ape_train \
   --cfg experiments/cfgs/linemod_ape.yml
