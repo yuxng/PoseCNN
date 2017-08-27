@@ -15,6 +15,6 @@ class Synthesizer
   void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
     float fx, float fy, float px, float py, float* outputs,  float* gt_poses, int num_gt);
 
-  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-    int num_roi, float* rois, float* poses, float* outputs, int poseIterations);
+  void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
+                float factor, int num_roi, float* rois, float* poses, float* outputs);
 };

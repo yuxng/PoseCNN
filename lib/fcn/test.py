@@ -22,8 +22,9 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
-#from synthesize import synthesizer
 import scipy.io
+from synthesize import synthesizer
+
 
 # from normals import gpu_normals
 # from pose_estimation import ransac
@@ -591,7 +592,8 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt):
+def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, 
+  labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -660,7 +662,34 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
     # show projection of the poses
     if cfg.TEST.POSE_REG:
+
         ax = fig.add_subplot(3, 4, 2, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(1, num_classes):
+            index = np.where(labels_gt == i)
+            if len(index[0]) > 0:
+                num = len(index[0])
+                # extract 3D points
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                # projection
+                ind = np.where(cls_indexes == i)[0][0]
+                RT = poses_gt[:, :, ind]
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+
+        ax.set_title('gt projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
+        ax = fig.add_subplot(3, 4, 3, aspect='equal')
         plt.imshow(im)
         ax.invert_yaxis()
         for i in xrange(rois.shape[0]):
@@ -730,8 +759,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(0, num_images, 200)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(1, num_images)
     else:
         perm = xrange(num_images)
 
@@ -744,7 +773,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 backgrounds = cPickle.load(fid)
             print 'backgrounds loaded from {}'.format(cache_file)
 
-    # SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+    SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+    SYN.setup()
     count_correct = 0
     count_all = 0
     for i in perm:
@@ -829,11 +859,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 fy = meta_data['intrinsic_matrix'][1, 1]
                 px = meta_data['intrinsic_matrix'][0, 2]
                 py = meta_data['intrinsic_matrix'][1, 2]
+                factor = meta_data['factor_depth']
                 znear = 0.25
                 zfar = 6.0
-                iters = 100
-                poses_new = np.zeros((poses.shape[0], 8), dtype=np.float32)        
-                # SYN.estimate_poses(labels_new, rois, poses, poses_new, fx, fy, px, py, znear, zfar, iters)
+                poses_new = np.zeros((poses.shape[0], 7), dtype=np.float32)        
+                SYN.estimate_poses(labels_new, im_depth, rois, poses, poses_new, fx, fy, px, py, znear, zfar, factor)
             else:
                 poses_new = []
 
@@ -864,20 +894,16 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 RT[:, 3] = poses[k, 4:7]
                 print RT
 
-                #print 'refined pose'
-                #RT_new = np.zeros((3, 4), dtype=np.float32)
-                #RT_new[:3, :3] = quat2mat(poses_new[k, :4])
-                #RT_new[:, 3] = poses_new[k, 4:7]
-                #print RT_new
+                print 'ICP refined pose'
+                RT_new = np.zeros((3, 4), dtype=np.float32)
+                RT_new[:3, :3] = quat2mat(poses_new[k, :4])
+                RT_new[:, 3] = poses_new[k, 4:7]
+                print RT_new
 
                 for j in xrange(num):
                     if cls == imdb._classes_all[meta_data['cls_indexes'][j, 0]]:
                         print 'gt pose'
                         print poses_gt[:, :, j]
-
-                        # compute pose error
-                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                        print 'error: {}'.format(error)
 
                         error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
                         print 'rotation error: {}'.format(error_rotation)
@@ -885,17 +911,21 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         error_translation = te(RT[:, 3], poses_gt[:, 3, j])
                         print 'translation error: {}'.format(error_translation)
 
+                        # compute pose error
+                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        print 'error: {}'.format(error)
+
                         # compute pose error if distance the same as gt
                         # RT[2, 3] = poses_gt[2, 3, j]
                         # error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         # print 'error if distance as gt: {}'.format(error)
 
-                        #error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                        #print 'error new: {}'.format(error_new)
+                        error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        print 'error new: {}'.format(error_new)
                         print 0.1 * np.linalg.norm(imdb._extents[cls_index, :])
 
                         count_all += 1
-                        if error < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
+                        if error_new < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
                             count_correct += 1
 
         if cfg.TEST.VISUALIZE:
@@ -906,7 +936,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 vertmap_gt = meta_data['vertmap'].copy()
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], meta_data['vertmap'])
+                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], \
+                    meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

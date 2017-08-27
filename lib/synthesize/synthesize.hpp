@@ -33,6 +33,7 @@
 #include <df/util/glHelpers.h>
 #include <df/util/pangolinHelpers.h>
 #include <df/util/tensor.h>
+#include <df/optimization/icp.h>
 
 #include "types.h"
 #include "ransac.h"
@@ -60,23 +61,6 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
                               {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
                               {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
 
-struct DataForOpt
-{
-  int num_roi;
-  int classID;
-
-  std::vector<Eigen::Matrix4f> transforms;
-  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers;
-  std::vector<pangolin::GlBuffer*> modelIndexBuffers;
-  df::GLRenderer<df::CanonicalVertRenderType>* renderer;
-  pangolin::View* view;
-
-  df::ManagedDeviceTensor2<int>* labels_device;
-  df::ManagedDeviceTensor2<int>* intersection_device;
-  df::ManagedDeviceTensor2<int>* union_device;
-  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device;
-};
-
 class Synthesizer
 {
  public:
@@ -96,7 +80,7 @@ class Synthesizer
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
-    pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors,
+    pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors, pangolin::GlBuffer & normals,
     pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
 
   jp::jp_trans_t quat2our(const Sophus::SE3d T_co);
@@ -114,17 +98,30 @@ class Synthesizer
   void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
   void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 
-  // pose refinement with bounding box
-  void estimatePose(const int* labelmap, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                    int num_roi, float* rois, float* poses, float* outputs, int poseIterations);
-  double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
-
+  // pose refinement with ICP
+  void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
+                float factor, int num_roi, float* rois, float* poses, float* outputs);
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
 
  private:
   int counter_;
   int setup_;
   std::string model_file_, pose_file_;
+
+  df::ManagedDeviceTensor2<int>* labels_device_;
+
+  // depths
+  float depth_factor_;
+  float depth_cutoff_;
+  df::ManagedTensor<2, float>* depth_map_;
+  df::ManagedTensor<2, float, df::DeviceResident>* depth_map_device_;
+
+  // 3D points
+  df::ManagedDeviceTensor2<Vec3>* vertex_map_device_;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device_;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_normals_device_;
+  df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_;
+  df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_normals_;
 
   // poses
   std::vector<float*> poses_;
@@ -147,16 +144,11 @@ class Synthesizer
   std::vector<pangolin::GlBuffer> texturedVertices_;
   std::vector<pangolin::GlBuffer> canonicalVertices_;
   std::vector<pangolin::GlBuffer> vertexColors_;
+  std::vector<pangolin::GlBuffer> vertexNormals_;
   std::vector<pangolin::GlBuffer> texturedIndices_;
   std::vector<pangolin::GlBuffer> texturedCoords_;
   std::vector<pangolin::GlTexture> texturedTextures_;
 
   df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
-
-  // device tensors
-  df::ManagedDeviceTensor2<int>* labels_device_;
-  df::ManagedDeviceTensor2<int>* intersection_device_;
-  df::ManagedDeviceTensor2<int>* union_device_;
-  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* vertex_map_device_;
-
+  df::GLRenderer<df::VertAndNormalRenderType>* renderer_vn_;
 };
