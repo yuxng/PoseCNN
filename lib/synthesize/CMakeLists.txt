@@ -19,6 +19,7 @@ find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(PCL REQUIRED)
 pkg_check_modules(OpenEXR REQUIRED OpenEXR)
 
 find_package(OpenMP REQUIRED)
@@ -45,12 +46,14 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${OpenEXR_INCLUDE_DIRS}
                     ${SUITESPARSE_INCLUDE_DIRS}
                     ${OpenCV_INCLUDE_DIRS}
+                    ${PCL_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
 
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
-                 ${OpenEXR_LIBRARY_DIRS})
+                 ${OpenEXR_LIBRARY_DIRS}
+                 ${PCL_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
                ${xFusion_LIBRARIES}
@@ -59,6 +62,7 @@ link_libraries(${Pangolin_LIBRARIES}
                ${OpenEXR_LIBRARIES}
                ${OpenCV_LIBS}
                ${NLOPT_LIBRARIES}
+               ${PCL_LIBRARIES}
                assimp
                util)
 

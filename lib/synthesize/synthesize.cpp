@@ -55,6 +55,7 @@ void Synthesizer::setup()
 
   // 3D points
   vertex_map_device_ = new ManagedDeviceTensor2<Vec3>({width, height});
+  vertex_map_ = new ManagedHostTensor2<Vec3>({width, height});
   predicted_verts_device_ = new ManagedDeviceTensor2<Eigen::UnalignedVec4<float> > ({width, height});
   predicted_normals_device_ = new ManagedDeviceTensor2<Eigen::UnalignedVec4<float> > ({width, height});
   predicted_verts_ = new ManagedHostTensor2<Eigen::UnalignedVec4<float> >({width, height});
@@ -1285,11 +1286,11 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       else
         p[j] = 0;
     }
-    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
 
     // backprojection
     depth_map_device_->copyFrom(*depth_map_);
     backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
+    vertex_map_->copyFrom(*vertex_map_device_);
 
     // rendering
     float* pose = poses + i * 7;
@@ -1308,6 +1309,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     {
       pangolin::CudaScopedMappedArray scopedArray(vertTex);
       cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
+      predicted_verts_->copyFrom(*predicted_verts_device_);
     }
 
     // copy predicted normals
@@ -1316,16 +1318,21 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       cudaMemcpy2DFromArray(predicted_normals_device_->data(), normTex.width*4*sizeof(float), *scopedArray, 0, 0, normTex.width*4*sizeof(float), normTex.height, cudaMemcpyDeviceToDevice);
     }
 
-    // ICP
-    Eigen::Vector2f depthRange(znear, zfar);
-    float maxError = 0.02;
-    uint icpIterations = 8;
+    // Tanner's ICP
+    Sophus::SE3f T_co_new = T_co;
+    if (count > 400)
+    {
+      Eigen::Vector2f depthRange(znear, zfar);
+      float maxError = 0.02;
+      uint icpIterations = 8;
 
-    Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
+      Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
                               model, T_co, depthRange, maxError, icpIterations);
 
-    Sophus::SE3f T_co_new = update * T_co;
-    std::cout << T_co_new.matrix3x4() << std::endl;
+      T_co_new = update * T_co;
+      std::cout << T_co_new.matrix3x4() << std::endl;
+    }
+    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co_new.unit_quaternion();

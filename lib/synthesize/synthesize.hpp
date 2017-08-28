@@ -118,6 +118,7 @@ class Synthesizer
 
   // 3D points
   df::ManagedDeviceTensor2<Vec3>* vertex_map_device_;
+  df::ManagedHostTensor2<Vec3>* vertex_map_;
   df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device_;
   df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_normals_device_;
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_;

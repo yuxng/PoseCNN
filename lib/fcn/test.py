@@ -22,9 +22,8 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
-import scipy.io
 from synthesize import synthesizer
-
+import scipy.io
 
 # from normals import gpu_normals
 # from pose_estimation import ransac
@@ -717,6 +716,34 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
 
+        ax = fig.add_subplot(3, 4, 4, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(rois.shape[0]):
+            cls = int(rois[i, 1])
+            index = np.where(labels_gt == cls)
+            if len(index[0]) > 0:
+                num = len(index[0])
+                # extract 3D points
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                # projection
+                RT = np.zeros((3, 4), dtype=np.float32)
+                RT[:3, :3] = quat2mat(poses_new[i, :4])
+                RT[:, 3] = poses_new[i, 4:7]
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+        ax.set_title('projection refined by ICP')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
     plt.show()
 
 
@@ -760,7 +787,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(1, num_images)
+        perm = xrange(630, num_images)
     else:
         perm = xrange(num_images)
 
@@ -774,7 +801,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print 'backgrounds loaded from {}'.format(cache_file)
 
     SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
-    SYN.setup()
     count_correct = 0
     count_all = 0
     for i in perm:
@@ -922,7 +948,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
                         error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         print 'error new: {}'.format(error_new)
-                        print 0.1 * np.linalg.norm(imdb._extents[cls_index, :])
+                        print '{}'.format(0.1 * np.linalg.norm(imdb._extents[cls_index, :]))
 
                         count_all += 1
                         if error_new < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
