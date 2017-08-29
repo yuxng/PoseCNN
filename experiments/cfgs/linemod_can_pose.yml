@@ -11,16 +11,16 @@ TRAIN:
   NUM_CLASSES: 2
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
-  SNAPSHOT_INFIX: linemod_ape
-  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_single_frame
+  SNAPSHOT_INFIX: linemod_can
+  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_single_frame_pose
   USE_FLIPPED: False
   CHROMATIC: False
   VERTEX_REG: True
   VERTEX_W: 10.0
   VISUALIZE: False
-  POSE_REG: False
+  POSE_REG: True
   SYNTHESIZE: True
-  SYNROOT: 'data/LINEMOD/data_syn/ape/'
+  SYNROOT: 'data/LINEMOD/data_syn/can/'
   SYNNUM: 80000
   SYN_RATIO: 4
 TEST:
@@ -28,5 +28,5 @@ TEST:
   SCALES_BASE: !!python/tuple [1.5]
   VERTEX_REG: True
   VISUALIZE: True
-  POSE_REG: False
+  POSE_REG: True
   SYNTHETIC: False

@@ -79,6 +79,7 @@ class Network(object):
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
+                        print op_name + '_p ' + param_name + ' assigned'
                     except ValueError:
                         if not ignore_missing:
                             raise

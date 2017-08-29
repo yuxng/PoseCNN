@@ -91,7 +91,7 @@ class SolverWrapper(object):
         print('Restored %s' % save_file)
 
 
-    def train_model(self, sess, train_op, loss, learning_rate, max_iters):
+    def train_model(self, sess, train_op, loss, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         tf.summary.scalar('loss', loss)
@@ -112,6 +112,13 @@ class SolverWrapper(object):
             self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
+
+        coord = tf.train.Coordinator()
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, self.net, data_layer, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, self.net, data_layer, coord))
+            t.start()
 
         last_snapshot_iter = -1
         timer = Timer()
@@ -134,8 +141,12 @@ class SolverWrapper(object):
         if last_snapshot_iter != iter:
             self.snapshot(sess, iter)
 
+        sess.run(self.net.close_queue_op)
+        coord.request_stop()
+        coord.join([t])
 
-    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters):
+
+    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -155,6 +166,13 @@ class SolverWrapper(object):
             self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
+
+        coord = tf.train.Coordinator()
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, self.net, data_layer, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, self.net, data_layer, coord))
+            t.start()
 
         # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 
@@ -180,8 +198,12 @@ class SolverWrapper(object):
         if last_snapshot_iter != iter:
             self.snapshot(sess, iter)
 
+        sess.run(self.net.close_queue_op)
+        coord.request_stop()
+        coord.join([t])
 
-    def train_model_vertex_pose(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters):
+
+    def train_model_vertex_pose(self, sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -201,6 +223,13 @@ class SolverWrapper(object):
             self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
+
+        coord = tf.train.Coordinator()
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, self.net, data_layer, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, self.net, data_layer, coord))
+            t.start()
 
         # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 
@@ -225,6 +254,10 @@ class SolverWrapper(object):
 
         if last_snapshot_iter != iter:
             self.snapshot(sess, iter)
+
+        sess.run(self.net.close_queue_op)
+        coord.request_stop()
+        coord.join([t])
 
 
 def get_training_roidb(imdb):
@@ -255,16 +288,11 @@ def load_and_enqueue(sess, net, data_layer, coord):
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
                 if cfg.TRAIN.VERTEX_REG:
-                    if cfg.TRAIN.POSE_REG:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                                   net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
-                    else:
-                        feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
-                                   net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights']}
+                    feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
+                               net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
+                               net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
-
             else:
                 if cfg.TRAIN.VERTEX_REG:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
@@ -390,23 +418,12 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
             # data layer
             data_layer = GtDataLayer(roidb, imdb.num_classes)
 
-        coord = tf.train.Coordinator()
-        if cfg.TRAIN.VISUALIZE:
-            load_and_enqueue(sess, network, data_layer, coord)
-        else:
-            t = threading.Thread(target=load_and_enqueue, args=(sess, network, data_layer, coord))
-            t.start()
-
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG:
             if cfg.TRAIN.POSE_REG:
-                sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters)
+                sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters, data_layer)
             else:
-                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters)
+                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters, data_layer)
         else:
-            sw.train_model(sess, train_op, loss, learning_rate, max_iters)
+            sw.train_model(sess, train_op, loss, learning_rate, max_iters, data_layer)
         print 'done solving'
-
-        sess.run(network.close_queue_op)
-        coord.request_stop()
-        coord.join([t])

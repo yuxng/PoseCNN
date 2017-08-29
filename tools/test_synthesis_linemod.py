@@ -71,7 +71,7 @@ if __name__ == '__main__':
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup()
 
-    which_class = 0
+    which_class = 7
     classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
 
     num_images = 80000
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     znear = 0.25;
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/var/Projects/Deep_Pose/data/LINEMOD/data_syn/' + classes_all[which_class] + '/'
+    root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
 
     extent_file = '/var/Projects/Deep_Pose/data/LINEMOD/extents.txt'
     extents = np.zeros((9, 3), dtype=np.float32)

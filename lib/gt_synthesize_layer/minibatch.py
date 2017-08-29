@@ -70,23 +70,28 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
 
             # sample a background image
             ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename = backgrounds[ind]
-            background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+            filename_color = backgrounds[ind]['color']
+            filename_depth = backgrounds[ind]['depth']
+            background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
+            background_depth = cv2.imread(filename_depth, cv2.IMREAD_UNCHANGED)
             try:
-                background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+                background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+                background_depth = cv2.resize(background_depth, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
             except:
-                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                background_depth = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
                 print 'bad background image'
 
-            if len(background.shape) != 3:
-                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+            if len(background_color.shape) != 3:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
                 print 'bad background image'
 
             # add background
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = background[I[0], I[1], :3]
+            im[I[0], I[1], :] = background_color[I[0], I[1], :3]
+            im_depth_raw[I[0], I[1]] = background_depth[I[0], I[1]]
 
             if cfg.TRAIN.CHROMATIC:
                 filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])
@@ -236,6 +241,11 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             else:
                 im = im[:, ::-1, :]
         im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
+        if num_classes == 2:
+            I = np.where(im > 0)
+            im[I[0], I[1]] = 1
+            for j in xrange(len(meta_data['cls_indexes'])):
+                meta_data['cls_indexes'][j] = 1
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
@@ -392,8 +402,8 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes, vertmap, ex
             vertex_targets[y, x, 3*i+0] = R[0,:]
             vertex_targets[y, x, 3*i+1] = R[1,:]
             vertex_targets[y, x, 3*i+2] = z
-            vertex_weights[y, x, 3*i+0] = 1.0
-            vertex_weights[y, x, 3*i+1] = 1.0
+            vertex_weights[y, x, 3*i+0] = 10.0
+            vertex_weights[y, x, 3*i+1] = 10.0
             vertex_weights[y, x, 3*i+2] = 10.0
 
     return vertex_targets, vertex_weights
@@ -425,7 +435,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_target_blob):
+def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -441,18 +451,18 @@ def _vis_minibatch(im_blob, im_normal_blob, depth_blob, label_blob, vertex_targe
         ax.set_title('color') 
 
         # show depth image
-        depth = depth_blob[i, :, :, 0]
-        ax = fig.add_subplot(2, 3, 2)
-        plt.imshow(abs(depth))
-        ax.set_title('depth') 
+        #depth = depth_blob[i, :, :, 0]
+        #ax = fig.add_subplot(2, 3, 2)
+        #plt.imshow(abs(depth))
+        #ax.set_title('depth') 
 
         # show normal image
-        #im_normal = im_normal_blob[i, :, :, :].copy()
-        #im_normal += cfg.PIXEL_MEANS
-        #im_normal = im_normal[:, :, (2, 1, 0)]
-        #im_normal = im_normal.astype(np.uint8)
-        #fig.add_subplot(233)
-        #plt.imshow(im_normal)
+        im_depth = im_depth_blob[i, :, :, :].copy()
+        im_depth += cfg.PIXEL_MEANS
+        im_depth = im_depth[:, :, (2, 1, 0)]
+        im_depth = im_depth.astype(np.uint8)
+        fig.add_subplot(2, 3, 2)
+        plt.imshow(im_depth)
 
         # show label
         label = label_blob[i, :, :, :]

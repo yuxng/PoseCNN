@@ -1,5 +1,5 @@
 EXP_DIR: linemod
-INPUT: COLOR
+INPUT: RGBD
 TRAIN:
   SINGLE_FRAME: True
   LEARNING_RATE: 0.001
@@ -12,7 +12,7 @@ TRAIN:
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: linemod_ape
-  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
+  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_single_frame_pose
   USE_FLIPPED: False
   CHROMATIC: False
   VERTEX_REG: True
@@ -20,7 +20,7 @@ TRAIN:
   VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True
-  SYNROOT: '/var/Projects/Deep_Pose/data/LINEMOD/data_syn/ape/'
+  SYNROOT: 'data/LINEMOD/data_syn/ape/'
   SYNNUM: 80000
   SYN_RATIO: 4
 TEST:

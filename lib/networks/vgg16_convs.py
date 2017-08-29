@@ -35,7 +35,7 @@ class vgg16_convs(Network):
             if vertex_reg:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
-                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meat_data])
+                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
                 data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
                                     'poses': poses, 'extents': extents, 'meta_data': meta_data})

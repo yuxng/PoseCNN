@@ -223,6 +223,11 @@ def _get_label_blob(roidb, voxelizer, im_scales):
             else:
                 im = im[:, ::-1, :]
         im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
+        if num_classes == 2:
+            I = np.where(im > 0)
+            im[I[0], I[1]] = 1
+            for j in xrange(len(meta_data['cls_indexes'])):
+                meta_data['cls_indexes'][j] = 1
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
