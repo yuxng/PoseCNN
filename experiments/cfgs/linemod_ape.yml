@@ -17,7 +17,7 @@ TRAIN:
   CHROMATIC: False
   VERTEX_REG: True
   VERTEX_W: 10.0
-  VISUALIZE: True
+  VISUALIZE: False
   POSE_REG: False
   SYNTHESIZE: True
   SYNROOT: 'data/LINEMOD/data_syn/ape/'
