@@ -1,5 +1,5 @@
 EXP_DIR: linemod
-INPUT: RGBD
+INPUT: COLOR
 TRAIN:
   SINGLE_FRAME: True
   LEARNING_RATE: 0.001
@@ -12,12 +12,12 @@ TRAIN:
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: linemod_can
-  SNAPSHOT_PREFIX: vgg16_fcn_rgbd_single_frame
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
   USE_FLIPPED: False
   CHROMATIC: False
   VERTEX_REG: True
   VERTEX_W: 10.0
-  VISUALIZE: False
+  VISUALIZE: True
   POSE_REG: False
   SYNTHESIZE: True
   SYNROOT: 'data/LINEMOD/data_syn/can/'

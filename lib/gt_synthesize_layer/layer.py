@@ -29,7 +29,7 @@ class GtSynthesizeLayer(object):
         self._name = name
         self._shuffle_roidb_inds()
         self._shuffle_syn_inds()
-        self._write_background_images()
+        self._build_background_images()
         self._read_camera_parameters()
 
     def _shuffle_roidb_inds(self):
@@ -163,7 +163,7 @@ class GtSynthesizeLayer(object):
         perm = perm[:num]
         print len(perm)
 
-        backgrounds = [[] for _ in xrange(num)]
+        backgrounds = [None]*num
         kernel = np.ones((50, 50), np.uint8)
         for i in xrange(num):
             index = perm[i]
@@ -177,26 +177,17 @@ class GtSynthesizeLayer(object):
             else:
                 im = rgba
 
-            # depth
-            im_depth = pad_im(cv2.imread(self._roidb[index]['depth'], cv2.IMREAD_UNCHANGED), 16)
-
             # generate background image
             mask = pad_im(cv2.imread(self._roidb[index]['label'], cv2.IMREAD_UNCHANGED), 16)
             index = np.where(mask > 0)
             mask[index[0], index[1]] = 1
             mask = cv2.dilate(mask, kernel)
-            background_color = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
-            im_depth[index[0], index[1]] = 0
-            background_depth = im_depth
+            background = cv2.inpaint(im, mask, 3, cv2.INPAINT_TELEA)
 
             # write the image
-            filename_color = os.path.join(self._cache_path, self._name + '_backgrounds', '%04d-color.png' % (i))
-            cv2.imwrite(filename_color, background_color)
-            filename_depth = os.path.join(self._cache_path, self._name + '_backgrounds', '%04d-depth.png' % (i))
-            cv2.imwrite(filename_depth, background_depth)
-
-            bak = {'color': filename_color, 'depth': filename_depth}
-            backgrounds[i] = bak
+            filename = os.path.join(self._cache_path, self._name + '_backgrounds', '%04d.jpg' % (i))
+            cv2.imwrite(filename, background)
+            backgrounds[i] = filename
 
         self._backgrounds = backgrounds
         print "build background images finished"

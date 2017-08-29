@@ -166,7 +166,12 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
+        if cfg.TEST.VERTEX_REG:
+            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
+                         net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
+                         net.meta_data: meta_data_blob, net.extents: extents, net.poses: pose_blob}
+        else:
+            feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
         if cfg.TEST.VERTEX_REG:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \

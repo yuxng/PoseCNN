@@ -70,16 +70,12 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
 
             # sample a background image
             ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename_color = backgrounds[ind]['color']
-            filename_depth = backgrounds[ind]['depth']
+            filename_color = backgrounds[ind]
             background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
-            background_depth = cv2.imread(filename_depth, cv2.IMREAD_UNCHANGED)
             try:
                 background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
-                background_depth = cv2.resize(background_depth, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
             except:
                 background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
-                background_depth = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
                 print 'bad background image'
 
             if len(background_color.shape) != 3:
@@ -91,7 +87,6 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
             im[I[0], I[1], :] = background_color[I[0], I[1], :3]
-            im_depth_raw[I[0], I[1]] = background_depth[I[0], I[1]]
 
             if cfg.TRAIN.CHROMATIC:
                 filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])

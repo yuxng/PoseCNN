@@ -71,7 +71,7 @@ if __name__ == '__main__':
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup()
 
-    which_class = 7
+    which_class = 3
     classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
 
     num_images = 80000
@@ -94,7 +94,6 @@ if __name__ == '__main__':
 
     i = 0
     while i < num_images:
-        print i
         
         # render a synthetic image
         im_syn = np.zeros((height, width, 4), dtype=np.uint8)
@@ -150,5 +149,6 @@ if __name__ == '__main__':
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
         scipy.io.savemat(filename, metadata, do_compression=True)
+        print filename
 
         i += 1
