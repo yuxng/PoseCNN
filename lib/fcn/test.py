@@ -875,7 +875,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
-        if imdb.num_classes == 2:
+        if imdb.num_classes == 2 and not 'test' in imdb.name:
             for j in xrange(len(meta_data['cls_indexes'])):
                 meta_data['cls_indexes'][j] = 1
 
