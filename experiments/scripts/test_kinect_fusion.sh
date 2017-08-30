@@ -12,6 +12,5 @@ echo Logging output to "$LOG"
 
 # test icp
 time ./tools/test_kinect_fusion.py --gpu 0 \
-  --imdb rgbd_scene_trainval \
-  --cfg experiments/cfgs/rgbd_scene.yml \
-  --rig data/RGBDScene/camera.json
+  --imdb lov_trainval \
+  --rig data/LOV/camera.json

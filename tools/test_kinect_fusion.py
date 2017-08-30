@@ -54,6 +54,7 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
+    is_save = 0
 
     print('Called with args:')
     print(args)
@@ -88,27 +89,30 @@ if __name__ == '__main__':
         if video_index == '':
             video_index = image_index[:pos]
             have_prediction = False
-            # open file to save camera poses
-            filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
-            file = open(filename, 'w')
-            frame_index = 0
+            if is_save:
+                # open file to save camera poses
+                filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
+                file = open(filename, 'w')
+                frame_index = 0
         else:
             if video_index != image_index[:pos]:
-                # save the model
-                filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.ply'
-                KF.save_model(filename)
-                print 'save model to file: {}'.format(filename)
+                if is_save:
+                    # save the model
+                    filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.ply'
+                    KF.save_model(filename)
+                    print 'save model to file: {}'.format(filename)
 
                 video_index = image_index[:pos]
                 print 'start video {}'.format(video_index)
                 have_prediction = False
                 KF.reset()
 
-                # open new pose file
-                file.close()
-                filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
-                file = open(filename, 'w')
-                frame_index = 0
+                if is_save:
+                    # open new pose file
+                    file.close()
+                    filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.txt'
+                    file = open(filename, 'w')
+                    frame_index = 0
 
         # RGB image
         im = cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED)
@@ -136,11 +140,12 @@ if __name__ == '__main__':
             pose_world2live[2, 2] = 1
             pose_live2world = pose_world2live
 
-        # save pose_world2live to file
-        file.write('{:05d}\n'.format(frame_index))
-        for j in range(3):
-            file.write('{} {} {} {}\n'.format(pose_world2live[j, 0], pose_world2live[j, 1], pose_world2live[j, 2], pose_world2live[j, 3]))
-        frame_index += 1
+        if is_save:
+            # save pose_world2live to file
+            file.write('{:05d}\n'.format(frame_index))
+            for j in range(3):
+                file.write('{} {} {} {}\n'.format(pose_world2live[j, 0], pose_world2live[j, 1], pose_world2live[j, 2], pose_world2live[j, 3]))
+            frame_index += 1
 
         KF.fuse_depth()
         print 'finish fuse depth'
@@ -155,7 +160,7 @@ if __name__ == '__main__':
 
         have_prediction = True
 
-        if i == num_images - 1:
+        if is_save and i == num_images - 1:
             # save the model
             filename = '/var/Projects/FCN/data/RGBDScene/models/' + video_index + '.ply'
             KF.save_model(filename)

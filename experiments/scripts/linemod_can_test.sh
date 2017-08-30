@@ -13,6 +13,14 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
+  --model output/linemod/linemod_can_train/vgg16_fcn_color_single_frame_linemod_can_iter_40000.ckpt \
+  --imdb linemod_can_test \
+  --cfg experiments/cfgs/linemod_can.yml \
+  --cad data/LINEMOD/models.txt \
+  --pose data/LINEMOD/poses.txt
+
+time ./tools/test_net.py --gpu 0 \
+  --network vgg16_convs \
   --model output/linemod/linemod_can_train/vgg16_fcn_color_single_frame_pose_linemod_can_iter_40000.ckpt \
   --imdb linemod_can_test \
   --cfg experiments/cfgs/linemod_can_pose.yml \

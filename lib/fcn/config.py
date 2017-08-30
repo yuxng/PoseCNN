@@ -106,7 +106,7 @@ __C.TEST.VISUALIZE = False
 __C.TEST.RANSAC = False
 __C.TEST.GAN = False
 __C.TEST.POSE_REG = False
-__C.TEST.MATCHING = False
+__C.TEST.POSE_REFINE = False
 __C.TEST.SYNTHETIC = False
 
 # Scales to compute real features
