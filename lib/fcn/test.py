@@ -791,8 +791,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(630, num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
@@ -835,6 +835,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             # label
             filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(i)
             labels_gt = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
             if len(labels_gt.shape) == 2:
                 im_label_gt = imdb.labels_to_image(im, labels_gt)
             else:
@@ -873,6 +874,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+
+        if imdb.num_classes == 2:
+            for j in xrange(len(meta_data['cls_indexes'])):
+                meta_data['cls_indexes'][j] = 1
 
         _t['im_segment'].tic()
         labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
