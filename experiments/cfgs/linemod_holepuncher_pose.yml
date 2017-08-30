@@ -11,7 +11,7 @@ TRAIN:
   NUM_CLASSES: 2
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
-  SNAPSHOT_INFIX: linemod_ape
+  SNAPSHOT_INFIX: linemod_holepuncher
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
   USE_FLIPPED: False
   CHROMATIC: False
@@ -20,7 +20,7 @@ TRAIN:
   VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True
-  SYNROOT: 'data/LINEMOD/data_syn/ape/'
+  SYNROOT: 'data/LINEMOD/data_syn/holepuncher/'
   SYNNUM: 80000
   SYN_RATIO: 3
 TEST:

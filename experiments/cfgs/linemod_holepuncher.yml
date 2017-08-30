@@ -11,16 +11,16 @@ TRAIN:
   NUM_CLASSES: 2
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
-  SNAPSHOT_INFIX: linemod_ape
-  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
+  SNAPSHOT_INFIX: linemod_holepuncher
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
   USE_FLIPPED: False
   CHROMATIC: False
   VERTEX_REG: True
   VERTEX_W: 10.0
   VISUALIZE: False
-  POSE_REG: True
+  POSE_REG: False
   SYNTHESIZE: True
-  SYNROOT: 'data/LINEMOD/data_syn/ape/'
+  SYNROOT: 'data/LINEMOD/data_syn/holepuncher/'
   SYNNUM: 80000
   SYN_RATIO: 3
 TEST:
@@ -28,5 +28,5 @@ TEST:
   SCALES_BASE: !!python/tuple [1.5]
   VERTEX_REG: True
   VISUALIZE: True
-  POSE_REG: True
+  POSE_REG: False
   SYNTHETIC: False
