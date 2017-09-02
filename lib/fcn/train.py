@@ -272,8 +272,10 @@ def get_training_roidb(imdb):
 
 def load_and_enqueue(sess, net, data_layer, coord):
 
+    iter = 0
     while not coord.should_stop():
-        blobs = data_layer.forward()
+        blobs = data_layer.forward(iter)
+        iter += 1
 
         if cfg.INPUT == 'RGBD':
             data_blob = blobs['data_image_color']

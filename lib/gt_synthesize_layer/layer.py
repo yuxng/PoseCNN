@@ -58,31 +58,34 @@ class GtSynthesizeLayer(object):
 
         return db_inds, db_inds_syn
 
-    def _get_next_minibatch(self):
+    def _get_next_minibatch(self, iter):
         """Return the blobs to be used for the next minibatch."""
 
-        ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, cfg.TRAIN.SYN_RATIO)
-        if ratio == 0:
-            ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), cfg.TRAIN.SYN_RATIO)
-            r = np.random.randint(ratio+1, size=1)[0]
-            if r == 0:
-                is_syn = 0
-            else:
-                is_syn = 1
+        if iter < 3000:
+            is_syn = 0
         else:
-            r = np.random.randint(ratio+1, size=1)[0]
-            if r == 0:
-                is_syn = 1
+            ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, cfg.TRAIN.SYN_RATIO)
+            if ratio == 0:
+                ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), cfg.TRAIN.SYN_RATIO)
+                r = np.random.randint(ratio+1, size=1)[0]
+                if r == 0:
+                     is_syn = 0
+                else:
+                     is_syn = 1
             else:
-                is_syn = 0
+                r = np.random.randint(ratio+1, size=1)[0]
+                if r == 0:
+                    is_syn = 1
+                else:
+                    is_syn = 0
 
         db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
         minibatch_db = [self._roidb[i] for i in db_inds]
         return get_minibatch(minibatch_db, self._extents, self._num_classes, self._backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn)
             
-    def forward(self):
+    def forward(self, iter):
         """Get blobs and copy them into this layer's top blob vector."""
-        blobs = self._get_next_minibatch()
+        blobs = self._get_next_minibatch(iter)
 
         return blobs
 
