@@ -173,6 +173,7 @@ class HoughvotingOp : public OpKernel {
       roi(3) = 0;
       roi(4) = 1;
       roi(5) = 1;
+      roi(6) = 1;
       outputs.push_back(roi);
     }
 

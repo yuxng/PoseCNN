@@ -22,6 +22,11 @@ class linemod(datasets.imdb):
         self._class_weights = [1, 100]
         self._classes_all = ('__background__', 'ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
 
+        for i in xrange(len(self._classes_all)):
+            if self._cls == self._classes_all[i]:
+                self._cls_index = i
+                break
+
         self._extents = self._load_object_extents()
         self._points = self._load_object_points()
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
@@ -280,6 +285,10 @@ class linemod(datasets.imdb):
             # read ground truth labels
             im = cv2.imread(self.label_path_from_index(index), cv2.IMREAD_UNCHANGED)
             gt_labels = im.astype(np.float32)
+            if self._image_set == 'test':
+                I = np.where(gt_labels == self._cls_index)
+                gt_labels[:, :] = 0
+                gt_labels[I[0], I[1]] = 1
 
             # predicated labels
             sg_labels = segmentations[im_ind]['labels']

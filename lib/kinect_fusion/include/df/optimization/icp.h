@@ -26,6 +26,20 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
                              const uint numIterations,
                              DebugArgsT ... debugArgs);
 
+template <typename Scalar,
+          typename CameraModelT,
+          int DPred,
+          typename ... DebugArgsT>
+Sophus::SE3Group<Scalar> icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+                             const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
+                             const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
+                             const CameraModelT & cameraModel,
+                             const Sophus::SE3Group<Scalar> & predictionPose,
+                             const Eigen::Matrix<Scalar,2,1> & depthRange,
+                             const Scalar maxError,
+                             const uint numIterations,
+                             DebugArgsT ... debugArgs);
+
 namespace internal {
 
 template <typename Scalar,
@@ -37,6 +51,23 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                                     const CameraModelT & cameraModel,
                                     const Sophus::SE3Group<Scalar> & predictionPose,
+                                    const Eigen::Matrix<Scalar,6,1>& initialPose,
+                                    const Eigen::Matrix<Scalar,2,1> & depthRange,
+                                    const Scalar maxError,
+                                    const dim3 grid,
+                                    const dim3 block,
+                                    DebugArgsT ... debugArgs);
+
+template <typename Scalar,
+          typename CameraModelT,
+          int DPred,
+          typename ... DebugArgsT>
+LinearSystem<Scalar,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+                                    const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
+                                    const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
+                                    const CameraModelT & cameraModel,
+                                    const Sophus::SE3Group<Scalar> & predictionPose,
+                                    const Eigen::Matrix<Scalar,6,1>& initialPose,
                                     const Eigen::Matrix<Scalar,2,1> & depthRange,
                                     const Scalar maxError,
                                     const dim3 grid,

@@ -17,7 +17,7 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+Sophus::SE3Group<Scalar> icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                              const CameraModelT & cameraModel,
@@ -47,7 +47,7 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
 
         std::cout << iter << std::endl;
 
-        internal::LinearSystem<Scalar,6> system = internal::icpIteration(liveVertices,
+        internal::LinearSystem<Scalar,3> system = internal::icpIteration_translation(liveVertices,
                                                                          predVertices,
                                                                          predNormals,
                                                                          cameraModel,
@@ -57,37 +57,9 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
                                                                          grid,block,
                                                                          debugArgs ...);
 
-        Eigen::Matrix<Scalar,6,6,Eigen::DontAlign> fullJTJ = internal::SquareMatrixReconstructor<Scalar,6>::reconstruct(system.JTJ);
+        Eigen::Matrix<Scalar,3,3,Eigen::DontAlign> fullJTJ = internal::SquareMatrixReconstructor<Scalar,3>::reconstruct(system.JTJ);
 
-//        Eigen::Matrix<Scalar,6,6> fullJTJ = Eigen::Matrix<Scalar,6,6>::Zero();
-//        fullJTJ.template block<1,6>(0,0) = system.JTJ.head;
-//        fullJTJ.template block<1,5>(1,1) = system.JTJ.tail.head;
-//        fullJTJ.template block<1,4>(2,2) = system.JTJ.tail.tail.head;
-//        fullJTJ.template block<1,3>(3,3) = system.JTJ.tail.tail.tail.head;
-//        fullJTJ.template block<1,2>(4,4) = system.JTJ.tail.tail.tail.tail.head;
-//        fullJTJ.template block<1,1>(5,5) = system.JTJ.tail.tail.tail.tail.tail.head;
-
-//        for (int i=0; i<6; ++i) {
-//            for (int j=0; j<6; ++j) {
-//                fullJTJ(j,i) = fullJTJ(i,j);
-//            }
-//        }
-
-//        for (int i = 0; i < 6; ++i) {
-//            system.JTr(i) = 0;
-//        }
-
-//        std::cout << fullJTJ << std::endl;
-
-//        std::cout << std::endl << system.JTr << std::endl << std::endl << std::endl;
-
-//        Eigen::Matrix<Scalar,6,6> sav = fullJTJ.template selfadjointView<Eigen::Upper>();
-//        std::cout << sav << std::endl;
-//        Eigen::Matrix<Scalar,6,1> solution = sav.ldlt().solve(system.JTr);
-//        std::cout << solution << std::endl;
-
-        Eigen::Matrix<Scalar,6,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
-//        std::cout << std::endl << solution2 << std::endl;
+        Eigen::Matrix<Scalar,3,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
 
         std::cout << fullJTJ << std::endl;
 
@@ -95,10 +67,18 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
 
         std::cout << solution.transpose() << std::endl;
 
-        SE3 update = SE3::exp(solution);
+        Eigen::Matrix<Scalar,6,1> full_solution;
+        full_solution(0) = solution(0);
+        full_solution(1) = solution(1);
+        full_solution(2) = solution(2);
+        full_solution(3) = 0;
+        full_solution(4) = 0;
+        full_solution(5) = 0;
+
+        SE3 update = SE3::exp(full_solution);
         accumulatedUpdate = update*accumulatedUpdate;
 
-//        std::cout << accumulatedUpdate.matrix() << std::endl << std::endl;
+        std::cout << accumulatedUpdate.matrix() << std::endl << std::endl;
 
     }
 
@@ -106,7 +86,7 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
 
 }
 
-template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template Sophus::SE3f icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const Poly3CameraModel<float> &,
@@ -115,7 +95,7 @@ template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const float,
                           const uint);
 
-template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template Sophus::SE3f icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const Poly3CameraModel<float> &,
@@ -126,7 +106,7 @@ template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
 
 
-template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template Sophus::SE3f icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const Poly3CameraModel<float> &,
@@ -135,7 +115,7 @@ template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const float,
                           const uint);
 
-template Sophus::SE3f icp(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template Sophus::SE3f icp_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                           const Poly3CameraModel<float> &,

@@ -20,7 +20,15 @@
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/Importer.hpp>
 #include <OpenEXR/half.h>
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+#include <pcl/registration/icp.h>
+#include <pcl/registration/icp_nl.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/common/geometry.h>
 
 #include <df/camera/camera.h>
 #include <df/camera/linear.h>
@@ -68,7 +76,7 @@ class Synthesizer
   Synthesizer(std::string model_file, std::string pose_file);
   ~Synthesizer();
 
-  void setup();
+  void setup(int width, int height);
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 

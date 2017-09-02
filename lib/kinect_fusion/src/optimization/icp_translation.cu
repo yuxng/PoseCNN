@@ -21,7 +21,7 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-__global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansAndResiduals,
+__global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,3> * jacobiansAndResiduals,
                           const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > liveVertices,
                           const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > predictedVertices,
                           const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > predictedNormals,
@@ -49,7 +49,7 @@ __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansA
     if (x < width && y < height) {
 
         // TODO: take care of this with a memset?
-        jacobiansAndResiduals[x + width*y].J = Eigen::Matrix<Scalar,1,6>::Zero();
+        jacobiansAndResiduals[x + width*y].J = Eigen::Matrix<Scalar,1,3>::Zero();
         jacobiansAndResiduals[x + width*y].r = 0;
 
         const VecD & predictedVertex = predictedVertices(x,y);
@@ -66,12 +66,6 @@ __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansA
         const Vec3 updatedPredVertex = updatedPose * predictedVertex.template head<3>();
 
         const Vec2 projectedPredVertex = cameraModel.project(updatedPredVertex);
-
-        //            const Vec2 projectedPredVertex  (updatedPredVertex(0)/updatedPredVertex(2)*cameraModel.params()[0] + cameraModel.params()[2],
-        //                                             updatedPredVertex(1)/updatedPredVertex(2)*cameraModel.params()[1] + cameraModel.params()[3]);
-        //            if ( x > 200 && x < 220 && y > 200 && y < 220) {
-        //                printf("(%d,%d) -> (%f,%f)\n",x,y,projectedPredVertex(0),projectedPredVertex(1));
-        //            }
 
         // TODO: interpolate?
         const int u = projectedPredVertex(0) + Scalar(0.5);
@@ -121,10 +115,10 @@ __global__ void icpKernel(internal::JacobianAndResidual<Scalar,1,6> * jacobiansA
         const Scalar weightSqrt = Scalar(1) / (liveDepth);
 
         const Eigen::Matrix<Scalar,1,3> dError_dUpdatedPredictedPoint = predictedNormal.template head<3>().transpose();
-        Eigen::Matrix<Scalar,3,6> dUpdatedPredictedPoint_dUpdate;
-        dUpdatedPredictedPoint_dUpdate << 1, 0, 0,                     0,  updatedPredVertex(2), -updatedPredVertex(1),
-                                          0, 1, 0, -updatedPredVertex(2),                     0,  updatedPredVertex(0),
-                                          0, 0, 1,  updatedPredVertex(1), -updatedPredVertex(0),                     0;
+        Eigen::Matrix<Scalar,3,3> dUpdatedPredictedPoint_dUpdate;
+        dUpdatedPredictedPoint_dUpdate << 1, 0, 0,
+                                          0, 1, 0,
+                                          0, 0, 1;
 
         jacobiansAndResiduals[x + width*y].J = weightSqrt * dError_dUpdatedPredictedPoint * dUpdatedPredictedPoint_dUpdate;
         jacobiansAndResiduals[x + width*y].r = weightSqrt * error;
@@ -142,7 +136,7 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+LinearSystem<Scalar,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                                     const CameraModelT & cameraModel,
@@ -155,11 +149,11 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                     DebugArgsT ... debugArgs) {
 
     // TODO: make efficient
-    static thrust::device_vector<JacobianAndResidual<Scalar,1,6> > jacobiansAndResiduals(liveVertices.count());
+    static thrust::device_vector<JacobianAndResidual<Scalar,1,3> > jacobiansAndResiduals(liveVertices.count());
 
-    GlobalTimer::tick("icpKernel");
-    cudaFuncSetCacheConfig(icpKernel<Scalar,CameraModelT,DPred>, cudaFuncCachePreferL1);
-    icpKernel<Scalar><<<grid,block>>>(thrust::raw_pointer_cast(jacobiansAndResiduals.data()),
+    GlobalTimer::tick("icpKernel_translation");
+    cudaFuncSetCacheConfig(icpKernel_translation<Scalar,CameraModelT,DPred>, cudaFuncCachePreferL1);
+    icpKernel_translation<Scalar><<<grid,block>>>(thrust::raw_pointer_cast(jacobiansAndResiduals.data()),
                                       liveVertices,predVertices,predNormals,
                                       cameraModel,
                                       predictionPose,
@@ -170,66 +164,25 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
 
     cudaDeviceSynchronize();
     CheckCudaDieOnError();
-    GlobalTimer::tock("icpKernel");
-
-//    static thrust::device_vector<LinearSystem<Scalar,6> > systems(jacobiansAndResiduals.size());
-
-//    std::cout << sizeof(LinearSystem<Scalar,6>) << std::endl;
-//    std::cout << sizeof(LinearSystem2<Scalar,6>) << std::endl;
-
-//    std::cout << sizeof(RawVec<Scalar,6*7/2>) << std::endl;
-//    std::cout << sizeof(RawVec<Scalar,1>) << std::endl;
-//    std::cout << sizeof(LinearSystem3<Scalar,6>) << std::endl;
-
-//    GlobalTimer::tick("transform");
-//    thrust::transform(jacobiansAndResiduals.begin(),jacobiansAndResiduals.end(),
-//                      systems.begin(),LinearSystemCreationFunctor<Scalar,1,6>());
-//    cudaDeviceSynchronize();
-//    CheckCudaDieOnError();
-
-//    GlobalTimer::tock("transform");
-//    GlobalTimer::tick("reduce");
-//    LinearSystem<Scalar,6> system = thrust::reduce(systems.begin(),systems.end(),LinearSystem<Scalar,6>::zero(),LinearSystemSumFunctor<Scalar,6>());
-//    cudaDeviceSynchronize();
-//    GlobalTimer::tock("reduce");
-
-//    CheckCudaDieOnError();
-
-
-//    GlobalTimer::tick("transform_reduce");
-//    LinearSystem2<Scalar,6> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
-//                                                             jacobiansAndResiduals.end(),
-//                                                             LinearSystemCreationFunctor2<Scalar,1,6>(),
-//                                                             LinearSystem2<Scalar,6>::zero(),
-//                                                             LinearSystemSumFunctor2<Scalar,6>());
-
-//    cudaDeviceSynchronize();
-//    CheckCudaDieOnError();
-//    GlobalTimer::tock("transform_reduce");
+    GlobalTimer::tock("icpKernel_translation");
 
     GlobalTimer::tick("transform_reduce");
-    LinearSystem<Scalar,6> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
+    LinearSystem<Scalar,3> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
                                                              jacobiansAndResiduals.end(),
-                                                             LinearSystemCreationFunctor<Scalar,1,6>(),
-                                                             LinearSystem<Scalar,6>::zero(),
-                                                             LinearSystemSumFunctor<Scalar,6>());
+                                                             LinearSystemCreationFunctor<Scalar,1,3>(),
+                                                             LinearSystem<Scalar,3>::zero(),
+                                                             LinearSystemSumFunctor<Scalar,3>());
 
     cudaDeviceSynchronize();
     CheckCudaDieOnError();
     GlobalTimer::tock("transform_reduce");
-
-//    std::cout << "size: " << sizeof(LinearSystem<Scalar,6>) << std::endl;
-
-//    LinearSystem2<Scalar,6> * sysptr = reinterpret_cast<LinearSystem2<Scalar,6> *>(&system);
-//    return *sysptr;
-
 
     return system;
 
 }
 
 
-template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const Poly3CameraModel<float> &,
@@ -239,7 +192,7 @@ template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::Unaligned
                                             const float,
                                             const dim3, const dim3);
 
-template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const Poly3CameraModel<float> &,
@@ -250,7 +203,7 @@ template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::Unaligned
                                             const dim3, const dim3,                                                                                         \
                                             DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
 
-template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const Poly3CameraModel<float> &,
@@ -260,7 +213,7 @@ template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::Unaligned
                                             const float,
                                             const dim3, const dim3);
 
-template LinearSystem<float,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const Poly3CameraModel<float> &,

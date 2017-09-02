@@ -30,10 +30,8 @@ Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
   setup_ = 0;
 }
 
-void Synthesizer::setup()
+void Synthesizer::setup(int width, int height)
 {
-  int width = 640;
-  int height = 480;
   create_window(width, height);
 
   loadModels(model_file_);
@@ -74,7 +72,7 @@ void Synthesizer::create_window(int width, int height)
 {
   pangolin::CreateWindowAndBind("Synthesizer", width, height);
 
-  gtView_ = &pangolin::Display("gt").SetAspect(640.0/480.);
+  gtView_ = &pangolin::Display("gt").SetAspect(float(height)/float(height));
 
   // create render
   renderer_ = new df::GLRenderer<df::CanonicalVertRenderType>(width, height);
@@ -187,7 +185,7 @@ void Synthesizer::loadModels(const std::string filename)
 
 aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & texture_name)
 {
-    const struct aiScene * scene = aiImportFile(filename.c_str(), aiProcess_JoinIdenticalVertices);
+    const struct aiScene * scene = aiImportFile(filename.c_str(), aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals);
     if (scene == 0) {
         throw std::runtime_error("error: " + std::string(aiGetErrorString()));
     }
@@ -244,8 +242,15 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
     vertices.Upload(assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float)*3);
 
     // normals
-    normals.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
-    normals.Upload(assimpMesh->mNormals, assimpMesh->mNumVertices*sizeof(float)*3);
+    if (assimpMesh->HasNormals())
+    {
+      normals.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
+      normals.Upload(assimpMesh->mNormals, assimpMesh->mNumVertices*sizeof(float)*3);
+    }
+    else
+    {
+      throw std::runtime_error("no normals in the mesh");
+    }
 
     // canonical vertices
     std::vector<float3> canonicalVerts(assimpMesh->mNumVertices);
@@ -1167,7 +1172,7 @@ void Synthesizer::estimateCenter(const int* labelmap, const float* vertmap, cons
 void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi)
 {
   if (setup_ == 0)
-    setup();
+    setup(width, height);
 
   int num = rois_.size();
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -1246,7 +1251,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
                            float factor, int num_roi, float* rois, float* poses, float* outputs)
 {
   if (setup_ == 0)
-    setup();
+    setup(width, height);
 
   // build the camera paramters
   Eigen::Matrix<float,7,1,Eigen::DontAlign> params;
@@ -1263,6 +1268,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   depth_factor_ = factor;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, -fy, px+0.5, height-(py+0.5), znear, zfar);
+  renderer_->setProjectionMatrix(projectionMatrix);
   renderer_vn_->setProjectionMatrix(projectionMatrix);
 
   // for each object
@@ -1276,27 +1282,98 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float* p = depth_map_->data();
     ushort* q = reinterpret_cast<ushort *>(depth);
     int count = 0;
+    float d = 0;
     for (int j = 0; j < width * height; j++)
     {
       if (labelmap[j] == objID)
       {
         p[j] = q[j] / depth_factor_;
         count++;
+        d += p[j];
       }
       else
         p[j] = 0;
     }
+    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
+    if (count > 0)
+      d /= count;
+    std::cout << "mean depth: " << d << std::endl;
 
     // backprojection
     depth_map_device_->copyFrom(*depth_map_);
     backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
     vertex_map_->copyFrom(*vertex_map_device_);
 
-    // rendering
+    // pose
     float* pose = poses + i * 7;
+    std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
     Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
-    const Sophus::SE3f T_co(quaternion, translation);
+    Sophus::SE3f T_co(quaternion, translation);
+
+    // render vertmap
+    std::vector<Eigen::Matrix4f> transforms(1);
+    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers_vertmap(1);
+    std::vector<pangolin::GlBuffer*> modelIndexBuffers(1);
+
+    transforms[0] = T_co.matrix().cast<float>();
+    attributeBuffers_vertmap[0].push_back(&texturedVertices_[objID - 1]);
+    attributeBuffers_vertmap[0].push_back(&canonicalVertices_[objID - 1]);
+    modelIndexBuffers[0] = &texturedIndices_[objID - 1];
+
+    glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+    renderer_->render(attributeBuffers_vertmap, modelIndexBuffers, transforms);
+
+    std::vector<float3> vertmap(width * height);
+    renderer_->texture(0).Download(vertmap.data(), GL_RGB, GL_FLOAT);
+
+    // compute object center using depth and vertmap
+    float Tx = 0;
+    float Ty = 0;
+    float Tz = 0;
+    int c = 0;
+    for (int x = 0; x < width; x++)
+    {
+      for (int y = 0; y < height; y++)
+      {
+        if (labelmap[y * width + x] == objID && (*depth_map_)(x, y) > 0)
+        {
+          float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
+          float vy = vertmap[y * width + x].y;
+          float vz = vertmap[y * width + x].z;
+
+          if (std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0)
+          {
+            float dx = (*vertex_map_)(x, y)(0);
+            float dy = (*vertex_map_)(x, y)(1);
+            float dz = (*vertex_map_)(x, y)(2);
+
+            Tx += (dx - vx);
+            Ty += (dy - vy);
+            Tz += (dz - vz);
+            c++;
+          }
+        }
+      }
+    }
+    if (c > 0)
+    {
+      Tx /= c;
+      Ty /= c;
+      Tz /= c;
+    }
+    std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
+
+    // rendering
+    float rx = 0;
+    float ry = 0;
+    if (pose[6])
+    {
+      rx = pose[4] / pose[6];
+      ry = pose[5] / pose[6];
+    }
+    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz + 0.05);
+    T_co.translation() = translation_1;
 
     std::vector<pangolin::GlBuffer *> attributeBuffers({&texturedVertices_[objID - 1], &vertexNormals_[objID - 1]});
     renderer_vn_->setModelViewMatrix(T_co.matrix().cast<float>());
@@ -1305,18 +1382,35 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     const pangolin::GlTextureCudaArray & vertTex = renderer_vn_->texture(0);
     const pangolin::GlTextureCudaArray & normTex = renderer_vn_->texture(1);
 
-    // copy predicted vertices
-    {
-      pangolin::CudaScopedMappedArray scopedArray(vertTex);
-      cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
-      predicted_verts_->copyFrom(*predicted_verts_device_);
-    }
-
     // copy predicted normals
     {
       pangolin::CudaScopedMappedArray scopedArray(normTex);
       cudaMemcpy2DFromArray(predicted_normals_device_->data(), normTex.width*4*sizeof(float), *scopedArray, 0, 0, normTex.width*4*sizeof(float), normTex.height, cudaMemcpyDeviceToDevice);
+      predicted_normals_->copyFrom(*predicted_normals_device_);
     }
+
+    // copy predicted vertices
+    {
+      pangolin::CudaScopedMappedArray scopedArray(vertTex);
+      cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
+
+      predicted_verts_->copyFrom(*predicted_verts_device_);
+      Eigen::UnalignedVec4<float> v(0, 0, 0, 0);
+      for (int x = 0; x < width; x++)
+      {
+        for (int y = 0; y < height; y++)
+        {
+          if (labelmap[y * width + x] != objID)
+            (*predicted_verts_)(x, y) = v;
+        }
+      }
+      predicted_verts_device_->copyFrom(*predicted_verts_);
+    }
+
+    glColor3f(1, 1, 1);
+    gtView_->ActivateScissorAndClear();
+    renderer_vn_->texture(0).RenderToViewportFlipY();
+    pangolin::FinishFrame();
 
     // Tanner's ICP
     Sophus::SE3f T_co_new = T_co;
@@ -1331,8 +1425,54 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 
       T_co_new = update * T_co;
       std::cout << T_co_new.matrix3x4() << std::endl;
+/*
+      // PCL ICP
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out (new pcl::PointCloud<pcl::PointXYZ>);
+
+      cloud_in->width = count;
+      cloud_in->height = 1;
+      cloud_in->is_dense = false;
+      cloud_in->points.resize(cloud_in->width * cloud_in->height);
+
+      cloud_out->width = count;
+      cloud_out->height = 1;
+      cloud_out->is_dense = false;
+      cloud_out->points.resize(cloud_out->width * cloud_out->height);
+
+      int c = 0;
+      for (int x = 0; x < width; x++)
+      {
+        for (int y = 0; y < height; y++)
+        {
+          if (labelmap[y * width + x] == objID)
+          {
+            cloud_in->points[c].x = (*predicted_verts_)(x, y)(0);
+            cloud_in->points[c].y = (*predicted_verts_)(x, y)(1);
+            cloud_in->points[c].z = (*predicted_verts_)(x, y)(2);
+
+            cloud_out->points[c].x = (*vertex_map_)(x, y)(0);
+            cloud_out->points[c].y = (*vertex_map_)(x, y)(1);
+            cloud_out->points[c].z = (*vertex_map_)(x, y)(2);
+            c++;
+          }
+        }
+      }
+
+      pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> pcl_icp;
+      pcl_icp.setInputCloud(cloud_in);
+      pcl_icp.setInputTarget(cloud_out);
+
+      pcl::PointCloud<pcl::PointXYZ> Final;
+      pcl_icp.align(Final);
+      std::cout << "has converged:" << pcl_icp.hasConverged() << " score: " << pcl_icp.getFitnessScore() << std::endl;
+      Eigen::Matrix4f transformation = pcl_icp.getFinalTransformation();
+
+      Sophus::SE3f update(transformation);
+      T_co_new = update * T_co;
+      std::cout << T_co_new.matrix3x4() << std::endl;
+*/
     }
-    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co_new.unit_quaternion();
@@ -1345,24 +1485,19 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     outputs[i * 7 + 4] = translation_new(0);
     outputs[i * 7 + 5] = translation_new(1);
     outputs[i * 7 + 6] = translation_new(2);
-
-    glColor3f(1, 1, 1);
-    gtView_->ActivateScissorAndClear();
-    renderer_vn_->texture(0).RenderToViewportFlipY();
-    pangolin::FinishFrame();
   }
 }
 
 
 int main(int argc, char** argv) 
 {
-  Synthesizer Synthesizer(argv[1], argv[2]);
-  Synthesizer.setup();
-
   // camera parameters
   int width = 640;
   int height = 480;
   float fx = 1066.778, fy = 1067.487, px = 312.9869, py = 241.3109, zfar = 6.0, znear = 0.25;
+
+  Synthesizer Synthesizer(argv[1], argv[2]);
+  Synthesizer.setup(width, height);
 
   while (!pangolin::ShouldQuit()) 
   {

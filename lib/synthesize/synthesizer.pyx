@@ -13,7 +13,7 @@ import ctypes
 cdef extern from "synthesizer.hpp":
     cdef cppclass Synthesizer:
         Synthesizer(string, string) except +
-        void setup()
+        void setup(int, int )
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
         void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
@@ -28,8 +28,8 @@ cdef class PySynthesizer:
     def __dealloc__(self):
         del self.synthesizer
 
-    def setup(self):
-        self.synthesizer.setup()
+    def setup(self, int width, int height):
+        self.synthesizer.setup(width, height)
 
     def render(self, np.ndarray[np.uint8_t, ndim=3] color, np.ndarray[np.float32_t, ndim=2] depth, np.ndarray[np.float32_t, ndim=3] vertmap, \
                np.ndarray[np.float32_t, ndim=1] class_indexes, np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] centers,\
