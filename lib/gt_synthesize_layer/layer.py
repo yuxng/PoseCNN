@@ -61,7 +61,7 @@ class GtSynthesizeLayer(object):
     def _get_next_minibatch(self, iter):
         """Return the blobs to be used for the next minibatch."""
 
-        if iter < 3000:
+        if iter < 5000:
             is_syn = 0
         else:
             ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, cfg.TRAIN.SYN_RATIO)
