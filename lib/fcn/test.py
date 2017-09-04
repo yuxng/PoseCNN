@@ -793,7 +793,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(649, num_images)
+        perm = xrange(639, num_images)
     else:
         perm = xrange(num_images)
 
@@ -966,7 +966,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         print 'translation error: {}'.format(error_translation)
 
                         # compute pose error
-                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        if imdb._cls == 'eggbox' or imdb._cls == 'glue':
+                            error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                        else:
+                            error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                         print 'error: {}'.format(error)
 
                         if cfg.TEST.POSE_REFINE:
@@ -976,7 +979,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                             error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
                             print 'translation error new: {}'.format(error_translation_new)
 
-                            error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                            if imdb._cls == 'eggbox' or imdb._cls == 'glue':
+                                error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
+                            else:
+                                error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
                             print 'error new: {}'.format(error_new)
                             print '{}'.format(0.1 * np.linalg.norm(imdb._extents[cls_index, :]))
 

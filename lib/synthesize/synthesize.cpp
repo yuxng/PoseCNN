@@ -1374,6 +1374,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     }
     Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz + 0.05);
     T_co.translation() = translation_1;
+    std::cout << "Translation " << translation_1(0) << " " << translation_1(1) << " " << translation_1(2) << std::endl;
 
     std::vector<pangolin::GlBuffer *> attributeBuffers({&texturedVertices_[objID - 1], &vertexNormals_[objID - 1]});
     renderer_vn_->setModelViewMatrix(T_co.matrix().cast<float>());
@@ -1402,6 +1403,8 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         {
           if (labelmap[y * width + x] != objID)
             (*predicted_verts_)(x, y) = v;
+          if (std::isnan((*predicted_verts_)(x, y)(0)) || std::isnan((*predicted_verts_)(x, y)(1)) || std::isnan((*predicted_verts_)(x, y)(2)) || std::isnan((*predicted_verts_)(x, y)(3)))
+            (*predicted_verts_)(x, y) = v;
         }
       }
       predicted_verts_device_->copyFrom(*predicted_verts_);
@@ -1416,8 +1419,9 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     Sophus::SE3f T_co_new = T_co;
     if (count > 400)
     {
+
       Eigen::Vector2f depthRange(znear, zfar);
-      float maxError = 0.02;
+      float maxError = 0.01;
       uint icpIterations = 8;
 
       Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
@@ -1425,6 +1429,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 
       T_co_new = update * T_co;
       std::cout << T_co_new.matrix3x4() << std::endl;
+
 /*
       // PCL ICP
       pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
@@ -1450,7 +1455,6 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
             cloud_in->points[c].x = (*predicted_verts_)(x, y)(0);
             cloud_in->points[c].y = (*predicted_verts_)(x, y)(1);
             cloud_in->points[c].z = (*predicted_verts_)(x, y)(2);
-
             cloud_out->points[c].x = (*vertex_map_)(x, y)(0);
             cloud_out->points[c].y = (*vertex_map_)(x, y)(1);
             cloud_out->points[c].z = (*vertex_map_)(x, y)(2);

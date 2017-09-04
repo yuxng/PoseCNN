@@ -47,7 +47,7 @@ Sophus::SE3Group<Scalar> icp_translation(const DeviceTensor2<Eigen::UnalignedVec
 
         std::cout << iter << std::endl;
 
-        internal::LinearSystem<Scalar,3> system = internal::icpIteration_translation(liveVertices,
+        internal::LinearSystem<Scalar,6> system = internal::icpIteration_translation(liveVertices,
                                                                          predVertices,
                                                                          predNormals,
                                                                          cameraModel,
@@ -57,9 +57,9 @@ Sophus::SE3Group<Scalar> icp_translation(const DeviceTensor2<Eigen::UnalignedVec
                                                                          grid,block,
                                                                          debugArgs ...);
 
-        Eigen::Matrix<Scalar,3,3,Eigen::DontAlign> fullJTJ = internal::SquareMatrixReconstructor<Scalar,3>::reconstruct(system.JTJ);
+        Eigen::Matrix<Scalar,6,6,Eigen::DontAlign> fullJTJ = internal::SquareMatrixReconstructor<Scalar,6>::reconstruct(system.JTJ);
 
-        Eigen::Matrix<Scalar,3,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
+        Eigen::Matrix<Scalar,6,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
 
         std::cout << fullJTJ << std::endl;
 
@@ -67,15 +67,7 @@ Sophus::SE3Group<Scalar> icp_translation(const DeviceTensor2<Eigen::UnalignedVec
 
         std::cout << solution.transpose() << std::endl;
 
-        Eigen::Matrix<Scalar,6,1> full_solution;
-        full_solution(0) = solution(0);
-        full_solution(1) = solution(1);
-        full_solution(2) = solution(2);
-        full_solution(3) = 0;
-        full_solution(4) = 0;
-        full_solution(5) = 0;
-
-        SE3 update = SE3::exp(full_solution);
+        SE3 update = SE3::exp(solution);
         accumulatedUpdate = update*accumulatedUpdate;
 
         std::cout << accumulatedUpdate.matrix() << std::endl << std::endl;

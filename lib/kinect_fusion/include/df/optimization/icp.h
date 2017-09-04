@@ -62,7 +62,7 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-LinearSystem<Scalar,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                                     const CameraModelT & cameraModel,
