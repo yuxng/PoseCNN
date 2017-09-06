@@ -69,6 +69,22 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
                               {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
                               {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
 
+struct DataForOpt
+{
+  int width, height, objID;
+
+  std::vector<pangolin::GlBuffer*> attributeBuffers;
+  std::vector<pangolin::GlBuffer*> modelIndexBuffers;
+  df::GLRenderer<df::VertAndNormalRenderType>* renderer;
+  pangolin::View* view;
+
+  const int* labelmap;
+  Eigen::Vector2f depthRange;
+  df::ManagedHostTensor2<Vec3>* vertex_map;
+  df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
+  df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device;
+};
+
 class Synthesizer
 {
  public:
@@ -110,6 +126,7 @@ class Synthesizer
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, float* rois, float* poses, float* outputs);
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
+  double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
 
  private:
   int counter_;

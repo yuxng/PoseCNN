@@ -21,13 +21,13 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-__global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,6> * jacobiansAndResiduals,
+__global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,3> * jacobiansAndResiduals,
                           const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > liveVertices,
                           const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > predictedVertices,
                           const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > predictedNormals,
                           const CameraModelT cameraModel,
                           const Sophus::SE3Group<Scalar> updatedPose,
-                          const Eigen::Matrix<Scalar,6,1> initialPose,
+                          const Eigen::Matrix<Scalar,3,1> initialTranslation,
                           const Eigen::Matrix<Scalar,2,1> depthRange,
                           const Scalar maxError,
                           DebugArgsT ... debugArgs) {
@@ -49,7 +49,7 @@ __global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,6> 
     if (x < width && y < height) {
 
         // TODO: take care of this with a memset?
-        jacobiansAndResiduals[x + width*y].J = Eigen::Matrix<Scalar,1,6>::Zero();
+        jacobiansAndResiduals[x + width*y].J = Eigen::Matrix<Scalar,1,3>::Zero();
         jacobiansAndResiduals[x + width*y].r = 0;
 
         const VecD & predictedVertex = predictedVertices(x,y);
@@ -63,7 +63,7 @@ __global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,6> 
             return;
         }
 
-        const Vec3 updatedPredVertex = updatedPose * predictedVertex.template head<3>();
+        const Vec3 updatedPredVertex = updatedPose * (predictedVertex.template head<3>() - initialTranslation) + initialTranslation;
 
         const Vec2 projectedPredVertex = cameraModel.project(updatedPredVertex);
 
@@ -101,7 +101,7 @@ __global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,6> 
 
         }
 
-        const Scalar error = (liveVertex - updatedPredVertex).dot(liveVertex - updatedPredVertex);
+        const Scalar error = predictedNormal.template head<3>().dot(liveVertex - updatedPredVertex);
 
         const Scalar absError = fabs(error);
 
@@ -114,11 +114,11 @@ __global__ void icpKernel_translation(internal::JacobianAndResidual<Scalar,1,6> 
 
         const Scalar weightSqrt = Scalar(1) / (liveDepth);
 
-        const Eigen::Matrix<Scalar,1,3> dError_dUpdatedPredictedPoint = 2 * (liveVertex - updatedPredVertex).transpose();
-        Eigen::Matrix<Scalar,3,6> dUpdatedPredictedPoint_dUpdate;
-        dUpdatedPredictedPoint_dUpdate << 1, 0, 0,                     0,  updatedPredVertex(2), -updatedPredVertex(1),
-                                          0, 1, 0, -updatedPredVertex(2),                     0,  updatedPredVertex(0),
-                                          0, 0, 1,  updatedPredVertex(1), -updatedPredVertex(0),                     0;
+        const Eigen::Matrix<Scalar,1,3> dError_dUpdatedPredictedPoint = predictedNormal.template head<3>().transpose();
+        Eigen::Matrix<Scalar,3,3> dUpdatedPredictedPoint_dUpdate;
+        dUpdatedPredictedPoint_dUpdate <<                      0,  updatedPredVertex(2), -updatedPredVertex(1),
+                                           -updatedPredVertex(2),                     0,  updatedPredVertex(0),
+                                            updatedPredVertex(1), -updatedPredVertex(0),                     0;
 
         jacobiansAndResiduals[x + width*y].J = weightSqrt * dError_dUpdatedPredictedPoint * dUpdatedPredictedPoint_dUpdate;
         jacobiansAndResiduals[x + width*y].r = weightSqrt * error;
@@ -136,12 +136,12 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+LinearSystem<Scalar,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                                     const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                                     const CameraModelT & cameraModel,
                                     const Sophus::SE3Group<Scalar> & predictionPose,
-                                    const Eigen::Matrix<Scalar,6,1>& initialPose,
+                                    const Eigen::Matrix<Scalar,3,1>& initialTranslation,
                                     const Eigen::Matrix<Scalar,2,1> & depthRange,
                                     const Scalar maxError,
                                     const dim3 grid,
@@ -149,7 +149,7 @@ LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::Unali
                                     DebugArgsT ... debugArgs) {
 
     // TODO: make efficient
-    static thrust::device_vector<JacobianAndResidual<Scalar,1,6> > jacobiansAndResiduals(liveVertices.count());
+    static thrust::device_vector<JacobianAndResidual<Scalar,1,3> > jacobiansAndResiduals(liveVertices.count());
 
     GlobalTimer::tick("icpKernel_translation");
     cudaFuncSetCacheConfig(icpKernel_translation<Scalar,CameraModelT,DPred>, cudaFuncCachePreferL1);
@@ -157,7 +157,7 @@ LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::Unali
                                       liveVertices,predVertices,predNormals,
                                       cameraModel,
                                       predictionPose,
-                                      initialPose,
+                                      initialTranslation,
                                       depthRange,
                                       maxError,
                                       debugArgs ...);
@@ -167,11 +167,11 @@ LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::Unali
     GlobalTimer::tock("icpKernel_translation");
 
     GlobalTimer::tick("transform_reduce");
-    LinearSystem<Scalar,6> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
+    LinearSystem<Scalar,3> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
                                                              jacobiansAndResiduals.end(),
-                                                             LinearSystemCreationFunctor<Scalar,1,6>(),
-                                                             LinearSystem<Scalar,6>::zero(),
-                                                             LinearSystemSumFunctor<Scalar,6>());
+                                                             LinearSystemCreationFunctor<Scalar,1,3>(),
+                                                             LinearSystem<Scalar,3>::zero(),
+                                                             LinearSystemSumFunctor<Scalar,3>());
 
     cudaDeviceSynchronize();
     CheckCudaDieOnError();
@@ -182,43 +182,43 @@ LinearSystem<Scalar,6> icpIteration_translation(const DeviceTensor2<Eigen::Unali
 }
 
 
-template LinearSystem<float,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const Poly3CameraModel<float> &,
                                             const Sophus::SE3f &,
-                                            const Eigen::Matrix<float,6,1> &,
+                                            const Eigen::Matrix<float,3,1> &,
                                             const Eigen::Vector2f &,
                                             const float,
                                             const dim3, const dim3);
 
-template LinearSystem<float,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const Poly3CameraModel<float> &,
                                             const Sophus::SE3f &,
-                                            const Eigen::Matrix<float,6,1> &,
+                                            const Eigen::Matrix<float,3,1> &,
                                             const Eigen::Vector2f &,
                                             const float,
                                             const dim3, const dim3,                                                                                         \
                                             DeviceTensor2<Eigen::UnalignedVec4<uchar> >);
 
-template LinearSystem<float,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const Poly3CameraModel<float> &,
                                             const Sophus::SE3f &,
-                                            const Eigen::Matrix<float,6,1> &,
+                                            const Eigen::Matrix<float,3,1> &,
                                             const Eigen::Vector2f &,
                                             const float,
                                             const dim3, const dim3);
 
-template LinearSystem<float,6> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template LinearSystem<float,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                             const Poly3CameraModel<float> &,
                                             const Sophus::SE3f &,
-                                            const Eigen::Matrix<float,6,1> &,
+                                            const Eigen::Matrix<float,3,1> &,
                                             const Eigen::Vector2f &,
                                             const float,
                                             const dim3, const dim3,                                                                                         \

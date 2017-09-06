@@ -1,6 +1,7 @@
 #include "synthesize.hpp"
 
 using namespace df;
+static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 
 void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap, const int N) {
 
@@ -1264,6 +1265,14 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   params[6] = 0;
   df::Poly3CameraModel<float> model(params);
 
+  DataForOpt data;
+  data.width = width;
+  data.height = height;
+  data.labelmap = labelmap;
+  data.depthRange = Eigen::Vector2f(znear, zfar);
+  data.vertex_map = vertex_map_;
+  data.predicted_verts = predicted_verts_;
+
   // set the depth factor
   depth_factor_ = factor;
 
@@ -1275,6 +1284,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   for(int i = 0; i < num_roi; i++)
   {
     int objID = int(rois[i * 6 + 1]);
+    data.objID = objID;
     if (objID < 0)
       continue;
 
@@ -1285,7 +1295,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float d = 0;
     for (int j = 0; j < width * height; j++)
     {
-      if (labelmap[j] == objID)
+      if (labelmap[j] == objID && q[j] > 0)
       {
         p[j] = q[j] / depth_factor_;
         count++;
@@ -1299,11 +1309,15 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       d /= count;
     std::cout << "mean depth: " << d << std::endl;
 
+    if (count < 400)
+      continue;
+
     // backprojection
     depth_map_device_->copyFrom(*depth_map_);
     backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
     vertex_map_->copyFrom(*vertex_map_device_);
 
+    /********* step 1 ***********/
     // pose
     float* pose = poses + i * 7;
     std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
@@ -1372,10 +1386,11 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = pose[4] / pose[6];
       ry = pose[5] / pose[6];
     }
-    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz + 0.05);
+    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz);
     T_co.translation() = translation_1;
     std::cout << "Translation " << translation_1(0) << " " << translation_1(1) << " " << translation_1(2) << std::endl;
 
+    /********* step 2 ***********/
     std::vector<pangolin::GlBuffer *> attributeBuffers({&texturedVertices_[objID - 1], &vertexNormals_[objID - 1]});
     renderer_vn_->setModelViewMatrix(T_co.matrix().cast<float>());
     renderer_vn_->render(attributeBuffers, texturedIndices_[objID - 1], GL_TRIANGLES);
@@ -1415,72 +1430,132 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     renderer_vn_->texture(0).RenderToViewportFlipY();
     pangolin::FinishFrame();
 
-    // Tanner's ICP
-    Sophus::SE3f T_co_new = T_co;
-    if (count > 400)
+    // initialize pose
+    std::vector<double> vec(7);
+    vec[0] = 1;
+    vec[1] = 0;
+    vec[2] = 0;
+    vec[3] = 0;
+    vec[4] = 0;
+    vec[5] = 0;
+    vec[6] = 0;
+
+    // optimization 
+    float energy = poseWithOpt(vec, data, 100);
+
+    // update SE3
+    Eigen::Quaternionf quaternion_update(vec[0], vec[1], vec[2], vec[3]);
+    Sophus::SE3f::Point translation_update(vec[4], vec[5], vec[6]);
+    Sophus::SE3f update_new(quaternion_update, translation_update);
+
+    T_co = update_new * T_co;
+    std::cout << T_co.matrix3x4() << std::endl;
+
+    renderer_vn_->setModelViewMatrix(T_co.matrix().cast<float>());
+    renderer_vn_->render(attributeBuffers, texturedIndices_[objID - 1], GL_TRIANGLES);
+
+    // copy predicted normals
     {
+      pangolin::CudaScopedMappedArray scopedArray(normTex);
+      cudaMemcpy2DFromArray(predicted_normals_device_->data(), normTex.width*4*sizeof(float), *scopedArray, 0, 0, normTex.width*4*sizeof(float), normTex.height, cudaMemcpyDeviceToDevice);
+      predicted_normals_->copyFrom(*predicted_normals_device_);
+    }
 
-      Eigen::Vector2f depthRange(znear, zfar);
-      float maxError = 0.01;
-      uint icpIterations = 8;
+    // copy predicted vertices
+    {
+      pangolin::CudaScopedMappedArray scopedArray(vertTex);
+      cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
 
-      Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
-                              model, T_co, depthRange, maxError, icpIterations);
-
-      T_co_new = update * T_co;
-      std::cout << T_co_new.matrix3x4() << std::endl;
-
-/*
-      // PCL ICP
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out (new pcl::PointCloud<pcl::PointXYZ>);
-
-      cloud_in->width = count;
-      cloud_in->height = 1;
-      cloud_in->is_dense = false;
-      cloud_in->points.resize(cloud_in->width * cloud_in->height);
-
-      cloud_out->width = count;
-      cloud_out->height = 1;
-      cloud_out->is_dense = false;
-      cloud_out->points.resize(cloud_out->width * cloud_out->height);
-
-      int c = 0;
+      predicted_verts_->copyFrom(*predicted_verts_device_);
+      Eigen::UnalignedVec4<float> v(0, 0, 0, 0);
       for (int x = 0; x < width; x++)
       {
         for (int y = 0; y < height; y++)
         {
-          if (labelmap[y * width + x] == objID)
-          {
-            cloud_in->points[c].x = (*predicted_verts_)(x, y)(0);
-            cloud_in->points[c].y = (*predicted_verts_)(x, y)(1);
-            cloud_in->points[c].z = (*predicted_verts_)(x, y)(2);
-            cloud_out->points[c].x = (*vertex_map_)(x, y)(0);
-            cloud_out->points[c].y = (*vertex_map_)(x, y)(1);
-            cloud_out->points[c].z = (*vertex_map_)(x, y)(2);
-            c++;
-          }
+          if (labelmap[y * width + x] != objID)
+            (*predicted_verts_)(x, y) = v;
+          if (std::isnan((*predicted_verts_)(x, y)(0)) || std::isnan((*predicted_verts_)(x, y)(1)) || std::isnan((*predicted_verts_)(x, y)(2)) || std::isnan((*predicted_verts_)(x, y)(3)))
+            (*predicted_verts_)(x, y) = v;
         }
       }
-
-      pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> pcl_icp;
-      pcl_icp.setInputCloud(cloud_in);
-      pcl_icp.setInputTarget(cloud_out);
-
-      pcl::PointCloud<pcl::PointXYZ> Final;
-      pcl_icp.align(Final);
-      std::cout << "has converged:" << pcl_icp.hasConverged() << " score: " << pcl_icp.getFitnessScore() << std::endl;
-      Eigen::Matrix4f transformation = pcl_icp.getFinalTransformation();
-
-      Sophus::SE3f update(transformation);
-      T_co_new = update * T_co;
-      std::cout << T_co_new.matrix3x4() << std::endl;
-*/
     }
 
+    glColor3f(1, 1, 1);
+    gtView_->ActivateScissorAndClear();
+    renderer_vn_->texture(0).RenderToViewportFlipY();
+    pangolin::FinishFrame();
+
+    // Tanner's ICP
+    Eigen::Vector2f depthRange(znear, zfar);
+    float maxError = 0.005;
+    uint icpIterations = 8;
+
+    Sophus::SE3f update = icp(*vertex_map_device_, *predicted_verts_device_, *predicted_normals_device_,
+                              model, T_co, depthRange, maxError, icpIterations);
+
+    T_co = update * T_co;
+    std::cout << T_co.matrix3x4() << std::endl;
+
+    /*
+    // PCL ICP
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out (new pcl::PointCloud<pcl::PointXYZ>);
+
+    cloud_in->width = vcount;
+    cloud_in->height = 1;
+    cloud_in->is_dense = false;
+    cloud_in->points.resize(cloud_in->width * cloud_in->height);
+
+    cloud_out->width = count;
+    cloud_out->height = 1;
+    cloud_out->is_dense = false;
+    cloud_out->points.resize(cloud_out->width * cloud_out->height);
+
+    c = 0;
+    int cv = 0;
+    for (int x = 0; x < width; x++)
+    {
+      for (int y = 0; y < height; y++)
+      {
+        if (std::isnan((*predicted_verts_)(x, y)(0)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(1)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(2)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(3)) == 0 &&
+            labelmap[y * width + x] == objID)
+        {
+          cloud_in->points[cv].x = (*predicted_verts_)(x, y)(0);
+          cloud_in->points[cv].y = (*predicted_verts_)(x, y)(1);
+          cloud_in->points[cv].z = (*predicted_verts_)(x, y)(2);
+          cv++;
+        }
+
+        if (labelmap[y * width + x] == objID && (*vertex_map_)(x, y)(2) > 0)
+        {
+          cloud_out->points[c].x = (*vertex_map_)(x, y)(0);
+          cloud_out->points[c].y = (*vertex_map_)(x, y)(1);
+          cloud_out->points[c].z = (*vertex_map_)(x, y)(2);
+          c++;
+        }
+      }
+    }
+
+    pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> pcl_icp;
+    pcl_icp.setInputCloud(cloud_in);
+    pcl_icp.setInputTarget(cloud_out);
+
+    pcl::PointCloud<pcl::PointXYZ> Final;
+    pcl_icp.align(Final);
+    std::cout << "has converged:" << pcl_icp.hasConverged() << " score: " << pcl_icp.getFitnessScore() << std::endl;
+    Eigen::Matrix4f transformation = pcl_icp.getFinalTransformation();
+
+    Sophus::SE3f update_new(transformation);
+    T_co = update_new * T_co;
+    std::cout << T_co.matrix3x4() << std::endl;
+    */
+
     // set output
-    Eigen::Quaternionf quaternion_new = T_co_new.unit_quaternion();
-    Sophus::SE3f::Point translation_new = T_co_new.translation();
+    Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
+    Sophus::SE3f::Point translation_new = T_co.translation();
 
     outputs[i * 7 + 0] = quaternion_new.w();
     outputs[i * 7 + 1] = quaternion_new.x();
@@ -1490,6 +1565,105 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     outputs[i * 7 + 5] = translation_new(1);
     outputs[i * 7 + 6] = translation_new(2);
   }
+}
+
+
+static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data)
+{
+  DataForOpt* dataForOpt = (DataForOpt*) data;
+
+  // SE3
+  Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
+  Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
+  const Sophus::SE3f T_co(quaternion, translation);
+
+  // compute point-wise distance
+  int c = 0;
+  float distance = 0;
+  int width = dataForOpt->width;
+  int height = dataForOpt->height;
+  int objID = dataForOpt->objID;
+  const int* labelmap = dataForOpt->labelmap;
+  df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts = dataForOpt->predicted_verts;
+  df::ManagedHostTensor2<Vec3>* vertex_map = dataForOpt->vertex_map;
+  Eigen::Vector2f depthRange = dataForOpt->depthRange;
+  for (int x = 0; x < width; x++)
+  {
+    for (int y = 0; y < height; y++)
+    {
+      if (labelmap[y * width + x] == objID)
+      {
+        float px = (*predicted_verts)(x, y)(0);
+        float py = (*predicted_verts)(x, y)(1);
+        float pz = (*predicted_verts)(x, y)(2);
+
+        Sophus::SE3f::Point point(px, py, pz);
+        Sophus::SE3f::Point point_new = T_co * point;
+
+        px = point_new(0);
+        py = point_new(1);
+        pz = point_new(2);
+
+        float vx = (*vertex_map)(x, y)(0);
+        float vy = (*vertex_map)(x, y)(1);
+        float vz = (*vertex_map)(x, y)(2);
+        if (std::isnan(px) == 0 && std::isnan(py) == 0 && std::isnan(pz) == 0 && vz > depthRange(0) && vz < depthRange(1) && pz > depthRange(0) && pz < depthRange(1))
+        {
+          distance += std::sqrt((px - vx) * (px - vx) + (py - vy) * (py - vy) + (pz - vz) * (pz - vz));
+          c++;
+        }
+      }
+    }
+  }
+  if (c)
+    distance /= c;
+  float energy = distance;
+
+  return energy;
+}
+
+
+double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations)
+{
+  // set up optimization algorithm (gradient free)
+  nlopt::opt opt(nlopt::LN_NELDERMEAD, 7); 
+
+  // set optimization bounds 
+  double rotRange = 0.1;
+  double tRangeXY = 0.02;
+  double tRangeZ = 0.05; // pose uncertainty is larger in Z direction
+	
+  std::vector<double> lb(7);
+  lb[0] = vec[0] - rotRange;
+  lb[1] = vec[1] - rotRange;
+  lb[2] = vec[2] - rotRange;
+  lb[3] = vec[3] - rotRange;
+  lb[4] = vec[4] - tRangeXY;
+  lb[5] = vec[5] - tRangeXY;
+  lb[6] = vec[6] - tRangeZ;
+  opt.set_lower_bounds(lb);
+      
+  std::vector<double> ub(7);
+  ub[0] = vec[0] + rotRange;
+  ub[1] = vec[1] + rotRange;
+  ub[2] = vec[2] + rotRange;
+  ub[3] = vec[3] + rotRange;
+  ub[4] = vec[4] + tRangeXY;
+  ub[5] = vec[5] + tRangeXY;
+  ub[6] = vec[6] + tRangeZ;
+  opt.set_upper_bounds(ub);
+      
+  // configure NLopt
+  opt.set_min_objective(optEnergy, &data);
+  opt.set_maxeval(iterations);
+
+  // run optimization
+  double energy;
+  nlopt::result result = opt.optimize(vec, energy);
+
+  std::cout << "distance after optimization: " << energy << std::endl;
+   
+  return energy;
 }
 
 
