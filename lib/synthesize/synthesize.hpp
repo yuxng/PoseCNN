@@ -29,6 +29,8 @@
 #include <pcl/registration/icp_nl.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/geometry.h>
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/features/crh.h>
 
 #include <df/camera/camera.h>
 #include <df/camera/linear.h>
@@ -43,6 +45,13 @@
 #include <df/util/tensor.h>
 #include <df/optimization/icp.h>
 
+#include "super4pcs/shared4pcs.h"
+#include "super4pcs/algorithms/super4pcs.h"
+#include "super4pcs/algorithms/4pcs.h"
+#include "super4pcs/io/io.h"
+#include "super4pcs/utils/geometry.h"
+#include "app.h"
+
 #include "types.h"
 #include "ransac.h"
 #include "Hypothesis.h"
@@ -50,7 +59,23 @@
 #include "thread_rand.h"
 #include "iou.h"
 
+typedef pcl::PointXYZ PointT;
+typedef pcl::PointCloud<PointT> PointCloud;
+typedef pcl::PointNormal PointNormalT;
+typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
 typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
+
+struct TransformVisitor {
+    inline void operator() (
+            float fraction,
+            float best_LCP,
+            Eigen::Ref<GlobalRegistration::Match4PCSBase::MatrixType> /*transformation*/) {
+        printf("done: %d%c best: %f                  \r",
+               static_cast<int>(fraction * 100), '%', best_LCP);
+        fflush(stdout);
+    }
+    constexpr bool needsGlobalTransformation() const { return false; }
+};
 
 template <typename Derived>
 inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
@@ -77,8 +102,10 @@ struct DataForOpt
   std::vector<pangolin::GlBuffer*> modelIndexBuffers;
   df::GLRenderer<df::VertAndNormalRenderType>* renderer;
   pangolin::View* view;
+  df::Poly3CameraModel<float>* model;
 
   const int* labelmap;
+  std::vector<int> label_indexes;
   Eigen::Vector2f depthRange;
   df::ManagedHostTensor2<Vec3>* vertex_map;
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
@@ -124,9 +151,11 @@ class Synthesizer
 
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                float factor, int num_roi, float* rois, float* poses, float* outputs);
+                float factor, int num_roi, float* rois, float* poses, float* outputs, float maxError);
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
+  void refinePose(int width, int height, int objID, float znear, float zfar,
+                  const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int is_icp);
 
  private:
   int counter_;

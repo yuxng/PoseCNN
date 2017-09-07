@@ -16,5 +16,5 @@ class Synthesizer
     float fx, float fy, float px, float py, float* outputs,  float* gt_poses, int num_gt);
 
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                float factor, int num_roi, float* rois, float* poses, float* outputs);
+                float factor, int num_roi, float* rois, float* poses, float* outputs, float maxError);
 };

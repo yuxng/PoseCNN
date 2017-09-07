@@ -793,7 +793,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(697, num_images)
+        perm = xrange(164, num_images)
     else:
         perm = xrange(num_images)
 
@@ -901,6 +901,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 znear = 0.25
                 zfar = 6.0
                 poses_new = np.zeros((poses.shape[0], 7), dtype=np.float32)        
+                error_threshold = 0.02
                 if cfg.TEST.POSE_REFINE:
                     labels_icp = labels.copy();
                     rois_icp = rois
@@ -911,7 +912,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         rois_icp[:, 1] = imdb._cls_index
 
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, fx, fy, px, py, znear, zfar, factor)
+                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, fx, fy, px, py, znear, zfar, factor, error_threshold)
             else:
                 poses_new = []
 

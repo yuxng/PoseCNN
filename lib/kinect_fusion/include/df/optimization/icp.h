@@ -58,22 +58,6 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                     const dim3 block,
                                     DebugArgsT ... debugArgs);
 
-template <typename Scalar,
-          typename CameraModelT,
-          int DPred,
-          typename ... DebugArgsT>
-LinearSystem<Scalar,3> icpIteration_translation(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
-                                    const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
-                                    const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
-                                    const CameraModelT & cameraModel,
-                                    const Sophus::SE3Group<Scalar> & predictionPose,
-                                    const Eigen::Matrix<Scalar,3,1>& initialTranslation,
-                                    const Eigen::Matrix<Scalar,2,1> & depthRange,
-                                    const Scalar maxError,
-                                    const dim3 grid,
-                                    const dim3 block,
-                                    DebugArgsT ... debugArgs);
-
 } // namespace internal
 
 } // namespace df

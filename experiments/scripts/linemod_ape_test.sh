@@ -9,7 +9,7 @@ export CUDA_VISIBLE_DEVICES=$1
 LOG="experiments/logs/linemod_ape_test.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
-
+#export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 # test for semantic labeling
 #time ./tools/test_net.py --gpu 0 \
 #  --network vgg16_convs \

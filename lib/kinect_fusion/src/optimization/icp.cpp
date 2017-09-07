@@ -45,7 +45,7 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
 
     for (uint iter = 0; iter < numIterations; ++iter) {
 
-        std::cout << iter << std::endl;
+        // std::cout << iter << std::endl;
 
         internal::LinearSystem<Scalar,6> system = internal::icpIteration(liveVertices,
                                                                          predVertices,
@@ -89,11 +89,11 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
         Eigen::Matrix<Scalar,6,1> solution = fullJTJ.template selfadjointView<Eigen::Upper>().ldlt().solve(system.JTr);
 //        std::cout << std::endl << solution2 << std::endl;
 
-        std::cout << fullJTJ << std::endl;
+        // std::cout << fullJTJ << std::endl;
 
-        std::cout << system.JTr << std::endl;
+        // std::cout << system.JTr << std::endl;
 
-        std::cout << solution.transpose() << std::endl;
+        // std::cout << solution.transpose() << std::endl;
 
         SE3 update = SE3::exp(solution);
         accumulatedUpdate = update*accumulatedUpdate;
