@@ -1471,7 +1471,7 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
     }
   }
 
-  std::cout << T_co.matrix3x4() << std::endl;
+  // std::cout << T_co.matrix3x4() << std::endl;
 }
 
 
@@ -1570,23 +1570,14 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float d = 0;
     for (int j = 0; j < width * height; j++)
     {
-      int x = j % width;
-      int y = j / width;
-      float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
-      float vy = vertmap[y * width + x].y;
-      float vz = vertmap[y * width + x].z;
-
-      // mask occluder pixels
-      if (labelmap[j] != objID && std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0 && float(q[j]) < vz - 0.1)
-        p[j] = 0;
-      else
-        p[j] = q[j] / depth_factor_;
-
       if (labelmap[j] == objID)
       {
+        p[j] = q[j] / depth_factor_;
         count++;
         d += p[j];
       }
+      else
+        p[j] = 0;
     }
     std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
     if (count > 0)
@@ -1658,8 +1649,34 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     // iterations = 100;
     // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
 
+    // pose hypotheses
+    std::vector<Sophus::SE3f> hyps;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.05;
+    hyps.push_back(T_co);
+    
     iterations = 8;
-    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 1);
+    for (int j = 0; j < hyps.size(); j++)
+      refinePose(width, height, objID, znear, zfar, labelmap, data, model, hyps[j], iterations, maxError, 1);
+
+    // chose hypothesis
+    float dis = 1000000;
+    int choose = -1;
+    for (int j = 0; j < hyps.size(); j++)
+    {
+      float cx = hyps[j].translation()(0) / hyps[j].translation()(2);
+      float cy = hyps[j].translation()(1) / hyps[j].translation()(2);
+      float distance = std::sqrt( (cx - rx) * (cx - rx) + (cy - ry) * (cy - ry) );
+      // std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl << "distance: " << distance << std::endl;
+      // std::cout << "anglur distance: " << T_co.unit_quaternion().angularDistance(hyps[j].unit_quaternion()) << std::endl;
+      if (distance < dis)
+      {
+        dis = distance;
+        choose = j;
+      }
+    }
+    T_co = hyps[choose];
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
