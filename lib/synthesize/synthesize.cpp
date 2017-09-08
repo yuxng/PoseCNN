@@ -1518,35 +1518,6 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     if (objID < 0)
       continue;
 
-    // convert depth values
-    float* p = depth_map_->data();
-    ushort* q = reinterpret_cast<ushort *>(depth);
-    int count = 0;
-    float d = 0;
-    for (int j = 0; j < width * height; j++)
-    {
-      if (labelmap[j] == objID)
-      {
-        p[j] = q[j] / depth_factor_;
-        count++;
-        d += p[j];
-      }
-      else
-        p[j] = 0;
-    }
-    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
-    if (count > 0)
-      d /= count;
-    std::cout << "mean depth: " << d << std::endl;
-
-    if (count < 400)
-      continue;
-
-    // backprojection
-    depth_map_device_->copyFrom(*depth_map_);
-    backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
-    vertex_map_->copyFrom(*vertex_map_device_);
-
     // pose
     float* pose = poses + i * 7;
     std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
@@ -1591,6 +1562,44 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
       predicted_verts_->copyFrom(*predicted_verts_device_);
     }
+
+    // convert depth values
+    float* p = depth_map_->data();
+    ushort* q = reinterpret_cast<ushort *>(depth);
+    int count = 0;
+    float d = 0;
+    for (int j = 0; j < width * height; j++)
+    {
+      int x = j % width;
+      int y = j / width;
+      float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
+      float vy = vertmap[y * width + x].y;
+      float vz = vertmap[y * width + x].z;
+
+      // mask occluder pixels
+      if (labelmap[j] != objID && std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0 && float(q[j]) < vz - 0.1)
+        p[j] = 0;
+      else
+        p[j] = q[j] / depth_factor_;
+
+      if (labelmap[j] == objID)
+      {
+        count++;
+        d += p[j];
+      }
+    }
+    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
+    if (count > 0)
+      d /= count;
+    std::cout << "mean depth: " << d << std::endl;
+
+    if (count < 400)
+      continue;
+
+    // backprojection
+    depth_map_device_->copyFrom(*depth_map_);
+    backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
+    vertex_map_->copyFrom(*vertex_map_device_);
 
     // compute object center using depth and vertmap
     float Tx = 0;
@@ -1642,15 +1651,18 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = pose[4] / pose[6];
       ry = pose[5] / pose[6];
     }
-    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz + 0.05);
+    data.rx = rx;
+    data.ry = ry;
+    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz);
     T_co.translation() = translation_1;
+    data.pose = T_co;
     std::cout << "Translation " << translation_1(0) << " " << translation_1(1) << " " << translation_1(2) << std::endl;
 
-    // iterations = 100;
-    // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+    iterations = 100;
+    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
 
-    iterations = 8;
-    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 1);
+    // iterations = 8;
+    // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 1);
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
@@ -1679,6 +1691,7 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   // compute point-wise distance
   int c = 0;
   float distance = 0;
+  int border = 0;
   int width = dataForOpt->width;
   int height = dataForOpt->height;
   int objID = dataForOpt->objID;
@@ -1699,13 +1712,24 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
     Sophus::SE3f::Point point(px, py, pz);
     Sophus::SE3f::Point point_new = T_co * point;
 
+    Eigen::Matrix<float,2,1,Eigen::DontAlign>  projection = dataForOpt->model->project(point_new);
+    const int u = projection(0) + 0.5;
+    const int v = projection(1) + 0.5;
+
+    if ( (u <= border) || (u >= (width-1-border)) || (v <= border) || (v >= (height-1-border)) ) 
+    {
+      distance += 1;
+      c++;
+      continue;
+    }
+
     px = point_new(0);
     py = point_new(1);
     pz = point_new(2);
 
-    float vx = (*vertex_map)(x, y)(0);
-    float vy = (*vertex_map)(x, y)(1);
-    float vz = (*vertex_map)(x, y)(2);
+    float vx = (*vertex_map)(u, v)(0);
+    float vy = (*vertex_map)(u, v)(1);
+    float vz = (*vertex_map)(u, v)(2);
     if (std::isnan(px) == 0 && std::isnan(py) == 0 && std::isnan(pz) == 0 && vz > depthRange(0) && vz < depthRange(1) && pz > depthRange(0) && pz < depthRange(1))
     {
       distance += std::sqrt((px - vx) * (px - vx) + (py - vy) * (py - vy) + (pz - vz) * (pz - vz));
@@ -1714,7 +1738,14 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   }
   if (c)
     distance /= c;
-  float energy = distance;
+
+  Sophus::SE3f pose_new = T_co * dataForOpt->pose;
+  Sophus::SE3f::Point translation_new = pose_new.translation();
+  float rx = translation_new[0] / translation_new[2];
+  float ry = translation_new[1] / translation_new[2];
+  float distance_center = std::sqrt((rx - dataForOpt->rx) * (rx - dataForOpt->rx) + (ry - dataForOpt->ry) * (ry - dataForOpt->ry));
+
+  float energy = distance + distance_center;
 
   return energy;
 }
@@ -1726,7 +1757,7 @@ double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int 
   nlopt::opt opt(nlopt::LN_NELDERMEAD, 7); 
 
   // set optimization bounds 
-  double rotRange = 0.1;
+  double rotRange = 0.2;
   double tRangeXY = 0.01;
   double tRangeZ = 0.05; // pose uncertainty is larger in Z direction
 	
