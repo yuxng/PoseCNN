@@ -1651,18 +1651,15 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = pose[4] / pose[6];
       ry = pose[5] / pose[6];
     }
-    data.rx = rx;
-    data.ry = ry;
     Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz);
     T_co.translation() = translation_1;
-    data.pose = T_co;
     std::cout << "Translation " << translation_1(0) << " " << translation_1(1) << " " << translation_1(2) << std::endl;
 
-    iterations = 100;
-    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+    // iterations = 100;
+    // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
 
-    // iterations = 8;
-    // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 1);
+    iterations = 8;
+    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 1);
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
@@ -1691,7 +1688,6 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   // compute point-wise distance
   int c = 0;
   float distance = 0;
-  int border = 0;
   int width = dataForOpt->width;
   int height = dataForOpt->height;
   int objID = dataForOpt->objID;
@@ -1712,24 +1708,13 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
     Sophus::SE3f::Point point(px, py, pz);
     Sophus::SE3f::Point point_new = T_co * point;
 
-    Eigen::Matrix<float,2,1,Eigen::DontAlign>  projection = dataForOpt->model->project(point_new);
-    const int u = projection(0) + 0.5;
-    const int v = projection(1) + 0.5;
-
-    if ( (u <= border) || (u >= (width-1-border)) || (v <= border) || (v >= (height-1-border)) ) 
-    {
-      distance += 1;
-      c++;
-      continue;
-    }
-
     px = point_new(0);
     py = point_new(1);
     pz = point_new(2);
 
-    float vx = (*vertex_map)(u, v)(0);
-    float vy = (*vertex_map)(u, v)(1);
-    float vz = (*vertex_map)(u, v)(2);
+    float vx = (*vertex_map)(x, y)(0);
+    float vy = (*vertex_map)(x, y)(1);
+    float vz = (*vertex_map)(x, y)(2);
     if (std::isnan(px) == 0 && std::isnan(py) == 0 && std::isnan(pz) == 0 && vz > depthRange(0) && vz < depthRange(1) && pz > depthRange(0) && pz < depthRange(1))
     {
       distance += std::sqrt((px - vx) * (px - vx) + (py - vy) * (py - vy) + (pz - vz) * (pz - vz));
@@ -1738,14 +1723,7 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   }
   if (c)
     distance /= c;
-
-  Sophus::SE3f pose_new = T_co * dataForOpt->pose;
-  Sophus::SE3f::Point translation_new = pose_new.translation();
-  float rx = translation_new[0] / translation_new[2];
-  float ry = translation_new[1] / translation_new[2];
-  float distance_center = std::sqrt((rx - dataForOpt->rx) * (rx - dataForOpt->rx) + (ry - dataForOpt->ry) * (ry - dataForOpt->ry));
-
-  float energy = distance + distance_center;
+  float energy = distance;
 
   return energy;
 }
@@ -1757,7 +1735,7 @@ double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int 
   nlopt::opt opt(nlopt::LN_NELDERMEAD, 7); 
 
   // set optimization bounds 
-  double rotRange = 0.2;
+  double rotRange = 0.1;
   double tRangeXY = 0.01;
   double tRangeZ = 0.05; // pose uncertainty is larger in Z direction
 	

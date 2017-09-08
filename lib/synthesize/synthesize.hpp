@@ -97,9 +97,7 @@ unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, 
 struct DataForOpt
 {
   int width, height, objID;
-  float rx, ry;
 
-  Sophus::SE3f pose;
   std::vector<pangolin::GlBuffer*> attributeBuffers;
   std::vector<pangolin::GlBuffer*> modelIndexBuffers;
   df::GLRenderer<df::VertAndNormalRenderType>* renderer;
