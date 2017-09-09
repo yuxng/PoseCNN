@@ -1270,20 +1270,7 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
   {
     pangolin::CudaScopedMappedArray scopedArray(vertTex);
     cudaMemcpy2DFromArray(predicted_verts_device_->data(), vertTex.width*4*sizeof(float), *scopedArray, 0, 0, vertTex.width*4*sizeof(float), vertTex.height, cudaMemcpyDeviceToDevice);
-
     predicted_verts_->copyFrom(*predicted_verts_device_);
-    Eigen::UnalignedVec4<float> v(0, 0, 0, 0);
-    for (int x = 0; x < width; x++)
-    {
-      for (int y = 0; y < height; y++)
-      {
-        if (labelmap[y * width + x] != objID)
-          (*predicted_verts_)(x, y) = v;
-        if (std::isnan((*predicted_verts_)(x, y)(0)) || std::isnan((*predicted_verts_)(x, y)(1)) || std::isnan((*predicted_verts_)(x, y)(2)) || std::isnan((*predicted_verts_)(x, y)(3)))
-          (*predicted_verts_)(x, y) = v;
-      }
-    }
-    predicted_verts_device_->copyFrom(*predicted_verts_);
   }
 
   glColor3f(1, 1, 1);
@@ -1327,25 +1314,24 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
       std::vector<Point3D> set1, set2;
 
       // set point clouds
-      for (int x = 0; x < width; x++)
+      for (int i = 0; i < label_indexes_.size(); i++)
       {
-        for (int y = 0; y < height; y++)
+        int x = label_indexes_[i] % width;
+        int y = label_indexes_[i] / width;
+
+        if (std::isnan((*predicted_verts_)(x, y)(0)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(1)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(2)) == 0 &&
+            std::isnan((*predicted_verts_)(x, y)(3)) == 0)
         {
-          if (std::isnan((*predicted_verts_)(x, y)(0)) == 0 &&
-              std::isnan((*predicted_verts_)(x, y)(1)) == 0 &&
-              std::isnan((*predicted_verts_)(x, y)(2)) == 0 &&
-              std::isnan((*predicted_verts_)(x, y)(3)) == 0 &&
-              (*predicted_verts_)(x, y)(2) > 0 &&
-              labelmap[y * width + x] == objID)
-          {
-            Point3D ptx((*predicted_verts_)(x, y)(0), (*predicted_verts_)(x, y)(1), (*predicted_verts_)(x, y)(2));
-             set1.push_back(ptx);
-          }
-          if (labelmap[y * width + x] == objID && (*vertex_map_)(x, y)(2) > 0 && (*predicted_verts_)(x, y)(2) > 0)
-          {
-            Point3D ptx((*vertex_map_)(x, y)(0), (*vertex_map_)(x, y)(1), (*vertex_map_)(x, y)(2));
-            set2.push_back(ptx);
-          }
+          Point3D ptx((*predicted_verts_)(x, y)(0), (*predicted_verts_)(x, y)(1), (*predicted_verts_)(x, y)(2));
+          set1.push_back(ptx);
+        }
+
+        if ((*vertex_map_)(x, y)(2) > 0)
+        {
+          Point3D ptx((*vertex_map_)(x, y)(0), (*vertex_map_)(x, y)(1), (*vertex_map_)(x, y)(2));
+          set2.push_back(ptx);
         }
       }
 
@@ -1385,93 +1371,10 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
       Eigen::Matrix4f transformation = pcl_icp.getFinalTransformation();
       Sophus::SE3f update(transformation);
 
-      /*
-      // Compute surface normals and curvature
-      pcl::NormalEstimationOMP<PointNormalT, PointNormalT> norm_est;
-      norm_est.setRadiusSearch (0.1);
-      norm_est.setInputCloud (cloud_in);
-      norm_est.compute (*cloud_in);
-      norm_est.setInputCloud (cloud_out);
-      norm_est.compute (*cloud_out);
-
-      CApp app;
-      app.ComputeFeature(cloud_in);
-      std::cout << "compute feature done 1" << std::endl;
-      app.ComputeFeature(cloud_out);
-      std::cout << "compute feature done 2" << std::endl;
-      app.NormalizePoints();
-      app.AdvancedMatching();
-      app.OptimizePairwise(true, ITERATION_NUMBER);
-      Eigen::Matrix4f transformation = app.GetTrans();
-      std::cout << transformation << std::endl;
-
-
-      // Align
-      pcl::IterativeClosestPointWithNormals<PointNormalT, PointNormalT> reg;
-      reg.setTransformationEpsilon (1e-8);
-      // Set the maximum distance between two correspondences (src<->tgt) to 10cm
-      // Note: adjust this based on the size of your datasets
-      // reg.setMaxCorrespondenceDistance (0.1);  
-      reg.setInputSource (points_with_normals_src);
-      reg.setInputTarget (points_with_normals_tgt);
-
-      PointCloudWithNormals::Ptr reg_result = points_with_normals_src;;
-      reg.align (*reg_result);
-      Eigen::Matrix4f transformation = reg.getFinalTransformation();
-      */
-
-      /*
-      // run algorithm
-      Match4PCSOptions options;
-      double delta = 0.001;
-      // Estimated overlap (see the paper).
-      double overlap = 0.5;
-
-      // Threshold of the computed overlap for termination. 1.0 means don't terminate
-      // before the end.
-      double thr = 1.0;
-
-      // Maximum norm of RGB values between corresponded points. 1e9 means don't use.
-      double max_color = 1e9;
-
-      // Number of sampled points in both files. The 4PCS allows a very aggressive sampling.
-      int n_points = 200;
-
-      // Maximum angle (degrees) between corresponded normals.
-      double norm_diff = -1;
-
-      // Maximum allowed computation time.
-      int max_time_seconds = 10;
-
-      // Set parameters.
-      Match4PCSBase::MatrixType mat;
-      options.configureOverlap(overlap);
-      options.sample_size = n_points;
-      options.max_normal_difference = norm_diff;
-      options.max_color_distance = max_color;
-      options.max_time_seconds = max_time_seconds;
-      options.delta = delta;
-
-      // Match and return the score (estimated overlap or the LCP).
-      typename Point3D::Scalar score = 0;
-
-      constexpr Utils::LogLevel loglvl = Utils::Verbose;
-      using TrVisitorType = typename std::conditional <loglvl==Utils::NoLog,
-                            Match4PCSBase::DummyTransformVisitor,
-                            TransformVisitor>::type;
-      Utils::Logger logger(loglvl);
-
-      MatchSuper4PCS matcher(options, logger);
-      score = matcher.ComputeTransformation<TrVisitorType>(set1, &set2, mat);
-      std::cout << mat << std::endl;
-      Sophus::SE3f update(mat);
-      */
       T_co = update * T_co;
       break;
     }
   }
-
-  // std::cout << T_co.matrix3x4() << std::endl;
 }
 
 
@@ -1498,6 +1401,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   data.width = width;
   data.height = height;
   data.labelmap = labelmap;
+  data.label_indexes = &label_indexes_;
   data.depthRange = Eigen::Vector2f(znear, zfar);
   data.vertex_map = vertex_map_;
   data.predicted_verts = predicted_verts_;
@@ -1564,27 +1468,21 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     }
 
     // convert depth values
+    label_indexes_.clear();
     float* p = depth_map_->data();
     ushort* q = reinterpret_cast<ushort *>(depth);
-    int count = 0;
-    float d = 0;
     for (int j = 0; j < width * height; j++)
     {
       if (labelmap[j] == objID)
       {
         p[j] = q[j] / depth_factor_;
-        count++;
-        d += p[j];
+        label_indexes_.push_back(j);
       }
       else
         p[j] = 0;
     }
-    std::cout << "class id: " << objID << ", pixels: " << count << std::endl;
-    if (count > 0)
-      d /= count;
-    std::cout << "mean depth: " << d << std::endl;
-
-    if (count < 400)
+    std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
+    if (label_indexes_.size() < 400)
       continue;
 
     // backprojection
@@ -1597,31 +1495,29 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float Ty = 0;
     float Tz = 0;
     int c = 0;
-    data.label_indexes.clear();
-    for (int x = 0; x < width; x++)
+    for (int j = 0; j < label_indexes_.size(); j++)
     {
-      for (int y = 0; y < height; y++)
-      {
-        if (labelmap[y * width + x] == objID && (*depth_map_)(x, y) > 0)
-        {
-          float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
-          float vy = vertmap[y * width + x].y;
-          float vz = vertmap[y * width + x].z;
+      int x = label_indexes_[j] % width;
+      int y = label_indexes_[j] / width;
 
-          if (std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0)
+      if ((*depth_map_)(x, y) > 0)
+      {
+        float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
+        float vy = vertmap[y * width + x].y;
+        float vz = vertmap[y * width + x].z;
+
+        if (std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0)
+        {
+          Eigen::UnalignedVec4<float> normal = (*predicted_normals_)(x, y);
+          Eigen::UnalignedVec4<float> vertex = (*predicted_verts_)(x, y);
+          Vec3 dpoint = (*vertex_map_)(x, y);
+          float error = normal.head<3>().dot(dpoint - vertex.head<3>());
+          if (fabs(error) < maxError)
           {
-            Eigen::UnalignedVec4<float> normal = (*predicted_normals_)(x, y);
-            Eigen::UnalignedVec4<float> vertex = (*predicted_verts_)(x, y);
-            Vec3 dpoint = (*vertex_map_)(x, y);
-            float error = normal.head<3>().dot(dpoint - vertex.head<3>());
-            if (fabs(error) < maxError)
-            {
-              data.label_indexes.push_back(y * width + x);
-              Tx += (dpoint(0) - vx);
-              Ty += (dpoint(1) - vy);
-              Tz += (dpoint(2) - vz);
-              c++;
-            }
+            Tx += (dpoint(0) - vx);
+            Ty += (dpoint(1) - vy);
+            Tz += (dpoint(2) - vz);
+            c++;
           }
         }
       }
@@ -1634,7 +1530,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     }
     std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
 
-    // rendering
+    // modify translation
     float rx = 0;
     float ry = 0;
     if (pose[6])
@@ -1642,15 +1538,41 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = pose[4] / pose[6];
       ry = pose[5] / pose[6];
     }
-    Sophus::SE3f::Point translation_1(rx * Tz, ry * Tz, Tz);
-    T_co.translation() = translation_1;
-    std::cout << "Translation " << translation_1(0) << " " << translation_1(1) << " " << translation_1(2) << std::endl;
+    T_co.translation()(0) = rx * Tz;
+    T_co.translation()(1) = ry * Tz;
+    T_co.translation()(2) = Tz;
+    std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
 
-    // iterations = 100;
-    // refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+    iterations = 100;
+    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+    Tx = T_co.translation()(0);
+    Ty = T_co.translation()(1);
+    Tz = T_co.translation()(2);
+    rx = Tx / Tz;
+    ry = Ty / Tz;
+    std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
 
     // pose hypotheses
     std::vector<Sophus::SE3f> hyps;
+
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz - 0.02;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz - 0.01;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.01;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.02;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.03;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.04;
     hyps.push_back(T_co);
 
     T_co.translation()(2) = Tz + 0.05;
@@ -1668,8 +1590,9 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       float cx = hyps[j].translation()(0) / hyps[j].translation()(2);
       float cy = hyps[j].translation()(1) / hyps[j].translation()(2);
       float distance = std::sqrt( (cx - rx) * (cx - rx) + (cy - ry) * (cy - ry) );
-      // std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl << "distance: " << distance << std::endl;
-      // std::cout << "anglur distance: " << T_co.unit_quaternion().angularDistance(hyps[j].unit_quaternion()) << std::endl;
+      // float distance = (translation_1 - hyps[j].translation()).norm();
+      std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl << "distance: " << distance << std::endl;
+      std::cout << "anglur distance: " << T_co.unit_quaternion().angularDistance(hyps[j].unit_quaternion()) << std::endl;
       if (distance < dis)
       {
         dis = distance;
@@ -1713,10 +1636,10 @@ static double optEnergy(const std::vector<double> &pose, std::vector<double> &gr
   df::ManagedHostTensor2<Vec3>* vertex_map = dataForOpt->vertex_map;
   Eigen::Vector2f depthRange = dataForOpt->depthRange;
 
-  for (int i = 0; i < dataForOpt->label_indexes.size(); i++)
+  for (int i = 0; i < dataForOpt->label_indexes->size(); i++)
   {
-    int x = dataForOpt->label_indexes[i] % width;
-    int y = dataForOpt->label_indexes[i] / width;
+    int x = (*dataForOpt->label_indexes)[i] % width;
+    int y = (*dataForOpt->label_indexes)[i] / width;
 
     float px = (*predicted_verts)(x, y)(0);
     float py = (*predicted_verts)(x, y)(1);
@@ -1754,7 +1677,7 @@ double Synthesizer::poseWithOpt(std::vector<double> & vec, DataForOpt data, int 
   // set optimization bounds 
   double rotRange = 0.1;
   double tRangeXY = 0.01;
-  double tRangeZ = 0.05; // pose uncertainty is larger in Z direction
+  double tRangeZ = 0.1; // pose uncertainty is larger in Z direction
 	
   std::vector<double> lb(7);
   lb[0] = vec[0] - rotRange;

@@ -105,7 +105,7 @@ struct DataForOpt
   df::Poly3CameraModel<float>* model;
 
   const int* labelmap;
-  std::vector<int> label_indexes;
+  std::vector<int>* label_indexes;
   Eigen::Vector2f depthRange;
   df::ManagedHostTensor2<Vec3>* vertex_map;
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
@@ -167,6 +167,7 @@ class Synthesizer
   // depths
   float depth_factor_;
   float depth_cutoff_;
+  std::vector<int> label_indexes_;
   df::ManagedTensor<2, float>* depth_map_;
   df::ManagedTensor<2, float, df::DeviceResident>* depth_map_device_;
 

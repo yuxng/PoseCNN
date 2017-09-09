@@ -85,7 +85,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	 */
 	bool operator < (const TransHyp& hyp) const { return (getScore() > hyp.getScore()); }
 
-        void compute_width_height()
+        void compute_width_height(cv::Rect bb2D)
         {
           float w = -1;
           float h = -1;
@@ -93,9 +93,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           {
             float x = fabs(inlierPts2D[i].second.x - center.x);
             float y = fabs(inlierPts2D[i].second.y - center.y);
-            if (x > w)
+            if (x > w && x < 1.5 * bb2D.width / 2)
               w = x;
-            if (y > h)
+            if (y > h && y < 1.5 * bb2D.height / 2)
               h = y;
           }
           width_ = 2 * w;

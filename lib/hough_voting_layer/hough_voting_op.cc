@@ -616,27 +616,17 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
   for(auto it = hypMap.begin(); it != hypMap.end(); it++)
   for(int h = 0; h < it->second.size(); h++)
   {
-
     cv::Vec<float, 13> roi;
     roi(0) = batch;
     roi(1) = it->second[h].objID;
 
-    cv::Point2d center = it->second[h].center;
-    it->second[h].compute_width_height();
-    float scale = 0.1;
-    roi(2) = center.x - it->second[h].width_ * (0.5 + scale);
-    roi(3) = center.y - it->second[h].height_ * (0.5 + scale);
-    roi(4) = center.x + it->second[h].width_ * (0.5 + scale);
-    roi(5) = center.y + it->second[h].height_ * (0.5 + scale);
-
-    // initial pose estimation
-
     // backproject the center
+    cv::Point2d center = it->second[h].center;
     float rx = (center.x - px) / fx;
     float ry = (center.y - py) / fy;
     float distance = it->second[h].compute_distance(vertmap, num_classes, width);
 
-    // initialize pose
+    // initial pose
     std::vector<double> vec(6);
     vec[0] = 0.0;
     vec[1] = 0.0;
@@ -666,7 +656,15 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     Eigen::Map<Eigen::Matrix3d> eigenT( (double*)pose_t.data );
     Eigen::Quaterniond quaternion(eigenT);
 
-    // assign result
+    // project the 3D bounding box
+    cv::Rect bb2D = getBB2D(width, height, bb3Ds[it->second[h].objID-1], camMat, trans);
+    it->second[h].compute_width_height(bb2D);
+    float scale = 0.1;
+    roi(2) = center.x - it->second[h].width_ * (0.5 + scale);
+    roi(3) = center.y - it->second[h].height_ * (0.5 + scale);
+    roi(4) = center.x + it->second[h].width_ * (0.5 + scale);
+    roi(5) = center.y + it->second[h].height_ * (0.5 + scale);
+
     roi(6) = quaternion.w();
     roi(7) = quaternion.x();
     roi(8) = quaternion.y();
