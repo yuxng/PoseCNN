@@ -23,7 +23,7 @@ echo Logging output to "$LOG"
 # test for pose regression
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/linemod/linemod_cat_train/vgg16_fcn_color_single_frame_pose_linemod_cat_iter_40000.ckpt \
+  --model output/linemod/linemod_cat_train/vgg16_fcn_color_single_frame_pose_linemod_cat_iter_80000.ckpt \
   --imdb linemod_cat_test \
   --cfg experiments/cfgs/linemod_cat_pose.yml \
   --cad data/LINEMOD/models.txt \
