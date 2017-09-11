@@ -166,14 +166,14 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         data_blob = im_normal_blob
 
     if cfg.INPUT == 'RGBD':
-        if cfg.TEST.VERTEX_REG:
+        if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
                          net.meta_data: meta_data_blob, net.extents: extents, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
-        if cfg.TEST.VERTEX_REG:
+        if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
                          net.meta_data: meta_data_blob, net.extents: extents, net.poses: pose_blob}
@@ -185,7 +185,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
     if cfg.NETWORK == 'FCN8VGG':
         labels_2d, probs = sess.run([net.label_2d, net.prob], feed_dict=feed_dict)
     else:
-        if cfg.TEST.VERTEX_REG:
+        if cfg.TEST.VERTEX_REG_2D:
             if cfg.TEST.POSE_REG:
                 labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
@@ -636,7 +636,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     plt.imshow(im_labels)
     ax.set_title('class labels')      
 
-    if cfg.TEST.VERTEX_REG:
+    if cfg.TEST.VERTEX_REG_2D:
         # show centers
         for i in xrange(rois.shape[0]):
             cx = (rois[i, 2] + rois[i, 4]) / 2
@@ -888,7 +888,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
-        if cfg.TEST.VERTEX_REG:
+        if cfg.TEST.VERTEX_REG_2D:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
 
             if cfg.TEST.POSE_REG:
@@ -995,7 +995,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                                 count_correct += 1
 
         if cfg.TEST.VISUALIZE:
-            if cfg.TEST.VERTEX_REG:
+            if cfg.TEST.VERTEX_REG_2D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))

@@ -289,14 +289,14 @@ def load_and_enqueue(sess, net, data_layer, coord):
 
         if cfg.TRAIN.SINGLE_FRAME:
             if cfg.INPUT == 'RGBD':
-                if cfg.TRAIN.VERTEX_REG:
+                if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
                                net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
                 else:
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
             else:
-                if cfg.TRAIN.VERTEX_REG:
+                if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
                                net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
@@ -364,7 +364,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
             labels = network.gt_label_2d_queue
             loss = loss_cross_entropy_single_frame(scores, labels)
         else:
-            if cfg.TRAIN.VERTEX_REG:
+            if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                 scores = network.get_output('prob')
                 labels = network.get_output('gt_label_2d')
                 loss_cls = loss_cross_entropy_single_frame(scores, labels)
@@ -421,7 +421,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
             data_layer = GtDataLayer(roidb, imdb.num_classes)
 
         print 'Solving...'
-        if cfg.TRAIN.VERTEX_REG:
+        if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             if cfg.TRAIN.POSE_REG:
                 sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters, data_layer)
             else:

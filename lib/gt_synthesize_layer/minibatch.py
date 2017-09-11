@@ -183,6 +183,13 @@ def _process_label_image(label_image, class_colors, class_weights):
             I = np.where(label_image == i)
             label_index[I[0], I[1], i] = class_weights[i]
             labels[I[0], I[1]] = i
+
+            # 051_large_clamp and 052_extra_large_clamp
+            if cfg.EXP_DIR == 'lov' and i == 19:
+                label_index[I[0], I[1], 20] = class_weights[i]
+
+            if cfg.EXP_DIR == 'lov' and i == 20:
+                label_index[I[0], I[1], 19] = class_weights[i]
     
     return label_index, labels
 
@@ -194,7 +201,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     processed_depth = []
     processed_label = []
     processed_meta_data = []
-    if cfg.TRAIN.VERTEX_REG:
+    if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
         processed_vertex_targets = []
         processed_vertex_weights = []
         pose_blob = np.zeros((0, 13), dtype=np.float32)
@@ -245,7 +252,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         processed_label.append(im_cls)
 
         # vertex regression targets and weights
-        if cfg.TRAIN.VERTEX_REG:
+        if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             if is_syn:
                 poses = meta_data['poses']
                 if len(poses.shape) == 2:
@@ -256,9 +263,9 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
                     vertmap = vertmap[:, ::-1, :]
                 vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
 
-                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'].flatten(), im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
-                processed_vertex_targets.append(center_targets)
-                processed_vertex_weights.append(center_weights)
+                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'].flatten(), im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
+                processed_vertex_targets.append(vertex_targets)
+                processed_vertex_weights.append(vertex_weights)
 
                 num = poses.shape[2]
                 qt = np.zeros((num, 13), dtype=np.float32)
@@ -281,9 +288,9 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
                     vertmap = vertmap[:, ::-1, :]
                 vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
 
-                center_targets, center_weights = _vote_centers(im, meta_data['cls_indexes'], im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
-                processed_vertex_targets.append(center_targets)
-                processed_vertex_weights.append(center_weights)
+                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
+                processed_vertex_targets.append(vertex_targets)
+                processed_vertex_weights.append(vertex_weights)
 
                 num = poses.shape[2]
                 qt = np.zeros((num, 13), dtype=np.float32)
@@ -354,7 +361,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
-    if cfg.TRAIN.VERTEX_REG:
+    if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
         vertex_target_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
         vertex_weight_blob = np.zeros((num_images, height, width, 3 * num_classes), dtype=np.float32)
     else:
@@ -365,7 +372,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         depth_blob[i,:,:,0] = processed_depth[i]
         label_blob[i,:,:,:] = processed_label[i]
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
-        if cfg.TRAIN.VERTEX_REG:
+        if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
     
@@ -373,7 +380,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
 
 
 # compute the voting label image in 2D
-def _vote_centers(im_label, cls_indexes, center, poses, num_classes, vertmap, extents):
+def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, vertmap, extents):
     width = im_label.shape[1]
     height = im_label.shape[0]
     vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
@@ -384,19 +391,23 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes, vertmap, ex
         y, x = np.where(im_label == i)
         I = np.where(im_label == i)
         if len(x) > 0:
-            ind = np.where(cls_indexes == i)[0]    
-            c[0] = center[ind, 0]
-            c[1] = center[ind, 1]
-            z = poses[2, 3, ind]
-            R = np.tile(c, (1, len(x))) - np.vstack((x, y))
-            # compute the norm
-            N = np.linalg.norm(R, axis=0) + 1e-10
-            # normalization
-            R = np.divide(R, np.tile(N, (2,1)))
-            # assignment
-            vertex_targets[y, x, 3*i+0] = R[0,:]
-            vertex_targets[y, x, 3*i+1] = R[1,:]
-            vertex_targets[y, x, 3*i+2] = z
+            if cfg.TRAIN.VERTEX_REG_2D:
+                ind = np.where(cls_indexes == i)[0]    
+                c[0] = center[ind, 0]
+                c[1] = center[ind, 1]
+                z = poses[2, 3, ind]
+                R = np.tile(c, (1, len(x))) - np.vstack((x, y))
+                # compute the norm
+                N = np.linalg.norm(R, axis=0) + 1e-10
+                # normalization
+                R = np.divide(R, np.tile(N, (2,1)))
+                # assignment
+                vertex_targets[y, x, 3*i+0] = R[0,:]
+                vertex_targets[y, x, 3*i+1] = R[1,:]
+                vertex_targets[y, x, 3*i+2] = z
+            if cfg.TRAIN.VERTEX_REG_3D:
+                vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
+
             vertex_weights[y, x, 3*i+0] = 10.0
             vertex_weights[y, x, 3*i+1] = 10.0
             vertex_weights[y, x, 3*i+2] = 10.0
@@ -465,27 +476,36 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target
         width = label.shape[1]
         num_classes = label.shape[2]
         l = np.zeros((height, width), dtype=np.int32)
-        if cfg.TRAIN.VERTEX_REG:
+        if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             vertex_target = vertex_target_blob[i, :, :, :]
             center = np.zeros((height, width, 3), dtype=np.float32)
         for k in xrange(num_classes):
             index = np.where(label[:,:,k] > 0)
             l[index] = k
-            if cfg.TRAIN.VERTEX_REG and len(index[0]) > 0 and k > 0:
+            if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D and len(index[0]) > 0 and k > 0:
                 center[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
         ax = fig.add_subplot(2, 3, 3)
         ax.set_title('label') 
-        if cfg.TRAIN.VERTEX_REG:
+        if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             plt.imshow(l)
             ax = fig.add_subplot(2, 3, 4)
             plt.imshow(center[:,:,0])
-            ax.set_title('center x') 
+            if cfg.TRAIN.VERTEX_REG_2D:
+                ax.set_title('center x') 
+            else:
+                ax.set_title('vertex x') 
             ax = fig.add_subplot(2, 3, 5)
             plt.imshow(center[:,:,1])
-            ax.set_title('center y') 
+            if cfg.TRAIN.VERTEX_REG_2D:
+                ax.set_title('center y')
+            else:
+                ax.set_title('vertex y')
             ax = fig.add_subplot(2, 3, 6)
             plt.imshow(center[:,:,2])
-            ax.set_title('z')
+            if cfg.TRAIN.VERTEX_REG_2D:
+                ax.set_title('z')
+            else:
+                ax.set_title('vertex z')
         else:
             plt.imshow(l)
 

@@ -68,8 +68,6 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
-    synthesizer_.setup()
 
     num_images = 80000
     height = 480
@@ -84,6 +82,9 @@ if __name__ == '__main__':
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
     root = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
+
+    synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
+    synthesizer_.setup(width, height)
 
     for i in xrange(num_images):
         print i

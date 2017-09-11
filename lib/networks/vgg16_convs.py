@@ -2,16 +2,17 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg=False, pose_reg=False, matching=False, trainable=True, filename_model='', is_train=True):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, matching=False, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
         self.num_units = num_units
         self.scale = 1.0
-        self.vertex_reg = vertex_reg
+        self.vertex_reg_2d = vertex_reg_2d
+        self.vertex_reg_3d = vertex_reg_3d
+        self.vertex_reg = vertex_reg_2d or vertex_reg_3d
         self.pose_reg = pose_reg
         self.matching = matching
-        self.filename_model = filename_model
         if is_train:
             self.is_train = 1
         else:
@@ -22,7 +23,7 @@ class vgg16_convs(Network):
             self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
-        if vertex_reg:
+        if self.vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
             self.poses = tf.placeholder(tf.float32, shape=[None, 13])
@@ -32,7 +33,7 @@ class vgg16_convs(Network):
         # define a queue
         queue_size = 25
         if input_format == 'RGBD':
-            if vertex_reg:
+            if self.vertex_reg:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
                                              self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
@@ -45,7 +46,7 @@ class vgg16_convs(Network):
                 data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
-            if vertex_reg:
+            if self.vertex_reg:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
                 data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
@@ -142,27 +143,29 @@ class vgg16_convs(Network):
                  .deconv(int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
                  .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
 
-            (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                 .hough_voting(self.is_train, name='hough'))
+            if self.vertex_reg_2d:
 
-            self.layers['rois'] = self.get_output('hough')[0]
-            self.layers['poses_init'] = self.get_output('hough')[1]
-            self.layers['poses_target'] = self.get_output('hough')[2]
-            self.layers['poses_weight'] = self.get_output('hough')[3]
+                (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
+                     .hough_voting(self.is_train, name='hough'))
 
-            if self.pose_reg:
-                # roi pooling without masking
-                (self.feed('conv5_3', 'rois')
-                     .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5'))
+                self.layers['rois'] = self.get_output('hough')[0]
+                self.layers['poses_init'] = self.get_output('hough')[1]
+                self.layers['poses_target'] = self.get_output('hough')[2]
+                self.layers['poses_weight'] = self.get_output('hough')[3]
 
-                (self.feed('conv4_3', 'rois')
-                     .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4'))
+                if self.pose_reg:
+                    # roi pooling without masking
+                    (self.feed('conv5_3', 'rois')
+                         .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5'))
 
-                (self.feed('pool4', 'pool5')
-                     .add(name='pool_score')
-                     .fc(4096, height=7, width=7, channel=512, name='fc6')
-                     .dropout(self.keep_prob_queue, name='drop6')
-                     .fc(4096, num_in=4096, name='fc7')
-                     .dropout(self.keep_prob_queue, name='drop7')
-                     .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
-                     .tanh(name='poses_pred'))
+                    (self.feed('conv4_3', 'rois')
+                         .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4'))
+
+                    (self.feed('pool4', 'pool5')
+                         .add(name='pool_score')
+                         .fc(4096, height=7, width=7, channel=512, name='fc6')
+                         .dropout(self.keep_prob_queue, name='drop6')
+                         .fc(4096, num_in=4096, name='fc7')
+                         .dropout(self.keep_prob_queue, name='drop7')
+                         .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
+                         .tanh(name='poses_pred'))

@@ -75,7 +75,7 @@ void Synthesizer::create_window(int width, int height)
 {
   pangolin::CreateWindowAndBind("Synthesizer", width, height);
 
-  gtView_ = &pangolin::Display("gt").SetAspect(float(height)/float(height));
+  gtView_ = &pangolin::Display("gt").SetAspect(float(width)/float(height));
 
   // create render
   renderer_ = new df::GLRenderer<df::CanonicalVertRenderType>(width, height);
