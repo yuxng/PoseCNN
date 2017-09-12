@@ -185,11 +185,11 @@ def _process_label_image(label_image, class_colors, class_weights):
             labels[I[0], I[1]] = i
 
             # 051_large_clamp and 052_extra_large_clamp
-            if cfg.EXP_DIR == 'lov' and i == 19:
-                label_index[I[0], I[1], 20] = class_weights[i]
+            #if cfg.EXP_DIR == 'lov' and i == 19:
+            #    label_index[I[0], I[1], 20] = class_weights[i]
 
-            if cfg.EXP_DIR == 'lov' and i == 20:
-                label_index[I[0], I[1], 19] = class_weights[i]
+            #if cfg.EXP_DIR == 'lov' and i == 20:
+            #    label_index[I[0], I[1], 19] = class_weights[i]
     
     return label_index, labels
 

@@ -312,6 +312,240 @@ struct LinearSystemAtomicAdder {
 
 };
 
+// huber loss
+
+template <typename Scalar, uint ResidualDim, uint ModelDim, int D>
+struct JTJRowInitializerHuber {
+
+    static __attribute__((always_inline)) __host__ __device__
+    void initializeRow(Eigen::Matrix<Scalar,1,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & row,
+                       const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & J,
+                       const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & rhoDoublePrimeJ) {
+        row(D) = J.template block<ResidualDim,1>(0,0).dot(rhoDoublePrimeJ.template block<ResidualDim,1>(0,D)); // StaticDotProduct<Scalar,ResidualDim>::dot(J.template block<ResidualDim,1>(0,0),J.template block<ResidualDim,1>(0,D)); //J.template block<ResidualDim,1>(0,0).transpose()*J.template block<ResidualDim,1>(0,D);
+        JTJRowInitializerHuber<Scalar,ResidualDim,ModelDim,D-1>::initializeRow(row, J, rhoDoublePrimeJ);
+    }
+
+};
+
+// recursive base case
+template <typename Scalar, uint ResidualDim, uint ModelDim>
+struct JTJRowInitializerHuber<Scalar,ResidualDim,ModelDim,-1> {
+
+    static __attribute__((always_inline)) __host__ __device__
+    void initializeRow(Eigen::Matrix<Scalar,1,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & /*row*/,
+                       const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & /*J*/,
+                       const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & /*rhoDoublePrimeJ*/) { }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint ModelDim>
+struct JTJInitializerHuber {
+
+    static __attribute__((always_inline)) __host__ __device__
+    UpperTriangularMatrix<Scalar,ModelDim> upperTriangularJTJ(const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & jacobian,
+                                                              const Eigen::Matrix<Scalar,ResidualDim,ModelDim,Eigen::DontAlign | Eigen::RowMajor> & rhoDoublePrimeJacobian) {
+        Eigen::Matrix<Scalar,1,ModelDim,Eigen::DontAlign | Eigen::RowMajor> row;
+        JTJRowInitializerHuber<Scalar,ResidualDim,ModelDim,ModelDim-1>::initializeRow(row, jacobian, rhoDoublePrimeJacobian);
+        return { row, JTJInitializerHuber<Scalar,ResidualDim,ModelDim-1>::upperTriangularJTJ(jacobian.template block<ResidualDim,ModelDim-1>(0,1), rhoDoublePrimeJacobian.template block<ResidualDim,ModelDim-1>(0,1)) };
+    }
+
+};
+
+template <typename Scalar, uint ResidualDim>
+struct JTJInitializerHuber<Scalar,ResidualDim,1> {
+
+    static __attribute__((always_inline)) __host__ __device__
+    UpperTriangularMatrix<Scalar,1> upperTriangularJTJ(const Eigen::Matrix<Scalar,ResidualDim,1,Eigen::DontAlign> & jacobian,
+                                                       const Eigen::Matrix<Scalar,ResidualDim,1,Eigen::DontAlign> & rhoDoublePrimeJacobian) {
+        return { jacobian.transpose()*rhoDoublePrimeJacobian };
+    }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint ModelDim>
+struct ResidualFunctorHuber {
+
+    ResidualFunctorHuber(const Scalar alpha) : alpha_(alpha) { }
+
+    __attribute__((always_inline)) __host__ __device__
+    Scalar operator()(const JacobianAndResidual<Scalar,ResidualDim,ModelDim> & jacobianAndResidual) {
+
+        const Scalar norm = jacobianAndResidual.r.norm();
+
+        if (norm < alpha_) {
+
+            return Scalar(0.5) * norm * norm;
+
+        } else {
+
+            return alpha_ * (norm - Scalar(0.5) * alpha_);
+
+        }
+
+    }
+
+    Scalar alpha_;
+
+};
+
+template <typename Scalar, uint ModelDim>
+struct ResidualFunctorHuber<Scalar,1,ModelDim> {
+
+    ResidualFunctorHuber(const Scalar alpha) : alpha_(alpha) { }
+
+    __attribute__((always_inline)) __host__ __device__
+    Scalar operator()(const JacobianAndResidual<Scalar,1,ModelDim> & jacobianAndResidual) {
+
+        const Scalar norm = fabsf(jacobianAndResidual.r);
+
+        if (norm < alpha_) {
+
+            return Scalar(0.5) * norm * norm;
+
+        } else {
+
+            return alpha_ * (norm - Scalar(0.5) * alpha_);
+
+        }
+
+    }
+
+    Scalar alpha_;
+
+};
+
+template <typename Scalar, uint ResidualDim, uint R, uint C>
+struct RhoDoublePrimeInitializer {
+
+    __attribute__((always_inline))
+    __host__ __device__
+    static void Initialize(Eigen::Matrix<Scalar, ResidualDim, ResidualDim, Eigen::DontAlign> & rhoDoublePrime,
+                           const Eigen::Matrix<Scalar, ResidualDim, 1, Eigen::DontAlign> & residual) {
+
+        rhoDoublePrime(R,C) = - residual(R) * residual(C);
+
+        RhoDoublePrimeInitializer<Scalar, ResidualDim, R, C-1>::Initialize(rhoDoublePrime, residual);
+
+    }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint R>
+struct RhoDoublePrimeInitializer<Scalar, ResidualDim, R, R> {
+    //diagonal specialization
+
+    __attribute__((always_inline))
+    __host__ __device__
+    static void Initialize(Eigen::Matrix<Scalar, ResidualDim, ResidualDim, Eigen::DontAlign> & rhoDoublePrime,
+                           const Eigen::Matrix<Scalar, ResidualDim, 1, Eigen::DontAlign> & residual) {
+
+        rhoDoublePrime(R,R) = residual(R) * residual(R);
+
+        RhoDoublePrimeInitializer<Scalar, ResidualDim, R, R-1>::Initialize(rhoDoublePrime, residual);
+
+    }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint R>
+struct RhoDoublePrimeInitializer<Scalar, ResidualDim, R, -1> {
+    // row wrappover case
+
+    __attribute__((always_inline))
+    __host__ __device__
+    static void Initialize(Eigen::Matrix<Scalar, ResidualDim, ResidualDim, Eigen::DontAlign> & rhoDoublePrime,
+                           const Eigen::Matrix<Scalar, ResidualDim, 1, Eigen::DontAlign> & residual) {
+
+        RhoDoublePrimeInitializer<Scalar, ResidualDim, R-1, ResidualDim-1>::Initialize(rhoDoublePrime, residual);
+
+    }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint C>
+struct RhoDoublePrimeInitializer<Scalar, ResidualDim, -1, C> {
+    //base case
+
+    __attribute__((always_inline))
+    __host__ __device__
+    static void Initialize(Eigen::Matrix<Scalar, ResidualDim, ResidualDim, Eigen::DontAlign> & rhoDoublePrime,
+                           const Eigen::Matrix<Scalar, ResidualDim, 1, Eigen::DontAlign> & residual) { }
+
+};
+
+template <typename Scalar, uint ResidualDim, uint ModelDim>
+struct LinearSystemCreationFunctorHuber {
+
+    LinearSystemCreationFunctorHuber(const Scalar alpha) : alpha_(alpha) { }
+
+    __attribute__((always_inline)) __host__ __device__
+    LinearSystem<Scalar,ModelDim> operator()(const JacobianAndResidual<Scalar,ResidualDim,ModelDim> & jacobianAndResidual) {
+
+        const Scalar norm = jacobianAndResidual.r.norm();
+
+        if (norm < alpha_) {
+
+            return { JTJInitializer<Scalar,ResidualDim,ModelDim>::upperTriangularJTJ(jacobianAndResidual.J),
+                     jacobianAndResidual.J.transpose() * jacobianAndResidual.r };
+
+        } else {
+
+            Eigen::Matrix<Scalar, ResidualDim, ModelDim> jacobianTransposeRhoDoublePrime;
+
+            // TODO: could be more efficient
+            const Scalar alphaOverNormCubed = alpha_ / (norm * jacobianAndResidual.r.squaredNorm());
+
+            Eigen::Matrix<Scalar, ResidualDim, ResidualDim, Eigen::DontAlign> rhoDoublePrime;
+
+            {
+
+                RhoDoublePrimeInitializer<Scalar, ResidualDim, ResidualDim-1, ResidualDim-1>::Initialize(rhoDoublePrime, jacobianAndResidual.r);
+
+                jacobianTransposeRhoDoublePrime = alphaOverNormCubed * jacobianAndResidual.J * rhoDoublePrime;
+
+            }
+
+            return { JTJInitializerHuber<Scalar,ResidualDim,ModelDim>::upperTriangularJTJ(jacobianAndResidual.J, jacobianTransposeRhoDoublePrime),
+                     alpha_ * jacobianAndResidual.J.transpose() * jacobianAndResidual.r / norm };
+
+        }
+
+    }
+
+    Scalar alpha_;
+
+};
+
+template <typename Scalar, uint ModelDim>
+struct LinearSystemCreationFunctorHuber<Scalar, 1, ModelDim> {
+
+    // in the special case of ResidualDim = 1, the second derivative of the Huber norm is zero, so J^T * J is cancelled out
+
+    LinearSystemCreationFunctorHuber(const Scalar alpha) : alpha_(alpha) { }
+
+    __attribute__((always_inline)) __host__ __device__
+    LinearSystem<Scalar,ModelDim> operator()(const JacobianAndResidual<Scalar,1,ModelDim> & jacobianAndResidual) {
+
+        const Scalar norm = fabs(jacobianAndResidual.r);
+
+        if (norm < alpha_) {
+
+            return { JTJInitializer<Scalar,1,ModelDim>::upperTriangularJTJ(jacobianAndResidual.J),
+                     jacobianAndResidual.J.transpose() * jacobianAndResidual.r };
+
+        } else {
+
+            return { UpperTriangularMatrix<Scalar, ModelDim>::zero(),
+                     alpha_ * jacobianAndResidual.J.transpose() * jacobianAndResidual.r / norm };
+
+        }
+
+    }
+
+    Scalar alpha_;
+
+};
+
 } // namespace internal
 
 

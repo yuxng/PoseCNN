@@ -793,7 +793,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(910, num_images)
+        # perm = xrange(13695, num_images)
     else:
         perm = xrange(num_images)
 
@@ -927,6 +927,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
+        flag = 0
         if cfg.TEST.POSE_REG:
             # print pose information
             poses_gt = meta_data['poses']
@@ -990,11 +991,13 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         if cfg.TEST.POSE_REFINE:
                             if error_new < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
                                 count_correct += 1
+                            else:
+                                flag = 1
                         else:
                             if error < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
                                 count_correct += 1
 
-        if cfg.TEST.VISUALIZE:
+        if cfg.TEST.VISUALIZE and flag:
             if cfg.TEST.VERTEX_REG_2D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:

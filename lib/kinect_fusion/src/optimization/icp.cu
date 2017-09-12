@@ -213,6 +213,26 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                                              LinearSystemCreationFunctor<Scalar,1,6>(),
                                                              LinearSystem<Scalar,6>::zero(),
                                                              LinearSystemSumFunctor<Scalar,6>());
+/*
+    static constexpr Scalar huberAlpha = Scalar(0.008);
+
+    const Scalar totalResidual = thrust::transform_reduce(jacobiansAndResiduals.begin(),
+                                                          jacobiansAndResiduals.end(),
+                                                          ResidualFunctorHuber<Scalar,1,6>(huberAlpha),
+                                                          Scalar(0),
+                                                          thrust::plus<Scalar>());
+
+    std::cout << "icp residual" << totalResidual << std::endl;
+
+
+
+    GlobalTimer::tick("transform_reduce");
+    LinearSystem<Scalar,6> system = thrust::transform_reduce(jacobiansAndResiduals.begin(),
+                                                             jacobiansAndResiduals.end(),
+                                                             LinearSystemCreationFunctorHuber<Scalar,1,6>(huberAlpha),
+                                                             LinearSystem<Scalar,6>::zero(),
+                                                             LinearSystemSumFunctor<Scalar,6>());
+*/
 
     cudaDeviceSynchronize();
     CheckCudaDieOnError();

@@ -21,11 +21,14 @@ import numpy as np
 
 if __name__ == '__main__':
 
+    num_images = 80000
+
+    '''
     which_class = 0
     classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
-
-    num_images = 80000
     root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
+    '''
+    root = '/home/yuxiang/mnt1/yuxiang/LOV_Dataset/data_syn/'
 
     for i in xrange(num_images):
 

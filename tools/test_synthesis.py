@@ -87,7 +87,6 @@ if __name__ == '__main__':
     synthesizer_.setup(width, height)
 
     for i in xrange(num_images):
-        print i
         
         # render a synthetic image
         im_syn = np.zeros((height, width, 4), dtype=np.uint8)
@@ -142,4 +141,5 @@ if __name__ == '__main__':
 
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
+        print filename
         scipy.io.savemat(filename, metadata, do_compression=True)
