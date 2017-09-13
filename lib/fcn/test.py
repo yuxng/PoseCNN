@@ -198,13 +198,18 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                     if class_id >= 0:
                         poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
             else:
-                #labels_2d, probs, vertex_pred, rois, poses = \
-                #    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
+                labels_2d, probs, vertex_pred, rois, poses = \
+                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
 
-                labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
-                vertex_pred = []
-                rois = []
-                poses = []
+                #labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
+                #vertex_pred = []
+                #rois = []
+                #poses = []
+        elif cfg.TEST.VERTEX_REG_3D:
+            labels_2d, probs, vertex_pred = \
+                sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')])
+            rois = []
+            poses = []
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
@@ -563,7 +568,6 @@ def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
     height = im_label.shape[0]
     width = im_label.shape[1]
     vertmap = np.zeros((height, width, 3), dtype=np.float32)
-    # centermap = np.zeros((height, width, 3), dtype=np.float32)
 
     for i in xrange(1, num_classes):
         I = np.where(im_label == i)
@@ -573,6 +577,20 @@ def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
             vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
 
     return vertmap
+
+# compute the voting label image in 2D
+def _generate_vertex_targets(im_label, num_classes, vertmap, extents):
+    width = im_label.shape[1]
+    height = im_label.shape[0]
+    vertex_targets = np.zeros((height, width, 3), dtype=np.float32)
+
+    for i in xrange(1, num_classes):
+        y, x = np.where(im_label == i)
+        I = np.where(im_label == i)
+        if len(x) > 0:
+            vertex_targets[y, x, :] = _scale_vertmap(vertmap, I, extents[i, :])
+
+    return vertex_targets
 
 
 def _scale_vertmap(vertmap, index, extents):
@@ -758,6 +776,57 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     plt.show()
 
 
+
+def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, center_map, vertmap_gt):
+    """Visual debugging of detections."""
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+
+    # show image
+    ax = fig.add_subplot(3, 4, 1)
+    im = im[:, :, (2, 1, 0)]
+    plt.imshow(im)
+    ax.set_title('input image')
+
+    # show gt class labels
+    ax = fig.add_subplot(3, 4, 5)
+    plt.imshow(im_labels_gt)
+    ax.set_title('gt class labels')
+
+    # show gt vertex map
+    ax = fig.add_subplot(3, 4, 6)
+    plt.imshow(vertmap_gt[:,:,0])
+    ax.set_title('gt vertmap x')
+
+    ax = fig.add_subplot(3, 4, 7)
+    plt.imshow(vertmap_gt[:,:,1])
+    ax.set_title('gt vertmap y')
+    
+    ax = fig.add_subplot(3, 4, 8)
+    plt.imshow(vertmap_gt[:,:,2])
+    ax.set_title('gt vertmap z')
+
+    # show class label
+    ax = fig.add_subplot(3, 4, 9)
+    plt.imshow(im_labels)
+    ax.set_title('class labels')      
+        
+    # show vertex map
+    ax = fig.add_subplot(3, 4, 10)
+    plt.imshow(center_map[:,:,0])
+    ax.set_title('vertmap x')
+
+    ax = fig.add_subplot(3, 4, 11)
+    plt.imshow(center_map[:,:,1])
+    ax.set_title('vertmap y')
+    
+    ax = fig.add_subplot(3, 4, 12)
+    plt.imshow(center_map[:,:,2])
+    ax.set_title('vertmap z')
+
+    plt.show()
+
+
 ###################
 # test single frame
 ###################
@@ -797,8 +866,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
@@ -1000,7 +1069,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                             if error < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
                                 count_correct += 1
 
-        if cfg.TEST.VISUALIZE and flag:
+        if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG_2D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
@@ -1011,6 +1080,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], \
                     meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
+            elif cfg.TEST.VERTEX_REG_3D:
+                vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
+                vertmap_gt = meta_data['vertmap'].copy()
+                vertmap_target = _generate_vertex_targets(labels_gt, imdb.num_classes, vertmap_gt, imdb._extents)
+                vis_segmentations_vertmaps_3d(im, im_depth, im_label, im_label_gt, vertmap, vertmap_target)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

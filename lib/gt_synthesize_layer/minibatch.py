@@ -16,7 +16,7 @@ from utils.blob import im_list_to_blob, pad_im, chromatic_transform
 from utils.se3 import *
 import scipy.io
 # from normals import gpu_normals
-from transforms3d.quaternions import mat2quat
+from transforms3d.quaternions import mat2quat, quat2mat
 
 def get_minibatch(roidb, extents, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -31,7 +31,7 @@ def get_minibatch(roidb, extents, num_classes, backgrounds, intrinsic_matrix, db
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob)
+        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,
@@ -87,10 +87,6 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
             im[I[0], I[1], :] = background_color[I[0], I[1], :3]
-
-            if cfg.TRAIN.CHROMATIC:
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])
-                label = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
         else:
             # depth raw
             im_depth_raw = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
@@ -105,12 +101,9 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
             else:
                 im = rgba
 
-            if cfg.TRAIN.CHROMATIC:
-                label = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
-
         # chromatic transform
-        if cfg.TRAIN.CHROMATIC:
-            im = chromatic_transform(im, label)
+        if cfg.TRAIN.CHROMATIC and npr.randint(0, 2) == 0:
+            im = chromatic_transform(im)
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
@@ -183,13 +176,6 @@ def _process_label_image(label_image, class_colors, class_weights):
             I = np.where(label_image == i)
             label_index[I[0], I[1], i] = class_weights[i]
             labels[I[0], I[1]] = i
-
-            # 051_large_clamp and 052_extra_large_clamp
-            #if cfg.EXP_DIR == 'lov' and i == 19:
-            #    label_index[I[0], I[1], 20] = class_weights[i]
-
-            #if cfg.EXP_DIR == 'lov' and i == 20:
-            #    label_index[I[0], I[1], 19] = class_weights[i]
     
     return label_index, labels
 
@@ -257,13 +243,19 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
                 poses = meta_data['poses']
                 if len(poses.shape) == 2:
                     poses = np.reshape(poses, (3, 4, 1))
+                if roidb[i]['flipped']:
+                    poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
 
                 vertmap = meta_data['vertmap']
                 if roidb[i]['flipped']:
                     vertmap = vertmap[:, ::-1, :]
                 vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
 
-                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'].flatten(), im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
+                center = meta_data['center']
+                if roidb[i]['flipped']:
+                    center[:, 0] = width - center[:, 0]
+
+                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'].flatten(), im_scale * center, poses, num_classes, vertmap, extents)
                 processed_vertex_targets.append(vertex_targets)
                 processed_vertex_weights.append(vertex_weights)
 
@@ -282,13 +274,19 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
                 poses = meta_data['poses']
                 if len(poses.shape) == 2:
                     poses = np.reshape(poses, (3, 4, 1))
+                if roidb[i]['flipped']:
+                    poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
 
                 vertmap = meta_data['vertmap']
                 if roidb[i]['flipped']:
                     vertmap = vertmap[:, ::-1, :]
                 vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
 
-                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * meta_data['center'], poses, num_classes, vertmap, extents)
+                center = meta_data['center']
+                if roidb[i]['flipped']:
+                    center[:, 0] = width - center[:, 0]
+
+                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * center, poses, num_classes, vertmap, extents)
                 processed_vertex_targets.append(vertex_targets)
                 processed_vertex_weights.append(vertex_weights)
 
@@ -379,6 +377,20 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob
 
 
+def _flip_poses(poses, K, width):
+    K1 = K.copy()
+    K1[0, 0] = -1 * K1[0, 0]
+    K1[0, 2] = width - K1[0, 2]
+
+    num = poses.shape[2]
+    poses_new = poses.copy()
+    for i in xrange(num):
+        pose = poses[:, :, i]
+        poses_new[:, :, i] = np.matmul(np.linalg.inv(K), np.matmul(K1, pose))
+
+    return poses_new
+
+
 # compute the voting label image in 2D
 def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, vertmap, extents):
     width = im_label.shape[1]
@@ -441,7 +453,26 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
     return vertmap
 
 
-def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target_blob):
+def _get_bb3D(extent):
+    bb = np.zeros((3, 8), dtype=np.float32)
+    
+    xHalf = extent[0] * 0.5
+    yHalf = extent[1] * 0.5
+    zHalf = extent[2] * 0.5
+    
+    bb[:, 0] = [xHalf, yHalf, zHalf]
+    bb[:, 1] = [-xHalf, yHalf, zHalf]
+    bb[:, 2] = [xHalf, -yHalf, zHalf]
+    bb[:, 3] = [-xHalf, -yHalf, zHalf]
+    bb[:, 4] = [xHalf, yHalf, -zHalf]
+    bb[:, 5] = [-xHalf, yHalf, -zHalf]
+    bb[:, 6] = [xHalf, -yHalf, -zHalf]
+    bb[:, 7] = [-xHalf, -yHalf, -zHalf]
+    
+    return bb
+
+
+def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -455,6 +486,34 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, vertex_target
         ax = fig.add_subplot(2, 3, 1)
         plt.imshow(im)
         ax.set_title('color') 
+
+        # project the 3D box to image
+        metadata = meta_data_blob[i, 0, 0, :]
+        intrinsic_matrix = metadata[:9].reshape((3,3))
+        print intrinsic_matrix
+        for j in xrange(pose_blob.shape[0]):
+            if pose_blob[j, 0] != i:
+                continue
+
+            class_id = int(pose_blob[j, 1])
+            bb3d = _get_bb3D(extents[class_id, :])
+            x3d = np.ones((4, 8), dtype=np.float32)
+            x3d[0:3, :] = bb3d
+            
+            # projection
+            RT = np.zeros((3, 4), dtype=np.float32)
+            RT[:3, :3] = quat2mat(pose_blob[j, 6:10])
+            RT[:, 3] = pose_blob[j, 10:]
+            x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+            x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+            x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+
+            x1 = np.min(x2d[0, :])
+            x2 = np.max(x2d[0, :])
+            y1 = np.min(x2d[1, :])
+            y2 = np.max(x2d[1, :])
+            plt.gca().add_patch(
+                plt.Rectangle((x1, y1), x2-x1, y2-y1, fill=False, edgecolor='g', linewidth=3))
 
         # show depth image
         #depth = depth_blob[i, :, :, 0]

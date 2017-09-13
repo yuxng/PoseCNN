@@ -214,7 +214,7 @@ LinearSystem<Scalar,6> icpIteration(const DeviceTensor2<Eigen::UnalignedVec3<Sca
                                                              LinearSystem<Scalar,6>::zero(),
                                                              LinearSystemSumFunctor<Scalar,6>());
 /*
-    static constexpr Scalar huberAlpha = Scalar(0.008);
+    static constexpr Scalar huberAlpha = Scalar(0.01);
 
     const Scalar totalResidual = thrust::transform_reduce(jacobiansAndResiduals.begin(),
                                                           jacobiansAndResiduals.end(),
