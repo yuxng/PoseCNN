@@ -198,8 +198,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                     if class_id >= 0:
                         poses[i, :4] = poses_pred[i, 4*class_id:4*class_id+4]
             else:
-                labels_2d, probs, vertex_pred, rois, poses = \
-                    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
+                #labels_2d, probs, vertex_pred, rois, poses = \
+                #    sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
+
+                labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
+                vertex_pred = []
+                rois = []
+                poses = []
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
@@ -792,8 +797,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(13695, num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
@@ -889,8 +894,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         im_label = imdb.labels_to_image(im, labels)
 
         if cfg.TEST.VERTEX_REG_2D:
-            vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
-
             if cfg.TEST.POSE_REG:
                 # pose refinement
                 fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
@@ -1002,6 +1005,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))
+                vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
                 vertmap_gt = meta_data['vertmap'].copy()
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
