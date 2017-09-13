@@ -18,7 +18,7 @@ TRAIN:
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VERTEX_W: 10.0
-  VISUALIZE: True
+  VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True
   SYNROOT: 'data/LINEMOD/data_syn/holepuncher/'
