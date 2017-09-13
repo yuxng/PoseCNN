@@ -157,6 +157,20 @@ class Synthesizer
   void refinePose(int width, int height, int objID, float znear, float zfar,
                   const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int is_icp);
 
+  // pose estimation
+  void estimatePose(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
+        int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
+  inline void updateHyp3D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
+  inline void filterInliers3D(TransHyp& hyp, int maxInliers);
+  inline void countInliers3D(TransHyp& hyp, const std::vector<std::vector<int>>& labels, const float* vertmap, const float* extents, const jp::img_coord_t& eyeData,
+      float inlierThreshold, int width, int num_classes, int minArea, int pixelBatch);
+  inline bool samplePoint3D(jp::id_t objID, int width, int num_classes, std::vector<cv::Point3f>& eyePts, std::vector<cv::Point3f>& objPts, const cv::Point2f& pt2D,
+      const float* vertmap, const float* extents, const jp::img_coord_t& eyeData, float minDist3D);
+  inline cv::Point3f getMode3D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, const float* extents, int width, int num_classes);
+  template<class T> inline double getMinDist(const std::vector<T>& pointSet, const T& point);
+  void getEye(unsigned char* rawdepth, jp::img_coord_t& img, jp::img_depth_t& img_depth, int width, int height, float fx, float fy, float px, float py, float depth_factor);
+  jp::coord3_t pxToEye(int x, int y, jp::depth_t depth, float fx, float fy, float px, float py, float depth_factor);
+
  private:
   int counter_;
   int setup_;

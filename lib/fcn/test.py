@@ -205,11 +205,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 #vertex_pred = []
                 #rois = []
                 #poses = []
+            vertex_pred = vertex_pred[0, :, :, :]
         elif cfg.TEST.VERTEX_REG_3D:
             labels_2d, probs, vertex_pred = \
                 sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred')])
             rois = []
             poses = []
+            vertex_pred = vertex_pred[0, :, :, :]
         else:
             labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
             vertex_pred = []
@@ -574,7 +576,7 @@ def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
         if len(I[0]) > 0:
             start = 3 * i
             end = 3 * i + 3
-            vertmap[I[0], I[1], :] = vertex_pred[0, I[0], I[1], start:end]
+            vertmap[I[0], I[1], :] = vertex_pred[I[0], I[1], start:end]
 
     return vertmap
 
@@ -777,7 +779,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
 
 
-def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, center_map, vertmap_gt):
+def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors, vertmap, vertmap_target,
+  labels, labels_gt, rois, poses, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -795,15 +798,15 @@ def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, center_
 
     # show gt vertex map
     ax = fig.add_subplot(3, 4, 6)
-    plt.imshow(vertmap_gt[:,:,0])
+    plt.imshow(vertmap_target[:,:,0])
     ax.set_title('gt vertmap x')
 
     ax = fig.add_subplot(3, 4, 7)
-    plt.imshow(vertmap_gt[:,:,1])
+    plt.imshow(vertmap_target[:,:,1])
     ax.set_title('gt vertmap y')
     
     ax = fig.add_subplot(3, 4, 8)
-    plt.imshow(vertmap_gt[:,:,2])
+    plt.imshow(vertmap_target[:,:,2])
     ax.set_title('gt vertmap z')
 
     # show class label
@@ -813,16 +816,76 @@ def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, center_
         
     # show vertex map
     ax = fig.add_subplot(3, 4, 10)
-    plt.imshow(center_map[:,:,0])
+    plt.imshow(vertmap[:,:,0])
     ax.set_title('vertmap x')
 
     ax = fig.add_subplot(3, 4, 11)
-    plt.imshow(center_map[:,:,1])
+    plt.imshow(vertmap[:,:,1])
     ax.set_title('vertmap y')
     
     ax = fig.add_subplot(3, 4, 12)
-    plt.imshow(center_map[:,:,2])
+    plt.imshow(vertmap[:,:,2])
     ax.set_title('vertmap z')
+
+    # show projection of the poses
+    if cfg.TEST.POSE_REG:
+
+        ax = fig.add_subplot(3, 4, 2, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(1, num_classes):
+            index = np.where(labels_gt == i)
+            if len(index[0]) > 0:
+                num = len(index[0])
+                # extract 3D points
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                print x3d
+
+                # projection
+                ind = np.where(cls_indexes == i)[0][0]
+                RT = poses_gt[:, :, ind]
+                print RT
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                print x2d
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+
+        ax.set_title('gt projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
+        ax = fig.add_subplot(3, 4, 3, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(rois.shape[0]):
+            cls = int(rois[i, 1])
+            index = np.where(labels_gt == cls)
+            if len(index[0]) > 0:
+                num = len(index[0])
+                # extract 3D points
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                # projection
+                RT = np.zeros((3, 4), dtype=np.float32)
+                RT[:3, :3] = quat2mat(poses[i, :4])
+                RT[:, 3] = poses[i, 4:7]
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+        ax.set_title('projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
 
     plt.show()
 
@@ -934,6 +997,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
             # load meta data
+            print imdb.metadata_path_at(i)
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
         if imdb.num_classes == 2:
@@ -987,6 +1051,33 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                     SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, fx, fy, px, py, znear, zfar, factor, error_threshold)
             else:
                 poses_new = []
+        elif cfg.TEST.VERTEX_REG_3D:
+            fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
+            fy = meta_data['intrinsic_matrix'][1, 1] * im_scale
+            px = meta_data['intrinsic_matrix'][0, 2] * im_scale
+            py = meta_data['intrinsic_matrix'][1, 2] * im_scale
+            factor = meta_data['factor_depth']
+            poses_new = np.zeros((3, 4, imdb.num_classes), dtype=np.float32)
+            labels_icp = labels.copy();
+            if imdb.num_classes == 2:
+                I = np.where(labels_icp > 0)
+                labels_icp[I[0], I[1]] = imdb._cls_index
+            im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            SYN.estimate_poses_3d(labels_icp, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
+
+            num = 0
+            for j in xrange(imdb.num_classes):
+                if poses_new[2, 3, j] > 0:
+                    num += 1
+            rois = np.zeros((num, 6), dtype=np.float32)
+            poses = np.zeros((num, 7), dtype=np.float32)
+            count = 0
+            for j in xrange(imdb.num_classes):
+                if poses_new[2, 3, j] > 0:
+                    rois[count, 1] = j
+                    poses[count, :4] = mat2quat(poses_new[:3, :3, j])
+                    poses[count, 4:] = poses_new[:, 3, j]
+                    count += 1
 
         _t['im_segment'].toc()
 
@@ -1000,7 +1091,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
         flag = 0
-        if cfg.TEST.POSE_REG:
+        if cfg.TEST.POSE_REG and cfg.TEST.VERTEX_REG_2D:
             # print pose information
             poses_gt = meta_data['poses']
             if len(poses_gt.shape) == 2:
@@ -1081,10 +1172,15 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], \
                     meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
             elif cfg.TEST.VERTEX_REG_3D:
+                poses_gt = meta_data['poses']
+                if len(poses_gt.shape) == 2:
+                    poses_gt = np.reshape(poses_gt, (3, 4, 1))
                 vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
                 vertmap_gt = meta_data['vertmap'].copy()
                 vertmap_target = _generate_vertex_targets(labels_gt, imdb.num_classes, vertmap_gt, imdb._extents)
-                vis_segmentations_vertmaps_3d(im, im_depth, im_label, im_label_gt, vertmap, vertmap_target)
+                vis_segmentations_vertmaps_3d(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
+                    vertmap, vertmap_target, labels, labels_gt, rois, poses, meta_data['intrinsic_matrix'], \
+                    meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 

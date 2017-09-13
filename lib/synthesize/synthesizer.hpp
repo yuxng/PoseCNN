@@ -17,4 +17,7 @@ class Synthesizer
 
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, float* rois, float* poses, float* outputs, float maxError);
+
+  void estimatePose(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
+        int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
 };

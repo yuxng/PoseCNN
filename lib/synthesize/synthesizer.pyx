@@ -18,6 +18,7 @@ cdef extern from "synthesizer.hpp":
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
         void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
         void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, float*, float*, float*, float)
+        void estimatePose(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
 
 cdef class PySynthesizer:
     cdef Synthesizer *synthesizer     # hold a C++ instance which we're wrapping
@@ -79,3 +80,15 @@ cdef class PySynthesizer:
 
         return self.synthesizer.solveICP(<int *>labels.data, depth_buff, height, width, fx, fy, px, py, znear, zfar, factor, num_roi, &rois[0, 0], &poses[0, 0], \
                                                &poses_new[0, 0], error)
+
+
+    def estimate_poses_3d(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, \
+               np.ndarray[np.float32_t, ndim=3] vertmap, np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=3] poses, \
+               int num_classes, np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py, np.float32_t factor):
+
+        cdef int height = labels.shape[0]
+        cdef int width = labels.shape[1]
+        cdef unsigned char* depth_buff = <unsigned char*> depth.data
+
+        return self.synthesizer.estimatePose(<int *>labels.data, depth_buff, &vertmap[0, 0, 0], &extents[0, 0], \
+            width, height, num_classes, fx, fy, px, py, factor, &poses[0, 0, 0])
