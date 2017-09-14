@@ -110,6 +110,8 @@ struct DataForOpt
   df::ManagedHostTensor2<Vec3>* vertex_map;
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
   df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device;
+
+  TransHyp* hyp; 
 };
 
 class Synthesizer
@@ -151,7 +153,7 @@ class Synthesizer
 
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                float factor, int num_roi, float* rois, float* poses, float* outputs, float maxError);
+                float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError);
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
   void refinePose(int width, int height, int objID, float znear, float zfar,
@@ -170,6 +172,8 @@ class Synthesizer
   template<class T> inline double getMinDist(const std::vector<T>& pointSet, const T& point);
   void getEye(unsigned char* rawdepth, jp::img_coord_t& img, jp::img_depth_t& img_depth, int width, int height, float fx, float fy, float px, float py, float depth_factor);
   jp::coord3_t pxToEye(int x, int y, jp::depth_t depth, float fx, float fy, float px, float py, float depth_factor);
+
+  double refineWithOpt(TransHyp& hyp, int iterations);
 
  private:
   int counter_;

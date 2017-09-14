@@ -7,6 +7,9 @@ import datasets.imdb
 import cPickle
 import numpy as np
 import cv2
+from fcn.config import cfg
+from utils.pose_error import *
+from transforms3d.quaternions import quat2mat, mat2quat
 
 class lov(datasets.imdb):
     def __init__(self, image_set, lov_path = None):
@@ -27,7 +30,7 @@ class lov(datasets.imdb):
                               (192, 0, 0), (0, 192, 0), (0, 0, 192)]
 
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-
+        self._points = self._load_object_points()
         self._extents = self._load_object_extents()
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
@@ -122,6 +125,19 @@ class lov(datasets.imdb):
         Return the default path where KITTI is expected to be installed.
         """
         return os.path.join(datasets.ROOT_DIR, 'data', 'LOV')
+
+
+    def _load_object_points(self):
+
+        points = [[] for _ in xrange(len(self._classes))]
+
+        for i in xrange(1, len(self._classes)):
+            point_file = os.path.join(self._lov_path, 'models', self._classes[i], 'points.xyz')
+            print point_file
+            assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
+            points[i] = np.loadtxt(point_file)
+
+        return points
 
 
     def _load_object_extents(self):
@@ -269,6 +285,109 @@ class lov(datasets.imdb):
         return image.astype(np.uint8)
 
 
+    def evaluate_result(self, segmentation, gt_labels, meta_data):
+
+        # evaluate segmentation
+        n_cl = self.num_classes
+        hist = np.zeros((n_cl, n_cl))
+
+        gt_labels = gt_labels.astype(np.float32)
+        sg_labels = segmentation['labels']
+        hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
+
+        # per-class IU
+        print 'per-class segmentation IoU'
+        intersection = np.diag(hist)
+        union = hist.sum(1) + hist.sum(0) - np.diag(hist)
+        index = np.where(union > 0)[0]
+        for i in range(len(index)):
+            ind = index[i]
+            print '{} {}'.format(self._classes[ind], intersection[ind] / union[ind])
+
+        # evaluate pose
+        if cfg.TEST.POSE_REG:
+            rois = segmentation['rois']
+            poses = segmentation['poses']
+            poses_new = segmentation['poses_refined']
+            poses_icp = segmentation['poses_icp']
+
+            poses_gt = meta_data['poses']
+            if len(poses_gt.shape) == 2:
+                poses_gt = np.reshape(poses_gt, (3, 4, 1))
+            num = poses_gt.shape[2]
+
+            for j in xrange(num):
+                if meta_data['cls_indexes'][j] <= 0:
+                    continue
+                cls = self.classes[int(meta_data['cls_indexes'][j])]
+                print cls
+                print 'gt pose'
+                print poses_gt[:, :, j]
+
+                for k in xrange(rois.shape[0]):
+                    cls_index = int(rois[k, 1])
+                    if cls_index == meta_data['cls_indexes'][j]:
+
+                        print 'estimated pose'
+                        RT = np.zeros((3, 4), dtype=np.float32)
+                        RT[:3, :3] = quat2mat(poses[k, :4])
+                        RT[:, 3] = poses[k, 4:7]
+                        print RT
+
+                        if cfg.TEST.POSE_REFINE:
+                            print 'translation refined pose'
+                            RT_new = np.zeros((3, 4), dtype=np.float32)
+                            RT_new[:3, :3] = quat2mat(poses_new[k, :4])
+                            RT_new[:, 3] = poses_new[k, 4:7]
+                            print RT_new
+
+                            print 'ICP refined pose'
+                            RT_icp = np.zeros((3, 4), dtype=np.float32)
+                            RT_icp[:3, :3] = quat2mat(poses_icp[k, :4])
+                            RT_icp[:, 3] = poses_icp[k, 4:7]
+                            print RT_icp
+
+                        error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                        print 'rotation error: {}'.format(error_rotation)
+
+                        error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+                        print 'translation error: {}'.format(error_translation)
+
+                        # compute pose error
+                        if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                            error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                        else:
+                            error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                        print 'error: {}'.format(error)
+
+                        if cfg.TEST.POSE_REFINE:
+                            error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
+                            print 'rotation error new: {}'.format(error_rotation_new)
+
+                            error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
+                            print 'translation error new: {}'.format(error_translation_new)
+
+                            if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                                error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                            else:
+                                error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                            print 'error new: {}'.format(error_new)
+
+                            error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
+                            print 'rotation error icp: {}'.format(error_rotation_icp)
+
+                            error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
+                            print 'translation error icp: {}'.format(error_translation_icp)
+
+                            if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                                error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                            else:
+                                error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                            print 'error icp: {}'.format(error_icp)
+
+                        print 'threshold: {}'.format(0.1 * np.linalg.norm(self._extents[cls_index, :]))
+        
+
     def evaluate_segmentations(self, segmentations, output_dir):
         print 'evaluating segmentations'
         # compute histogram
@@ -286,6 +405,14 @@ class lov(datasets.imdb):
         if not os.path.exists(mat_dir):
             os.makedirs(mat_dir)
 
+        count_all = np.zeros((self.num_classes,), dtype=np.float32)
+        count_correct = np.zeros((self.num_classes,), dtype=np.float32)
+        count_correct_refined = np.zeros((self.num_classes,), dtype=np.float32)
+        count_correct_icp = np.zeros((self.num_classes,), dtype=np.float32)
+        threshold = np.zeros((self.num_classes,), dtype=np.float32)
+        for i in xrange(self.num_classes):
+            threshold[i] = 0.1 * np.linalg.norm(self._extents[i, :])
+
         # for each image
         for im_ind, index in enumerate(self.image_index):
             # read ground truth labels
@@ -294,8 +421,67 @@ class lov(datasets.imdb):
 
             # predicated labels
             sg_labels = segmentations[im_ind]['labels']
-
             hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
+
+            # evaluate pose
+            if cfg.TEST.POSE_REG:
+                # load meta data
+                meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+            
+                rois = segmentations[im_ind]['rois']
+                poses = segmentations[im_ind]['poses']
+                poses_new = segmentations[im_ind]['poses_refined']
+                poses_icp = segmentations[im_ind]['poses_icp']
+
+                poses_gt = meta_data['poses']
+                if len(poses_gt.shape) == 2:
+                    poses_gt = np.reshape(poses_gt, (3, 4, 1))
+                num = poses_gt.shape[2]
+
+                for j in xrange(num):
+                    if meta_data['cls_indexes'][j] <= 0:
+                        continue
+                    cls = self.classes[int(meta_data['cls_indexes'][j])]
+                    count_all[int(meta_data['cls_indexes'][j])] += 1
+    
+                    for k in xrange(rois.shape[0]):
+                        cls_index = int(rois[k, 1])
+                        if cls_index == meta_data['cls_indexes'][j]:
+
+                            RT = np.zeros((3, 4), dtype=np.float32)
+                            RT[:3, :3] = quat2mat(poses[k, :4])
+                            RT[:, 3] = poses[k, 4:7]
+
+                            if cfg.TEST.POSE_REFINE:
+                                RT_new = np.zeros((3, 4), dtype=np.float32)
+                                RT_new[:3, :3] = quat2mat(poses_new[k, :4])
+                                RT_new[:, 3] = poses_new[k, 4:7]
+
+                                RT_icp = np.zeros((3, 4), dtype=np.float32)
+                                RT_icp[:3, :3] = quat2mat(poses_icp[k, :4])
+                                RT_icp[:, 3] = poses_icp[k, 4:7]
+
+                            error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                            error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+                            if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                                error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                            else:
+                                error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+
+                            if cfg.TEST.POSE_REFINE:
+                                error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
+                                error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
+                                if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                                    error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                                else:
+                                    error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+
+                                error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
+                                error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
+                                if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
+                                    error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+                                else:
+                                    error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
 
             '''
             # label image

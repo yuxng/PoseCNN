@@ -258,8 +258,9 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
     // canonical vertices
     std::vector<float3> canonicalVerts(assimpMesh->mNumVertices);
     std::memcpy(canonicalVerts.data(), assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float3));
+
     for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++)
-        canonicalVerts[i].x += model_index;
+      canonicalVerts[i].x += model_index;
 
     canonicalVertices.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
     canonicalVertices.Upload(canonicalVerts.data(), assimpMesh->mNumVertices*sizeof(float3));
@@ -278,6 +279,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 
     if (is_textured)
     {
+/*
       std::cout << "loading texture from " << textureName << std::endl;
       texture.LoadFromFile(textureName);
 
@@ -289,6 +291,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
           texCoords2[i] = make_float2(assimpMesh->mTextureCoords[0][i].x,1.0 - assimpMesh->mTextureCoords[0][i].y);
       }
       texCoords.Upload(texCoords2.data(),assimpMesh->mNumVertices*sizeof(float)*2);
+*/
     }
     else
     {
@@ -1390,6 +1393,108 @@ inline void Synthesizer::updateHyp3D(TransHyp& hyp, const cv::Mat& camMat, int i
 }
 
 
+static double optEnergy3D(const std::vector<double> &pose, std::vector<double> &grad, void *data)
+{
+  DataForOpt* dataForOpt = (DataForOpt*) data;
+	
+  // convert pose to our format
+  cv::Mat tvec(3, 1, CV_64F);
+  cv::Mat rvec(3, 1, CV_64F);
+      
+  for(int i = 0; i < 6; i++)
+  {
+    if(i > 2) 
+      tvec.at<double>(i-3, 0) = pose[i];
+    else 
+      rvec.at<double>(i, 0) = pose[i];
+  }
+  jp::cv_trans_t trans(rvec, tvec);
+
+  // pose conversion
+  jp::jp_trans_t jpTrans = jp::cv2our(trans);
+  jpTrans.first = jp::double2float(jpTrans.first);
+	
+  float distance = 0;
+  for(int pt = 0; pt < dataForOpt->hyp->inlierPts.size(); pt++) // iterate over correspondences
+  {
+    // read out obj point
+    cv::Mat_<float> obj(3, 1);
+    obj(0, 0) = dataForOpt->hyp->inlierPts.at(pt).first.x;
+    obj(1, 0) = dataForOpt->hyp->inlierPts.at(pt).first.y;
+    obj(2, 0) = dataForOpt->hyp->inlierPts.at(pt).first.z;
+		
+    // convert mode center from object coordinates to camera coordinates
+    cv::Mat_<float> transObj = jpTrans.first * obj;
+    transObj(0, 0) += jpTrans.second.x;
+    transObj(1, 0) += jpTrans.second.y;
+    transObj(2, 0) += jpTrans.second.z;
+	    
+    distance += std::sqrt((transObj(0, 0) - dataForOpt->hyp->inlierPts.at(pt).second.x) * (transObj(0, 0) - dataForOpt->hyp->inlierPts.at(pt).second.x)
+                        + (transObj(1, 0) - dataForOpt->hyp->inlierPts.at(pt).second.y) * (transObj(1, 0) - dataForOpt->hyp->inlierPts.at(pt).second.y)
+                        + (transObj(2, 0) - dataForOpt->hyp->inlierPts.at(pt).second.z) * (transObj(2, 0) - dataForOpt->hyp->inlierPts.at(pt).second.z));
+  }
+      
+  float energy = distance / dataForOpt->hyp->inlierPts.size();	
+  return energy;
+}
+
+
+double Synthesizer::refineWithOpt(TransHyp& hyp, int iterations) 
+{
+  // set up optimization algorithm (gradient free)
+  nlopt::opt opt(nlopt::LN_NELDERMEAD, 6); 
+      
+  // provide pointers to data and methods used in the energy calculation
+  DataForOpt data;
+  data.hyp = &hyp;
+
+  // convert pose to rodriguez vector and translation vector in meters
+  std::vector<double> vec(6);
+  for(int i = 0; i < 6; i++)
+  {
+    if(i > 2) 
+      vec[i] = hyp.pose.second.at<double>(i-3, 0);
+    else vec[i] = 
+      hyp.pose.first.at<double>(i, 0);
+  }
+	
+  // set optimization bounds 
+  double rotRange = 10;
+  rotRange *= PI / 180;
+  double tRangeXY = 0.1;
+  double tRangeZ = 0.5; // pose uncertainty is larger in Z direction
+	
+  std::vector<double> lb(6);
+  lb[0] = vec[0]-rotRange; lb[1] = vec[1]-rotRange; lb[2] = vec[2]-rotRange;
+  lb[3] = vec[3]-tRangeXY; lb[4] = vec[4]-tRangeXY; lb[5] = vec[5]-tRangeZ;
+  opt.set_lower_bounds(lb);
+      
+  std::vector<double> ub(6);
+  ub[0] = vec[0]+rotRange; ub[1] = vec[1]+rotRange; ub[2] = vec[2]+rotRange;
+  ub[3] = vec[3]+tRangeXY; ub[4] = vec[4]+tRangeXY; ub[5] = vec[5]+tRangeZ;
+  opt.set_upper_bounds(ub);
+      	
+  // configure NLopt
+  opt.set_min_objective(optEnergy3D, &data);
+  opt.set_maxeval(iterations);
+
+  // run optimization
+  double energy;
+  nlopt::result result = opt.optimize(vec, energy);
+
+  // read back optimized pose
+  for(int i = 0; i < 6; i++)
+  {
+    if(i > 2) 
+      hyp.pose.second.at<double>(i-3, 0) = vec[i];
+    else 
+      hyp.pose.first.at<double>(i, 0) = vec[i];
+  }
+	
+  return energy;
+}    
+
+
 void Synthesizer::estimatePose(
         const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
         int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output)
@@ -1398,19 +1503,19 @@ void Synthesizer::estimatePose(
   jp::img_coord_t eyeData;
   jp::img_depth_t img_depth;
   getEye(rawdepth, eyeData, img_depth, width, height, fx, fy, px, py, depth_factor);
-  std::cout << "read depth done" << std::endl;
 
   // bb3Ds
   std::vector<std::vector<cv::Point3f>> bb3Ds;
   getBb3Ds(extents, bb3Ds, num_classes);
-  std::cout << "read boxes done" << std::endl;
 
   // labels
   float minArea = 400; // a hypothesis covering less projected area (2D bounding box) can be discarded (too small to estimate anything reasonable)
   std::vector<std::vector<int>> labels;
   std::vector<int> object_ids;
   getLabels(labelmap, labels, object_ids, width, height, num_classes, minArea);
-  std::cout << "read labels done" << std::endl;
+
+  if (object_ids.size() == 0)
+    return;
 		
   int maxIterations = 10000000;
   float inlierThreshold3D = 0.01;
@@ -1420,6 +1525,7 @@ void Synthesizer::estimatePose(
   int maxPixels = 1000;  // 1000
   int minPixels = 10;  // 10
   int refIt = 8;  // 8
+  int refinementIterations = 100;
 
   // camera matrix
   cv::Mat_<float> camMat = cv::Mat_<float>::zeros(3, 3);
@@ -1428,7 +1534,6 @@ void Synthesizer::estimatePose(
   camMat(2, 2) = 1.f;
   camMat(0, 2) = px;
   camMat(1, 2) = py;
-  std::cout << "read camera matrix:\n" << camMat << std::endl;
 		
   // hold for each object a list of pose hypothesis, these are optimized until only one remains per object
   std::map<jp::id_t, std::vector<TransHyp>> hypMap;
@@ -1518,7 +1623,6 @@ void Synthesizer::estimatePose(
   std::cout << std::endl;
   for(std::pair<jp::id_t, std::vector<TransHyp>> hypPair : hypMap)
   {
-    std::cout << "Object " << (int) hypPair.first << ": " << hypPair.second.size() << std::endl;
     objList.push_back(hypPair.first);
   }
   std::cout << std::endl;
@@ -1558,11 +1662,15 @@ void Synthesizer::estimatePose(
     workingQueue = getWorkingQueue(hypMap, refIt);
   }
 
-  std::cout << std::endl << "---------------------------------------------------" << std::endl;
   for(auto it = hypMap.begin(); it != hypMap.end(); it++)
   for(int h = 0; h < it->second.size(); h++)
   {
-    std::cout << "Estimated Hypothesis for Object " << (int) it->second[h].objID << ":" << std::endl;
+    if(it->second[h].inliers > minPixels) 
+    {
+      jp::jp_trans_t pose = jp::cv2our(it->second[h].pose);
+      filterInliers3D(it->second[h], maxPixels);
+      it->second[h].likelihood = refineWithOpt(it->second[h], refinementIterations);
+    }
 
     jp::jp_trans_t pose = jp::cv2our(it->second[h].pose);
     for(int x = 0; x < 4; x++)
@@ -1582,15 +1690,8 @@ void Synthesizer::estimatePose(
           }
         }
       }
-    }
-    
-    std::cout << "Inliers: " << it->second[h].inliers;
-    std::printf(" (Rate: %.1f\%)\n", it->second[h].getInlierRate() * 100);
-    std::cout << "Refined " << it->second[h].refSteps << " times. " << std::endl;
-    std::cout << "Pose " << pose.first << ", " << pose.second << std::endl;
-    std::cout << "---------------------------------------------------" << std::endl;
+    } 
   }
-  std::cout << std::endl;
 }
 
 
@@ -1802,7 +1903,7 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
 
 // ICP
 void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                           float factor, int num_roi, float* rois, float* poses, float* outputs, float maxError)
+                           float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
 {
   int iterations;
   if (setup_ == 0)
@@ -1974,6 +2075,15 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     ry = Ty / Tz;
     std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
 
+    // copy results
+    outputs[i * 7 + 0] = T_co.unit_quaternion().w();
+    outputs[i * 7 + 1] = T_co.unit_quaternion().x();
+    outputs[i * 7 + 2] = T_co.unit_quaternion().y();
+    outputs[i * 7 + 3] = T_co.unit_quaternion().z();
+    outputs[i * 7 + 4] = T_co.translation()(0);
+    outputs[i * 7 + 5] = T_co.translation()(1);
+    outputs[i * 7 + 6] = T_co.translation()(2);
+
     // pose hypotheses
     std::vector<Sophus::SE3f> hyps;
 
@@ -2027,13 +2137,13 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
     Sophus::SE3f::Point translation_new = T_co.translation();
 
-    outputs[i * 7 + 0] = quaternion_new.w();
-    outputs[i * 7 + 1] = quaternion_new.x();
-    outputs[i * 7 + 2] = quaternion_new.y();
-    outputs[i * 7 + 3] = quaternion_new.z();
-    outputs[i * 7 + 4] = translation_new(0);
-    outputs[i * 7 + 5] = translation_new(1);
-    outputs[i * 7 + 6] = translation_new(2);
+    outputs_icp[i * 7 + 0] = quaternion_new.w();
+    outputs_icp[i * 7 + 1] = quaternion_new.x();
+    outputs_icp[i * 7 + 2] = quaternion_new.y();
+    outputs_icp[i * 7 + 3] = quaternion_new.z();
+    outputs_icp[i * 7 + 4] = translation_new(0);
+    outputs_icp[i * 7 + 5] = translation_new(1);
+    outputs_icp[i * 7 + 6] = translation_new(2);
   }
 }
 

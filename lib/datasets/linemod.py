@@ -7,6 +7,9 @@ import datasets.imdb
 import cPickle
 import numpy as np
 import cv2
+from fcn.config import cfg
+from utils.pose_error import *
+from transforms3d.quaternions import quat2mat, mat2quat
 
 class linemod(datasets.imdb):
     def __init__(self, cls, image_set, linemod_path = None):
@@ -263,6 +266,107 @@ class linemod(datasets.imdb):
         return image.astype(np.uint8)
 
 
+    def evaluate_result(self, segmentation, gt_labels, meta_data):
+
+        # evaluate segmentation
+        n_cl = self.num_classes
+        hist = np.zeros((n_cl, n_cl))
+
+        gt_labels = gt_labels.astype(np.float32)
+        sg_labels = segmentation['labels']
+        hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
+
+        # per-class IU
+        print 'per-class segmentation IoU'
+        intersection = np.diag(hist)
+        union = hist.sum(1) + hist.sum(0) - np.diag(hist)
+        index = np.where(union > 0)[0]
+        for i in range(len(index)):
+            ind = index[i]
+            print '{} {}'.format(self._classes[ind], intersection[ind] / union[ind])
+
+        # evaluate pose
+        if cfg.TEST.POSE_REG:
+            rois = segmentation['rois']
+            poses = segmentation['poses']
+            poses_new = segmentation['poses_refined']
+            poses_icp = segmentation['poses_icp']
+
+            poses_gt = meta_data['poses']
+            if len(poses_gt.shape) == 2:
+                poses_gt = np.reshape(poses_gt, (3, 4, 1))
+            num = poses_gt.shape[2]
+
+            for j in xrange(num):
+                if meta_data['cls_indexes'][j] <= 0:
+                    continue
+                cls = self._classes[int(meta_data['cls_indexes'][j])]
+                print cls
+                print 'gt pose'
+                print poses_gt[:, :, j]
+
+                for k in xrange(rois.shape[0]):
+
+                    print 'estimated pose'
+                    RT = np.zeros((3, 4), dtype=np.float32)
+                    RT[:3, :3] = quat2mat(poses[k, :4])
+                    RT[:, 3] = poses[k, 4:7]
+                    print RT
+
+                    if cfg.TEST.POSE_REFINE:
+                        print 'translation refined pose'
+                        RT_new = np.zeros((3, 4), dtype=np.float32)
+                        RT_new[:3, :3] = quat2mat(poses_new[k, :4])
+                        RT_new[:, 3] = poses_new[k, 4:7]
+                        print RT_new
+
+                        print 'ICP refined pose'
+                        RT_icp = np.zeros((3, 4), dtype=np.float32)
+                        RT_icp[:3, :3] = quat2mat(poses_icp[k, :4])
+                        RT_icp[:, 3] = poses_icp[k, 4:7]
+                        print RT_icp
+
+                    error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                    print 'rotation error: {}'.format(error_rotation)
+
+                    error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+                    print 'translation error: {}'.format(error_translation)
+
+                    # compute pose error
+                    if cls == 'eggbox' or cls == 'glue':
+                        error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    else:
+                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    print 'error: {}'.format(error)
+
+                    if cfg.TEST.POSE_REFINE:
+                        error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
+                        print 'rotation error new: {}'.format(error_rotation_new)
+
+                        error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
+                        print 'translation error new: {}'.format(error_translation_new)
+
+                        if cls == 'eggbox' or cls == 'glue':
+                            error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'error new: {}'.format(error_new)
+
+                        error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
+                        print 'rotation error icp: {}'.format(error_rotation_icp)
+
+                        error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
+                        print 'translation error icp: {}'.format(error_translation_icp)
+
+                        if cls == 'eggbox' or cls == 'glue':
+                            error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'error icp: {}'.format(error_icp)
+
+                    print 'threshold: {}'.format(0.1 * np.linalg.norm(self._extents[1, :]))
+
+
     def evaluate_segmentations(self, segmentations, output_dir):
         print 'evaluating segmentations'
         # compute histogram
@@ -280,6 +384,12 @@ class linemod(datasets.imdb):
         if not os.path.exists(mat_dir):
             os.makedirs(mat_dir)
 
+        count_all = 0
+        count_correct = 0
+        count_correct_refined = 0
+        count_correct_icp = 0
+        threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+
         # for each image
         for im_ind, index in enumerate(self.image_index):
             # read ground truth labels
@@ -292,8 +402,80 @@ class linemod(datasets.imdb):
 
             # predicated labels
             sg_labels = segmentations[im_ind]['labels']
-
             hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
+
+            # evaluate pose
+            if cfg.TEST.POSE_REG:
+                # load meta data
+                meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+                ind = np.where(meta_data['cls_indexes'] == self._cls_index)[0]
+                meta_data['cls_indexes'][:] = 0
+                meta_data['cls_indexes'][ind] = 1
+
+                rois = segmentations[im_ind]['rois']
+                poses = segmentations[im_ind]['poses']
+                poses_new = segmentations[im_ind]['poses_refined']
+                poses_icp = segmentations[im_ind]['poses_icp']
+
+                poses_gt = meta_data['poses']
+                if len(poses_gt.shape) == 2:
+                    poses_gt = np.reshape(poses_gt, (3, 4, 1))
+                num = poses_gt.shape[2]
+
+                for j in xrange(num):
+                    if meta_data['cls_indexes'][j] <= 0:
+                        continue
+                    cls = self._classes[int(meta_data['cls_indexes'][j])]
+                    count_all += 1
+
+                    for k in xrange(rois.shape[0]):
+
+                        RT = np.zeros((3, 4), dtype=np.float32)
+                        RT[:3, :3] = quat2mat(poses[k, :4])
+                        RT[:, 3] = poses[k, 4:7]
+
+                        if cfg.TEST.POSE_REFINE:
+                            RT_new = np.zeros((3, 4), dtype=np.float32)
+                            RT_new[:3, :3] = quat2mat(poses_new[k, :4])
+                            RT_new[:, 3] = poses_new[k, 4:7]
+
+                            RT_icp = np.zeros((3, 4), dtype=np.float32)
+                            RT_icp[:3, :3] = quat2mat(poses_icp[k, :4])
+                            RT_icp[:, 3] = poses_icp[k, 4:7]
+
+                        error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                        error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+
+                        # compute pose error
+                        if cls == 'eggbox' or cls == 'glue':
+                            error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                        if error < threshold:
+                            count_correct += 1
+
+                        if cfg.TEST.POSE_REFINE:
+                            error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
+                            error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
+                            if cls == 'eggbox' or cls == 'glue':
+                                error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                            else:
+                                error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                            if error_new < threshold:
+                                 count_correct_refined += 1
+
+                            error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
+                            error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
+                            if cls == 'eggbox' or cls == 'glue':
+                                error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                            else:
+                                error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                            if error_icp < threshold:
+                                 count_correct_icp += 1
+
 
             '''
             # label image
@@ -343,6 +525,13 @@ class linemod(datasets.imdb):
                 for j in range(n_cl):
                     f.write('{:f} '.format(hist[i, j]))
                 f.write('\n')
+
+        # pose accuracy
+        if cfg.TEST.POSE_REG:
+            print 'correct poses: {}, all poses: {}, accuracy: {}'.format(count_correct, count_all, float(count_correct) / float(count_all))
+            if cfg.TEST.POSE_REFINE:
+                print 'correct poses after refinement: {}, all poses: {}, accuracy: {}'.format(count_correct_refined, count_all, float(count_correct_refined) / float(count_all))
+                print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))
 
 
 if __name__ == '__main__':

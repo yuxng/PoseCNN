@@ -29,6 +29,6 @@ TEST:
   SCALES_BASE: !!python/tuple [1.5]
   VERTEX_REG_2D: False
   VERTEX_REG_3D: True
-  VISUALIZE: True
-  POSE_REG: False
+  VISUALIZE: False
+  POSE_REG: True
   SYNTHETIC: False

@@ -17,7 +17,7 @@ cdef extern from "synthesizer.hpp":
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
         void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
-        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, float*, float*, float*, float)
+        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, float*, float*, float*, float*, float)
         void estimatePose(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
 
 cdef class PySynthesizer:
@@ -70,7 +70,7 @@ cdef class PySynthesizer:
                                                height, width, num_classes, preemptive_batch, fx, fy, px, py, &centers[0, 0], &gt_poses[0, 0], num_gt)
 
     def estimate_poses(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, np.ndarray[np.float32_t, ndim=2] rois, \
-               np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] poses_new, \
+               np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] poses_new, np.ndarray[np.float32_t, ndim=2] poses_icp, \
                np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py, np.float32_t znear, np.float32_t zfar, np.float32_t factor, np.float32_t error):
 
         cdef int height = labels.shape[0]
@@ -79,7 +79,7 @@ cdef class PySynthesizer:
         cdef unsigned char* depth_buff = <unsigned char*> depth.data
 
         return self.synthesizer.solveICP(<int *>labels.data, depth_buff, height, width, fx, fy, px, py, znear, zfar, factor, num_roi, &rois[0, 0], &poses[0, 0], \
-                                               &poses_new[0, 0], error)
+                                               &poses_new[0, 0], &poses_icp[0, 0], error)
 
 
     def estimate_poses_3d(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, \

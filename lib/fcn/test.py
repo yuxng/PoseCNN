@@ -19,9 +19,9 @@ import cv2
 import cPickle
 import os
 import math
+from synthesize import synthesizer
 import tensorflow as tf
 import time
-from synthesize import synthesizer
 from transforms3d.quaternions import quat2mat, mat2quat
 import scipy.io
 
@@ -780,7 +780,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
 
 def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors, vertmap, vertmap_target,
-  labels, labels_gt, rois, poses, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
+  labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -812,7 +812,22 @@ def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors,
     # show class label
     ax = fig.add_subplot(3, 4, 9)
     plt.imshow(im_labels)
-    ax.set_title('class labels')      
+    ax.set_title('class labels')
+
+    if cfg.TEST.POSE_REG:
+        # show centers
+        for i in xrange(rois.shape[0]):
+            cx = (rois[i, 2] + rois[i, 4]) / 2
+            cy = (rois[i, 3] + rois[i, 5]) / 2
+            w = rois[i, 4] - rois[i, 2]
+            h = rois[i, 5] - rois[i, 3]
+            if not np.isinf(cx) and not np.isinf(cy):
+                plt.plot(cx, cy, 'yo')
+
+                # show boxes
+                plt.gca().add_patch(
+                    plt.Rectangle((cx-w/2, cy-h/2), w, h, fill=False,
+                                   edgecolor='g', linewidth=3))
         
     # show vertex map
     ax = fig.add_subplot(3, 4, 10)
@@ -842,16 +857,13 @@ def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors,
                 x3d[0, :] = vertmap_gt[index[0], index[1], 0]
                 x3d[1, :] = vertmap_gt[index[0], index[1], 1]
                 x3d[2, :] = vertmap_gt[index[0], index[1], 2]
-                print x3d
 
                 # projection
                 ind = np.where(cls_indexes == i)[0][0]
                 RT = poses_gt[:, :, ind]
-                print RT
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                print x2d
                 plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
 
         ax.set_title('gt projection')
@@ -887,7 +899,72 @@ def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors,
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
 
+        if cfg.TEST.POSE_REFINE:
+            ax = fig.add_subplot(3, 4, 4, aspect='equal')
+            plt.imshow(im)
+            ax.invert_yaxis()
+            for i in xrange(rois.shape[0]):
+                cls = int(rois[i, 1])
+                index = np.where(labels_gt == cls)
+                if len(index[0]) > 0:
+                    num = len(index[0])
+                    # extract 3D points
+                    x3d = np.ones((4, num), dtype=np.float32)
+                    x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                    x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                    x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                    # projection
+                    RT = np.zeros((3, 4), dtype=np.float32)
+                    RT[:3, :3] = quat2mat(poses_new[i, :4])
+                    RT[:, 3] = poses_new[i, 4:7]
+                    x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                    x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                    x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                    plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+            ax.set_title('projection refined by ICP')
+            ax.invert_yaxis()
+            ax.set_xlim([0, im.shape[1]])
+            ax.set_ylim([im.shape[0], 0])
+
     plt.show()
+
+
+def _get_bb2D(extent, pose, intrinsic_matrix):
+    bb3d = np.zeros((3, 8), dtype=np.float32)
+    
+    xHalf = extent[0] * 0.5
+    yHalf = extent[1] * 0.5
+    zHalf = extent[2] * 0.5
+    
+    bb3d[:, 0] = [xHalf, yHalf, zHalf]
+    bb3d[:, 1] = [-xHalf, yHalf, zHalf]
+    bb3d[:, 2] = [xHalf, -yHalf, zHalf]
+    bb3d[:, 3] = [-xHalf, -yHalf, zHalf]
+    bb3d[:, 4] = [xHalf, yHalf, -zHalf]
+    bb3d[:, 5] = [-xHalf, yHalf, -zHalf]
+    bb3d[:, 6] = [xHalf, -yHalf, -zHalf]
+    bb3d[:, 7] = [-xHalf, -yHalf, -zHalf]
+
+    x3d = np.ones((4, 8), dtype=np.float32)
+    x3d[0:3, :] = bb3d
+            
+    # projection
+    RT = np.zeros((3, 4), dtype=np.float32)
+    RT[:3, :3] = quat2mat(pose[:4])
+    RT[:, 3] = pose[4:7]
+    x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+    x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+    x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+
+    bb = np.zeros((4,), dtype=np.float32)
+    bb[0] = np.min(x2d[0, :])
+    bb[1] = np.min(x2d[1, :])
+    bb[2] = np.max(x2d[0, :])
+    bb[3] = np.max(x2d[1, :])
+    
+    return bb
 
 
 ###################
@@ -943,10 +1020,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 backgrounds = cPickle.load(fid)
             print 'backgrounds loaded from {}'.format(cache_file)
 
-    if cfg.TEST.POSE_REFINE:
+    if (cfg.TEST.VERTEX_REG_2D and cfg.TEST.POSE_REFINE) or (cfg.TEST.VERTEX_REG_3D and cfg.TEST.POSE_REG):
         SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
-    count_correct = 0
-    count_all = 0
+
     for i in perm:
 
         if cfg.TEST.SYNTHETIC:
@@ -997,7 +1073,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
             # load meta data
-            print imdb.metadata_path_at(i)
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
 
         if imdb.num_classes == 2:
@@ -1026,6 +1101,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         # build the label image
         im_label = imdb.labels_to_image(im, labels)
 
+        poses_new = []
+        poses_icp = []
         if cfg.TEST.VERTEX_REG_2D:
             if cfg.TEST.POSE_REG:
                 # pose refinement
@@ -1037,6 +1114,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 znear = 0.25
                 zfar = 6.0
                 poses_new = np.zeros((poses.shape[0], 7), dtype=np.float32)        
+                poses_icp = np.zeros((poses.shape[0], 7), dtype=np.float32)     
                 error_threshold = 0.01
                 if cfg.TEST.POSE_REFINE:
                     labels_icp = labels.copy();
@@ -1048,22 +1126,19 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         rois_icp[:, 1] = imdb._cls_index
 
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, fx, fy, px, py, znear, zfar, factor, error_threshold)
-            else:
-                poses_new = []
+                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
+                
         elif cfg.TEST.VERTEX_REG_3D:
             fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
             fy = meta_data['intrinsic_matrix'][1, 1] * im_scale
             px = meta_data['intrinsic_matrix'][0, 2] * im_scale
             py = meta_data['intrinsic_matrix'][1, 2] * im_scale
             factor = meta_data['factor_depth']
+            znear = 0.25
+            zfar = 6.0
             poses_new = np.zeros((3, 4, imdb.num_classes), dtype=np.float32)
-            labels_icp = labels.copy();
-            if imdb.num_classes == 2:
-                I = np.where(labels_icp > 0)
-                labels_icp[I[0], I[1]] = imdb._cls_index
             im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-            SYN.estimate_poses_3d(labels_icp, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
+            SYN.estimate_poses_3d(labels, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
 
             num = 0
             for j in xrange(imdb.num_classes):
@@ -1077,88 +1152,22 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                     rois[count, 1] = j
                     poses[count, :4] = mat2quat(poses_new[:3, :3, j])
                     poses[count, 4:] = poses_new[:, 3, j]
+                    rois[count, 2:] = _get_bb2D(imdb._extents[j, :], poses[count, :], meta_data['intrinsic_matrix']) * im_scale
                     count += 1
+            poses_new = []
 
         _t['im_segment'].toc()
 
         _t['misc'].tic()
         labels_new = cv2.resize(labels, None, None, fx=1.0/im_scale, fy=1.0/im_scale, interpolation=cv2.INTER_NEAREST)
-        seg = {'labels': labels_new}
+        seg = {'labels': labels_new, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
         segmentations[i] = seg
         _t['misc'].toc()
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        flag = 0
-        if cfg.TEST.POSE_REG and cfg.TEST.VERTEX_REG_2D:
-            # print pose information
-            poses_gt = meta_data['poses']
-            if len(poses_gt.shape) == 2:
-                poses_gt = np.reshape(poses_gt, (3, 4, 1))
-            num = poses_gt.shape[2]
-
-            for j in xrange(num):
-                if meta_data['cls_indexes'][j] <= 0:
-                    continue
-                print 'gt pose'
-                print poses_gt[:, :, j]
-                count_all += 1
-
-                for k in xrange(rois.shape[0]):
-                    cls_index = int(rois[k, 1])
-                    cls = imdb.classes[cls_index]
-                    print cls
-                    print 'estimated pose'
-                    RT = np.zeros((3, 4), dtype=np.float32)
-                    RT[:3, :3] = quat2mat(poses[k, :4])
-                    RT[:, 3] = poses[k, 4:7]
-                    print RT
-
-                    if cfg.TEST.POSE_REFINE:
-                        print 'ICP refined pose'
-                        RT_new = np.zeros((3, 4), dtype=np.float32)
-                        RT_new[:3, :3] = quat2mat(poses_new[k, :4])
-                        RT_new[:, 3] = poses_new[k, 4:7]
-                        print RT_new
-
-                    if cls_index == meta_data['cls_indexes'][j]:
-
-                        error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
-                        print 'rotation error: {}'.format(error_rotation)
-
-                        error_translation = te(RT[:, 3], poses_gt[:, 3, j])
-                        print 'translation error: {}'.format(error_translation)
-
-                        # compute pose error
-                        if imdb._cls == 'eggbox' or imdb._cls == 'glue':
-                            error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                        else:
-                            error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                        print 'error: {}'.format(error)
-
-                        if cfg.TEST.POSE_REFINE:
-                            error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
-                            print 'rotation error new: {}'.format(error_rotation_new)
-
-                            error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
-                            print 'translation error new: {}'.format(error_translation_new)
-
-                            if imdb._cls == 'eggbox' or imdb._cls == 'glue':
-                                error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                            else:
-                                error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], imdb._points)
-                            print 'error new: {}'.format(error_new)
-                            print '{}'.format(0.1 * np.linalg.norm(imdb._extents[cls_index, :]))
-
-                        if cfg.TEST.POSE_REFINE:
-                            if error_new < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
-                                count_correct += 1
-                            else:
-                                flag = 1
-                        else:
-                            if error < 0.1 * np.linalg.norm(imdb._extents[cls_index, :]):
-                                count_correct += 1
+        imdb.evaluate_result(seg, labels_gt, meta_data)
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG_2D:
@@ -1179,17 +1188,14 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 vertmap_gt = meta_data['vertmap'].copy()
                 vertmap_target = _generate_vertex_targets(labels_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps_3d(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    vertmap, vertmap_target, labels, labels_gt, rois, poses, meta_data['intrinsic_matrix'], \
+                    vertmap, vertmap_target, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], \
                     meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
-    # seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    # with open(seg_file, 'wb') as f:
-    #    cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
-
-    if cfg.TEST.POSE_REG:
-        print 'correct poses: {}, all poses: {}, accuracy: {}'.format(count_correct, count_all, float(count_correct) / float(count_all))
+    seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    with open(seg_file, 'wb') as f:
+        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
