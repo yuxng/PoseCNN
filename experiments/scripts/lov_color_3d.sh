@@ -23,7 +23,7 @@ echo Logging output to "$LOG"
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
   --model output/lov/lov_train/vgg16_fcn_color_single_frame_3d_lov_iter_80000.ckpt \
-  --imdb lov_val \
+  --imdb lov_keyframe \
   --cfg experiments/cfgs/lov_color_3d.yml \
   --rig data/LOV/camera.json \
   --cad data/LOV/models.txt \

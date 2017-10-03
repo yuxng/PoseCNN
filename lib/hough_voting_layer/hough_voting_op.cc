@@ -71,18 +71,19 @@ struct DataForOpt
 
 void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
 void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
-inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
+inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, std::vector<float>& distances, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
 std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
 inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
 inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
 inline void updateHyp2D(TransHyp& hyp, int maxPixels);
 inline void filterInliers2D(TransHyp& hyp, int maxInliers);
-inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
+inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, float & distance, int width, int num_classes);
 static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
 void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::vector<cv::Point3f>> bb3Ds, int batch, int height, int width, int num_classes, int is_train,
   float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs);
 void compute_target_weight(int height, int width, float* target, float* weight, std::vector<std::vector<cv::Point3f>> bb3Ds, const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> > outputs);
+inline void compute_width_height(TransHyp& hyp, const float* vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes);
 
 template <typename Device, typename T>
 class HoughvotingOp : public OpKernel {
@@ -323,7 +324,7 @@ void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds
 }
 
 
-inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes)
+inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, float & distance, int width, int num_classes)
 {
   int channel = VERTEX_CHANNELS * objID;
   int offset = channel + VERTEX_CHANNELS * num_classes * (pt.y * width + pt.x);
@@ -331,19 +332,25 @@ inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float*
   jp::coord2_t mode;
   mode(0) = vertmap[offset];
   mode(1) = vertmap[offset + 1];
+  distance = vertmap[offset + 2];
 
   return cv::Point2f(mode(0), mode(1));
 }
 
 
-inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes)
+inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, std::vector<float>& distances, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes)
 {
-  cv::Point2f obj = getMode2D(objID, pt2D, vertmap, width, num_classes); // read out object coordinate
+  float distance;
+  cv::Point2f obj = getMode2D(objID, pt2D, vertmap, distance, width, num_classes); // read out object coordinate
 
   eyePts.push_back(pt2D);
   objPts.push_back(obj);
+  distances.push_back(distance);
 
-  return true;
+  if (distance < 0)
+    return false;
+  else
+    return true;
 }
 
 
@@ -392,6 +399,12 @@ inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p)
 }
 
 
+inline float angle_distance(cv::Point2f x, cv::Point2f n, cv::Point2f p)
+{
+  return n.dot(x - p);
+}
+
+
 inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch)
 {
   // reset data of last RANSAC iteration
@@ -415,10 +428,12 @@ inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vect
     hyp.effPixels++;
   
     // read out object coordinate
-    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertmap, width, num_classes);
+    float distance;
+    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertmap, distance, width, num_classes);
 
     // inlier check
-    if(point2line(hyp.center, obj, pt2D) < inlierThreshold)
+    float d = cv::norm(hyp.center - pt2D);
+    if(point2line(hyp.center, obj, pt2D) < inlierThreshold && angle_distance(hyp.center, obj, pt2D) > 0 && d < std::max(hyp.bb.width, hyp.bb.height))
     {
       hyp.inlierPts2D.push_back(std::pair<cv::Point2d, cv::Point2d>(obj, pt2D)); // store object coordinate - camera coordinate correspondence
       hyp.inliers++; // keep track of the number of inliers (correspondences might be thinned out for speed later)
@@ -430,6 +445,38 @@ inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vect
     else
       ptIdx++;
   }
+}
+
+
+inline void compute_width_height(TransHyp& hyp, const float* vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes)
+{
+  float w = -1;
+  float h = -1;
+  int maxPt = labels[hyp.objID].size(); // num of pixels of this class
+
+  for(unsigned ptIdx = 0; ptIdx < maxPt; ptIdx++)
+  {
+    int index = labels[hyp.objID][ptIdx];
+    cv::Point2d pt2D(index % width, index / width);
+  
+    // read out object coordinate
+    float distance;
+    cv::Point2d obj = getMode2D(hyp.objID, pt2D, vertmap, distance, width, num_classes);
+
+    // inlier check
+    float d = cv::norm(hyp.center - pt2D);
+    if(point2line(hyp.center, obj, pt2D) < inlierThreshold && angle_distance(hyp.center, obj, pt2D) > 0 && d < std::max(hyp.bb.width, hyp.bb.height))
+    {
+      float x = fabs(pt2D.x - hyp.center.x);
+      float y = fabs(pt2D.y - hyp.center.y);
+      if (x > w)
+        w = x;
+      if (y > h)
+        h = y;
+    }
+  }
+  hyp.width_ = 2 * w;
+  hyp.height_ = 2 * h;
 }
 
 
@@ -472,23 +519,26 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
   //set parameters, see documentation of GlobalProperties
   int maxIterations = 10000000;
   float minArea = 400; // a hypothesis covering less projected area (2D bounding box) can be discarded (too small to estimate anything reasonable)
+  float minDist2D = 10;
   float inlierThreshold3D = 0.5;
   int ransacIterations;  // 256
   int poseIterations = 100;
   int preemptiveBatch;  // 1000
-  int maxPixels = 1000;  // 1000
+  int maxPixels;  // 1000
   int refIt;  // 8
 
   if (is_train)
   {
     ransacIterations = 256;
     preemptiveBatch = 100;
+    maxPixels = 1000;
     refIt = 4;
   }
   else
   {
-    ransacIterations = 256;
-    preemptiveBatch = 100;
+    ransacIterations = 256 * 1;
+    preemptiveBatch = 100 * 1;
+    maxPixels = 1000 * 1;
     refIt = 8;
   }
 
@@ -522,6 +572,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     // camera coordinate - object coordinate correspondences
     std::vector<cv::Point2f> eyePts;
     std::vector<cv::Point2f> objPts;
+    std::vector<float> distances;
 	    
     // sample first point and choose object ID
     jp::id_t objID = object_ids[irand(0, object_ids.size())];
@@ -533,7 +584,7 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     cv::Point2f pt1(index % width, index / width);
     
     // sample first correspondence
-    if(!samplePoint2D(objID, eyePts, objPts, pt1, vertmap, width, num_classes))
+    if(!samplePoint2D(objID, eyePts, objPts, distances, pt1, vertmap, width, num_classes))
       continue;
 
     // sample other points in search radius, discard hypothesis if minimum distance constrains are violated
@@ -541,26 +592,74 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     index = labels[objID][pindex];
     cv::Point2f pt2(index % width, index / width);
 
-    if(!samplePoint2D(objID, eyePts, objPts, pt2, vertmap, width, num_classes))
+    if (cv::norm(pt1 - pt2) < minDist2D)
+      continue;
+
+    if(!samplePoint2D(objID, eyePts, objPts, distances, pt2, vertmap, width, num_classes))
       continue;
 
     // reconstruct
     std::vector<std::pair<cv::Point2d, cv::Point2d>> pts2D;
+    float distance = 0;
     for(unsigned j = 0; j < eyePts.size(); j++)
     {
       pts2D.push_back(std::pair<cv::Point2d, cv::Point2d>(
       cv::Point2d(objPts[j].x, objPts[j].y),
       cv::Point2d(eyePts[j].x, eyePts[j].y)
       ));
+      distance += distances[j];
     }
+    distance /= distances.size();
 
     Hypothesis trans(pts2D);
 
     // center
     cv::Point2d center = trans.getCenter();
+    int x = int(center.x);
+    int y = int(center.y);
+    if (num_classes > 2 && x >= 0 && x < width && y >= 0 && y < height)
+    {
+      if (labelmap[y * width + x] == 0)
+        continue;
+    }
     
     // create a hypothesis object to store meta data
     TransHyp hyp(objID, center);
+
+    // estimate a projection
+    cv::Mat tvec(3, 1, CV_64F);
+    cv::Mat rvec(3, 1, CV_64F);
+    for(int j = 0; j < 3; j++)
+    {
+      tvec.at<double>(j, 0) = 0;
+      rvec.at<double>(j, 0) = 0;
+    }
+    tvec.at<double>(2, 0) = distance;
+    jp::cv_trans_t pose(rvec, tvec);
+
+    std::vector<cv::Point2f> bb2D;
+    cv::projectPoints(bb3Ds[objID-1], pose.first, pose.second, camMat, cv::Mat(), bb2D);
+    
+    // get min-max of projected vertices
+    int minX = 10000000;
+    int maxX = -10000000;
+    int minY = 10000000;
+    int maxY = -10000000;
+    
+    for(unsigned j = 0; j < bb2D.size(); j++)
+    {
+	minX = std::min((float) minX, bb2D[j].x);
+	minY = std::min((float) minY, bb2D[j].y);
+	maxX = std::max((float) maxX, bb2D[j].x);
+	maxY = std::max((float) maxY, bb2D[j].y);
+    }
+    hyp.bb = cv::Rect(0, 0, (maxX - minX + 1), (maxY - minY + 1));
+
+    cv::Point2f c;
+    c.x = center.x;
+    c.y = center.y;
+    if (cv::norm(pt1 - c) > std::max(hyp.bb.width, hyp.bb.height) || cv::norm(pt2 - c) > std::max(hyp.bb.width, hyp.bb.height))
+      continue;
     
     #pragma omp critical
     {
@@ -656,10 +755,8 @@ void estimateCenter(const int* labelmap, const float* vertmap, std::vector<std::
     Eigen::Map<Eigen::Matrix3d> eigenT( (double*)pose_t.data );
     Eigen::Quaterniond quaternion(eigenT);
 
-    // project the 3D bounding box
-    cv::Rect bb2D = getBB2D(width, height, bb3Ds[it->second[h].objID-1], camMat, trans);
-    it->second[h].compute_width_height(bb2D);
-    float scale = 0.1;
+    compute_width_height(it->second[h], vertmap, labels, inlierThreshold3D, width, num_classes);
+    float scale = 0.05;
     roi(2) = center.x - it->second[h].width_ * (0.5 + scale);
     roi(3) = center.y - it->second[h].height_ * (0.5 + scale);
     roi(4) = center.x + it->second[h].width_ * (0.5 + scale);

@@ -19,9 +19,9 @@ import cv2
 import cPickle
 import os
 import math
-from synthesize import synthesizer
 import tensorflow as tf
 import time
+from synthesize import synthesizer
 from transforms3d.quaternions import quat2mat, mat2quat
 import scipy.io
 
@@ -1007,7 +1007,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(num_images)
+        # perm = xrange(667, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1094,7 +1094,18 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             im_label_gt[:,:,2] = labels_gt[:,:,0]
 
         _t['im_segment'].tic()
-        labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
+
+        filename = os.path.join(output_dir, 'mat', '%04d.mat' % i)
+        if 0:
+            result = scipy.io.loadmat(filename)
+            labels = result['labels']
+            rois = result['rois']
+            poses = result['poses']
+            print labels
+            print rois
+            print poses
+        else:
+            labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
 
         labels = unpad_im(labels, 16)
         im_scale = cfg.TEST.SCALES_BASE[0]
@@ -1167,7 +1178,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        imdb.evaluate_result(seg, labels_gt, meta_data)
+        imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG_2D:

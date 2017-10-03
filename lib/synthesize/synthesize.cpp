@@ -295,6 +295,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
     }
     else
     {
+
       // vertex colors
       std::vector<float3> colors3(assimpMesh->mNumVertices);
       for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++) 
@@ -304,6 +305,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
       }
       colors.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
       colors.Upload(colors3.data(), assimpMesh->mNumVertices*sizeof(float)*3);
+
     }
 }
 
@@ -2045,15 +2047,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         }
       }
     }
-    if (c > 0)
-    {
-      Tx /= c;
-      Ty /= c;
-      Tz /= c;
-    }
-    std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
 
-    // modify translation
     float rx = 0;
     float ry = 0;
     if (pose[6])
@@ -2061,19 +2055,30 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = pose[4] / pose[6];
       ry = pose[5] / pose[6];
     }
-    T_co.translation()(0) = rx * Tz;
-    T_co.translation()(1) = ry * Tz;
-    T_co.translation()(2) = Tz;
-    std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+    if (c > 0)
+    {
+      Tx /= c;
+      Ty /= c;
+      Tz /= c;
+      std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
 
-    iterations = 100;
-    refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
-    Tx = T_co.translation()(0);
-    Ty = T_co.translation()(1);
-    Tz = T_co.translation()(2);
-    rx = Tx / Tz;
-    ry = Ty / Tz;
-    std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
+      // modify translation
+      T_co.translation()(0) = rx * Tz;
+      T_co.translation()(1) = ry * Tz;
+      T_co.translation()(2) = Tz;
+      std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+
+      iterations = 100;
+      refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+      Tx = T_co.translation()(0);
+      Ty = T_co.translation()(1);
+      Tz = T_co.translation()(2);
+      rx = Tx / Tz;
+      ry = Ty / Tz;
+      std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
+    }
+    else
+      Tz = T_co.translation()(2);
 
     // copy results
     outputs[i * 7 + 0] = T_co.unit_quaternion().w();

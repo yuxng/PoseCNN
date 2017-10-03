@@ -266,7 +266,7 @@ class linemod(datasets.imdb):
         return image.astype(np.uint8)
 
 
-    def evaluate_result(self, segmentation, gt_labels, meta_data):
+    def evaluate_result(self, i, segmentation, gt_labels, meta_data, output_dir):
 
         # evaluate segmentation
         n_cl = self.num_classes

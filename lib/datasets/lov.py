@@ -285,7 +285,13 @@ class lov(datasets.imdb):
         return image.astype(np.uint8)
 
 
-    def evaluate_result(self, segmentation, gt_labels, meta_data):
+    def evaluate_result(self, im_ind, segmentation, gt_labels, meta_data, output_dir):
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
 
         # evaluate segmentation
         n_cl = self.num_classes
@@ -310,6 +316,12 @@ class lov(datasets.imdb):
             poses = segmentation['poses']
             poses_new = segmentation['poses_refined']
             poses_icp = segmentation['poses_icp']
+
+            # save matlab result
+            results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, results, do_compression=True)
 
             poses_gt = meta_data['poses']
             if len(poses_gt.shape) == 2:
@@ -433,6 +445,14 @@ class lov(datasets.imdb):
                 poses_new = segmentations[im_ind]['poses_refined']
                 poses_icp = segmentations[im_ind]['poses_icp']
 
+                '''
+                # save matlab result
+                results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+                filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+                print filename
+                scipy.io.savemat(filename, results, do_compression=True)
+                '''
+
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))
@@ -468,6 +488,9 @@ class lov(datasets.imdb):
                             else:
                                 error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
 
+                            if error < threshold[cls_index]:
+                                count_correct[cls_index] += 1
+
                             if cfg.TEST.POSE_REFINE:
                                 error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
                                 error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
@@ -476,12 +499,18 @@ class lov(datasets.imdb):
                                 else:
                                     error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
 
+                                if error_new < threshold[cls_index]:
+                                    count_correct_refined[cls_index] += 1
+
                                 error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
                                 error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
                                 if cls == '024_bowl' or cls == '036_wood_block' or cls == '061_foam_brick':
                                     error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
                                 else:
                                     error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points[cls_index])
+
+                                if error_icp < threshold[cls_index]:
+                                    count_correct_icp[cls_index] += 1
 
             '''
             # label image
@@ -497,13 +526,6 @@ class lov(datasets.imdb):
             print filename
             cv2.imwrite(filename, label_image)
             '''
-            '''
-            # save matlab result
-            labels = {'labels': sg_labels}
-            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
-            print filename
-            scipy.io.savemat(filename, labels)
-            #'''
 
         # overall accuracy
         acc = np.diag(hist).sum() / hist.sum()
@@ -531,6 +553,16 @@ class lov(datasets.imdb):
                 for j in range(n_cl):
                     f.write('{:f} '.format(hist[i, j]))
                 f.write('\n')
+
+        # pose accuracy
+        if cfg.TEST.POSE_REG:
+            for i in xrange(1, self.num_classes):
+                print '{} correct poses: {}, all poses: {}, accuracy: {}'.format(self.classes[i], count_correct[i], count_all[i], float(count_correct[i]) / float(count_all[i]))
+                if cfg.TEST.POSE_REFINE:
+                    print '{} correct poses after refinement: {}, all poses: {}, accuracy: {}'.format( \
+                        self.classes[i], count_correct_refined[i], count_all[i], float(count_correct_refined[i]) / float(count_all[i]))
+                    print '{} correct poses after ICP: {}, all poses: {}, accuracy: {}'.format( \
+                        self.classes[i], count_correct_icp[i], count_all[i], float(count_correct_icp[i]) / float(count_all[i]))
 
 
 if __name__ == '__main__':
