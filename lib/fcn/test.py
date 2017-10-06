@@ -1007,7 +1007,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(667, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1189,7 +1188,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 vertmap_gt = meta_data['vertmap'].copy()
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
-                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_new, meta_data['intrinsic_matrix'], \
+                    centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
                     meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
             elif cfg.TEST.VERTEX_REG_3D:
                 poses_gt = meta_data['poses']
