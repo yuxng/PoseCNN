@@ -27,4 +27,4 @@ time ./tools/train_net.py --gpu 0 \
   --ckpt output/linemod/linemod_holepuncher_train/vgg16_fcn_color_single_frame_linemod_holepuncher_iter_40000.ckpt \
   --imdb linemod_holepuncher_train \
   --cfg experiments/cfgs/linemod_holepuncher_pose.yml \
-  --iters 40000
+  --iters 80000
