@@ -23,15 +23,14 @@ if __name__ == '__main__':
 
     num_images = 80000
 
-    '''
-    which_class = 0
+    which_class = 5
     classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
     root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
-    '''
-    root = '/home/yuxiang/mnt1/yuxiang/LOV_Dataset/data_syn/'
+    
+    #root = '/home/yuxiang/mnt1/yuxiang/LOV_Dataset/data_syn/'
 
-    for i in xrange(num_images):
-
+    for i in xrange(72000, num_images):
+        '''
         # color
         filename = root + '{:06d}-color.png'.format(i)
         print filename
@@ -46,7 +45,7 @@ if __name__ == '__main__':
         filename = root + '{:06d}-label.png'.format(i)
         print filename
         label = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-
+        '''
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
         print filename
