@@ -13,8 +13,8 @@ TRAIN:
   SNAPSHOT_ITERS: 10000
   SNAPSHOT_INFIX: linemod_holepuncher
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame
-  USE_FLIPPED: True
-  CHROMATIC: True
+  USE_FLIPPED: False
+  CHROMATIC: False
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VERTEX_W: 10.0
