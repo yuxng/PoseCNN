@@ -23,12 +23,12 @@ if __name__ == '__main__':
 
     num_images = 80000
 
-    which_class = 1
-    classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
-    root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
-    # root = '/home/yuxiang/mnt1/yuxiang/LOV_Dataset/data_syn/'
+    # which_class = 1
+    # classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
+    # root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
+    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn_lighting/'
 
-    for i in xrange(72000, num_images):
+    for i in xrange(num_images):
         '''
         # color
         filename = root + '{:06d}-color.png'.format(i)

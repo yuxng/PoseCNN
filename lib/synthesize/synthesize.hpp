@@ -45,13 +45,6 @@
 #include <df/util/tensor.h>
 #include <df/optimization/icp.h>
 
-#include "super4pcs/shared4pcs.h"
-#include "super4pcs/algorithms/super4pcs.h"
-#include "super4pcs/algorithms/4pcs.h"
-#include "super4pcs/io/io.h"
-#include "super4pcs/utils/geometry.h"
-#include "app.h"
-
 #include "types.h"
 #include "ransac.h"
 #include "Hypothesis.h"
@@ -64,18 +57,6 @@ typedef pcl::PointCloud<PointT> PointCloud;
 typedef pcl::PointNormal PointNormalT;
 typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
 typedef Eigen::Matrix<float,3,1,Eigen::DontAlign> Vec3;
-
-struct TransformVisitor {
-    inline void operator() (
-            float fraction,
-            float best_LCP,
-            Eigen::Ref<GlobalRegistration::Match4PCSBase::MatrixType> /*transformation*/) {
-        printf("done: %d%c best: %f                  \r",
-               static_cast<int>(fraction * 100), '%', best_LCP);
-        fflush(stdout);
-    }
-    constexpr bool needsGlobalTransformation() const { return false; }
-};
 
 template <typename Derived>
 inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
