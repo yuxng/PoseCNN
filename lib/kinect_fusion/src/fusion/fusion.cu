@@ -160,7 +160,7 @@ struct ColorFusionForLoop<Scalar,CompositeVoxelT> {
 template <typename Scalar, typename ColorCameraModelT, typename ... NonTsdfVoxelTs>
 struct ColorFusionHandler {
 
-    const Sophus::SE3Group<Scalar> T_cd;
+    const Sophus::SE3<Scalar> T_cd;
     const ColorCameraModelT colorCameraModel;
 
     typedef Eigen::Matrix<Scalar,2,1,Eigen::DontAlign> Vec2;
@@ -301,7 +301,7 @@ void fuseFrame(DeviceVoxelGrid<Scalar,CompositeVoxel<Scalar,TsdfVoxel,NonTsdfVox
                const TransformerT & transformer,
                const DepthCameraModelT & depthCameraModel,
                const ColorCameraModelT & colorCameraModel,
-               const Sophus::SE3Group<Scalar> & T_cd,
+               const Sophus::SE3<Scalar> & T_cd,
                const DeviceTensor2<DepthT> & depthMap,
                const Scalar truncationDistance,
                typename internal::FusionTypeTraits<NonTsdfVoxelTs>::template PackedInput<Scalar> ... nonTsdfInput) {
@@ -336,7 +336,7 @@ template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel> > 
                         const float);
 
 template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel> > &,
-                        const NonrigidTransformer<float,Sophus::SE3Group> &,
+                        const NonrigidTransformer<float,Sophus::SE3> &,
                         const Poly3CameraModel<float> &,
                         const DeviceTensor2<float> &,
                         const float);
@@ -360,7 +360,7 @@ template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,Col
                         typename internal::FusionTypeTraits<ColorVoxel>::PackedInput<float>);
 
 template void fuseFrame(DeviceVoxelGrid<float,CompositeVoxel<float,TsdfVoxel,ColorVoxel> > &,
-                        const NonrigidTransformer<float,Sophus::SE3Group> &,
+                        const NonrigidTransformer<float,Sophus::SE3> &,
                         const Poly3CameraModel<float> &,
                         const Poly3CameraModel<float> &,
                         const Sophus::SE3f &,

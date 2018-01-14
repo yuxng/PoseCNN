@@ -265,12 +265,12 @@ struct TransformRecenter<DualQuaternion> {
 //}
 
 template <>
-struct TransformRecenter<Sophus::SE3Group> {
+struct TransformRecenter<Sophus::SE3> {
 
     template <typename Scalar>
     inline static void recenter(DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > & dualQuaternions,
                                 const ConstHostTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & transformationOrigins,
-                                const ConstHostTensor1<Sophus::SE3Group<Scalar> > & transforms) {
+                                const ConstHostTensor1<Sophus::SE3<Scalar> > & transforms) {
 
         using namespace operators;
 
@@ -297,12 +297,12 @@ struct TransformRecenter<Sophus::SE3Group> {
 
 
 //template <typename Scalar>
-//void NonrigidTransformer<Scalar,Sophus::SE3Group>::toDeviceRecenteredDualQuaternions(
+//void NonrigidTransformer<Scalar,Sophus::SE3>::toDeviceRecenteredDualQuaternions(
 //        DeviceTensor1<DualQuaternion<Scalar, Eigen::DontAlign> > & dualQuaternions,
 //        const HostTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > & transformationOrigins,
-//        const HostTensor1<Sophus::SE3Group<Scalar> > & transforms) {
+//        const HostTensor1<Sophus::SE3<Scalar> > & transforms) {
 
-//    typedef Sophus::SE3Group<Scalar> SE3;
+//    typedef Sophus::SE3<Scalar> SE3;
 //    typedef DualQuaternion<Scalar,Eigen::DontAlign> DualQuaternion;
 //    typedef Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> Vec3;
 
@@ -336,10 +336,10 @@ void NonrigidTransformer<Scalar,TransformT>::toDeviceRecenteredDualQuaternions(
 
 }
 
-//template void NonrigidTransformer<float,Sophus::SE3Group>::toDeviceRecenteredDualQuaternions(
+//template void NonrigidTransformer<float,Sophus::SE3>::toDeviceRecenteredDualQuaternions(
 //        DeviceTensor1<DualQuaternion<float,Eigen::DontAlign> > &,
 //        const ConstHostTensor1<Eigen::Matrix<float,3,1,Eigen::DontAlign> > &,
-//        const ConstHostTensor1<Sophus::SE3Group<float> > &);
+//        const ConstHostTensor1<Sophus::SE3<float> > &);
 
 //template void NonrigidTransformer<float,DualQuaternion>::toDeviceRecenteredDualQuaternions(
 //        DeviceTensor1<DualQuaternion<float,Eigen::DontAlign> > &,
@@ -420,7 +420,7 @@ template void NonrigidTransformer<float,DualQuaternion>::warpMesh<4,1,3>(DeviceT
                                                                          const DeviceTensor1<Eigen::UnalignedVec3<float> > &,
                                                                          const DeviceTensor1<Eigen::UnalignedVec3<float> > &);
 
-template void NonrigidTransformer<float,Sophus::SE3Group>::warpMesh<4,1,3>(DeviceTensor1<Eigen::UnalignedVec3<float> > &,
+template void NonrigidTransformer<float,Sophus::SE3>::warpMesh<4,1,3>(DeviceTensor1<Eigen::UnalignedVec3<float> > &,
                                                                            DeviceTensor1<Eigen::UnalignedVec3<float> > &,
                                                                            const DeviceTensor1<Eigen::UnalignedVec3<float> > &,
                                                                            const DeviceTensor1<Eigen::UnalignedVec3<float> > &);
@@ -430,7 +430,7 @@ template void NonrigidTransformer<float,DualQuaternion>::warpMesh<4,2,4>(DeviceT
                                                                          const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                                                          const DeviceTensor2<Eigen::UnalignedVec4<float> > &);
 
-template void NonrigidTransformer<float,Sophus::SE3Group>::warpMesh<4,2,4>(DeviceTensor2<Eigen::UnalignedVec3<float> > &,
+template void NonrigidTransformer<float,Sophus::SE3>::warpMesh<4,2,4>(DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                                                            DeviceTensor2<Eigen::UnalignedVec3<float> > &,
                                                                            const DeviceTensor2<Eigen::UnalignedVec4<float> > &,
                                                                            const DeviceTensor2<Eigen::UnalignedVec4<float> > &);
@@ -663,7 +663,7 @@ void NonrigidTransformer<Scalar,TransformT>::computeDeformationGraphNearestNeigh
 
 template void NonrigidTransformer<float,DualQuaternion>::computeDeformationGraphNearestNeighbors<4>(const float nearestNeighborSigma);
 
-template void NonrigidTransformer<float,Sophus::SE3Group>::computeDeformationGraphNearestNeighbors<4>(const float nearestNeighborSigma);
+template void NonrigidTransformer<float,Sophus::SE3>::computeDeformationGraphNearestNeighbors<4>(const float nearestNeighborSigma);
 
 
 
@@ -1064,7 +1064,7 @@ void NonrigidTransformer<Scalar,TransformT>::update(const DeviceTensor1<Eigen::M
 
 }
 
-template class NonrigidTransformer<float,Sophus::SE3Group>;
+template class NonrigidTransformer<float,Sophus::SE3>;
 
 template class NonrigidTransformer<float,DualQuaternion>;
 

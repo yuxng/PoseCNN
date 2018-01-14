@@ -416,7 +416,7 @@ void KinectFusion::draw(std::string filename, int flag)
   Eigen::Matrix<float, 3, 1> T;
   T << 0, 0, 4;
 
-  Sophus::SE3Group<float> RT(R, T);
+  Sophus::SE3<float> RT(R, T);
   RigidTransformer<float> transformer;
   transformer.setWorldToLiveTransformation(RT * transformer_->worldToLiveTransformation());
 

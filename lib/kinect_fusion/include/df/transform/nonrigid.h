@@ -148,7 +148,7 @@ public:
     class DeviceModule {
     public:
 
-        inline DeviceModule(const Sophus::SE3Group<Scalar> & transformWorldToLive,
+        inline DeviceModule(const Sophus::SE3<Scalar> & transformWorldToLive,
                             const VoxelGrid<Scalar,Eigen::UnalignedVec<int,4>,DeviceResident> & nearestNeighborGrid,
                             const DeviceTensor1<Vec3> & deviceBaseLevelVertices,
                             const DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > & deviceBaseLevelTransforms,
@@ -158,7 +158,7 @@ public:
 
     private:
 
-        const Sophus::SE3Group<Scalar> transformWorldToLive_;
+        const Sophus::SE3<Scalar> transformWorldToLive_;
 
         const VoxelGrid<Scalar,Eigen::UnalignedVec<int,4>,DeviceResident> nearestNeighborGrid_;
 

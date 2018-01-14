@@ -22,7 +22,7 @@ template <typename Scalar,
           typename Derived, typename std::enable_if<Eigen::internal::traits<Derived>::RowsAtCompileTime == 3 &&
                                                     Eigen::internal::traits<Derived>::ColsAtCompileTime == 1 &&
                                                     std::is_same<typename Eigen::internal::traits<Derived>::Scalar, Scalar>::value, int>::type = 0>
-__host__ __device__ Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> rotate(const Sophus::SE3Group<Scalar> & transform, const Eigen::MatrixBase<Derived> & vector) {
+__host__ __device__ Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> rotate(const Sophus::SE3<Scalar> & transform, const Eigen::MatrixBase<Derived> & vector) {
 
     return transform.so3() * vector;
 
@@ -45,7 +45,7 @@ __global__ void computeDataNormalEquationsKernel(const DeviceTensor2<Eigen::Unal
                                                  const DeviceTensor2<Eigen::UnalignedVec4<Scalar> > predictedCanonicalVertices,
                                                  const DeviceTensor2<Eigen::UnalignedVec4<Scalar> > predictedCanonicalNormals,
                                                  const CameraModelT cameraModel,
-                                                 const Sophus::SE3Group<Scalar> updatePredictionToLive,
+                                                 const Sophus::SE3<Scalar> updatePredictionToLive,
                                                  const VoxelGrid<Scalar,Eigen::Matrix<int,K,1,Eigen::DontAlign>,DeviceResident> nearestNeighborGrid,
                                                  const DeviceTensor1<Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> > deformationGraphVertices,
                                                  const DeviceTensor1<TransformT<Scalar> > deformationGraphTransforms,
@@ -186,7 +186,7 @@ __global__ void computeDataNormalEquationsKernel(const DeviceTensor2<Eigen::Unal
             // TODO: apply update?
             const Vec3 residual = canonicalVertexWarpedByNeighbor - liveVertex;
 
-            const Scalar pointPlaneResidual = canonicalNormalWarpedByNeighbor.transpose()*residual;
+            const Scalar pointPlaneResidual = canonicalNormalWarpedByNeighbor.dot(residual);
 
             totalResidual += pointPlaneResidual*pointPlaneResidual;
 
@@ -244,7 +244,7 @@ void computeDataNormalEquations(const DeviceTensor2<Eigen::UnalignedVec3<Scalar>
                                 const DeviceTensor2<Eigen::UnalignedVec4<Scalar> > & predictedCanonicalNormals,
                                 const CameraModelT & cameraModel,
                                 NonrigidTransformer<Scalar,TransformT> & transformer,
-                                const Sophus::SE3Group<Scalar> & updatePredictionToLive,
+                                const Sophus::SE3<Scalar> & updatePredictionToLive,
                                 const Eigen::Matrix<Scalar,2,1> & depthRange,
                                 std::vector<Eigen::Triplet<ScalarOpt> > & JTJTriplets,
                                 Eigen::Matrix<ScalarOpt,Eigen::Dynamic,1> & JTr,
@@ -372,7 +372,7 @@ void computeDataNormalEquations(const DeviceTensor2<Eigen::UnalignedVec3<Scalar>
         const DeviceTensor2<Eigen::UnalignedVec4<type> > &,                                                                                     \
         const camera##CameraModel<type> &,                                                                                                      \
         NonrigidTransformer<type,transform> &,                                                                                                  \
-        const Sophus::SE3Group<type> &,                                                                                                         \
+        const Sophus::SE3<type> &,                                                                                                         \
         const Eigen::Matrix<type,2,1> &,                                                                                                        \
         std::vector<Eigen::Triplet<type_opt> > &,                                                                                               \
         Eigen::Matrix<type_opt,Eigen::Dynamic,1> &);                                                                                            \
@@ -385,7 +385,7 @@ void computeDataNormalEquations(const DeviceTensor2<Eigen::UnalignedVec3<Scalar>
         const DeviceTensor2<Eigen::UnalignedVec4<type> > &,                                                                                     \
         const camera##CameraModel<type> &,                                                                                                      \
         NonrigidTransformer<type,transform> &,                                                                                                  \
-        const Sophus::SE3Group<type> &,                                                                                                         \
+        const Sophus::SE3<type> &,                                                                                                         \
         const Eigen::Matrix<type,2,1> &,                                                                                                        \
         std::vector<Eigen::Triplet<type_opt> > &,                                                                                               \
         Eigen::Matrix<type_opt,Eigen::Dynamic,1> &,                                                                                             \
@@ -394,15 +394,15 @@ void computeDataNormalEquations(const DeviceTensor2<Eigen::UnalignedVec3<Scalar>
 COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,DualQuaternion,4,Left);
 COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,DualQuaternion,4,Right);
 
-COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,Sophus::SE3Group,4,Left);
-COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,Sophus::SE3Group,4,Right);
+COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,Sophus::SE3,4,Left);
+COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Poly3,Sophus::SE3,4,Right);
 
 
 COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,DualQuaternion,4,Left);
 COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,DualQuaternion,4,Right);
 
-COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,Sophus::SE3Group,4,Left);
-COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,Sophus::SE3Group,4,Right);
+COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,Sophus::SE3,4,Left);
+COMPUTE_DATA_NORMAL_EQUATIONS_EXPLICIT_INSTANTIATION(float,double,Linear,Sophus::SE3,4,Right);
 
 
 } // namespace internal

@@ -60,8 +60,8 @@ __global__ void raycastKernel(Tensor<3,Scalar,DeviceResident> predictedVertices,
                               Tensor<3,Scalar,DeviceResident> predictedNormals,
                               const VoxelGrid<Scalar,VoxelT,DeviceResident> voxelGrid, // TODO: if we dont end up using scale/offset, we can just pass in the Tensor portion
                               const CameraModelT cameraModel,
-                              const Sophus::SE3Group<Scalar> transformWorldToPrediction, // TODO: faster to pass in both or do in-kernel?
-                              const Sophus::SE3Group<Scalar> transformPredictionToWorld) {
+                              const Sophus::SE3<Scalar> transformWorldToPrediction, // TODO: faster to pass in both or do in-kernel?
+                              const Sophus::SE3<Scalar> transformPredictionToWorld) {
 
     typedef Eigen::Matrix<Scalar,2,1> Vec2;
     typedef Eigen::Matrix<Scalar,3,1> Vec3;
@@ -126,7 +126,7 @@ void raycast(Tensor<3,Scalar,DeviceResident> & predictedVertices,
              Tensor<3,Scalar,DeviceResident> & predictedNormals,
              const VoxelGrid<Scalar,VoxelT,DeviceResident> & voxelGrid,
              const CameraModelT & cameraModel,
-             const Sophus::SE3Group<Scalar> & transformWorldToPrediction) {
+             const Sophus::SE3<Scalar> & transformWorldToPrediction) {
 
     const uint width = predictedVertices.dimensionSize(1);
     const uint height = predictedVertices.dimensionSize(2);

@@ -22,14 +22,14 @@ public:
         return *cameras_[index];
     }
 
-    inline const Sophus::SE3Group<T> & transformCameraToRig(const std::size_t index) const {
+    inline const Sophus::SE3<T> & transformCameraToRig(const std::size_t index) const {
         return transformsCameraToRig_[index];
     }
 
 private:
 
     std::vector<std::shared_ptr<CameraBase<T> > > cameras_;
-    std::vector<Sophus::SE3Group<T> > transformsCameraToRig_;
+    std::vector<Sophus::SE3<T> > transformsCameraToRig_;
 
 };
 
