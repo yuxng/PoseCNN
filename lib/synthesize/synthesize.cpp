@@ -1900,8 +1900,8 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
 
 
 // ICP
-void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                           float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
+void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
+  float znear, float zfar, float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
 {
   int iterations;
   if (setup_ == 0)
