@@ -228,7 +228,7 @@ void NonrigidTransformer<Scalar,TransformT>::initialize(const HostTensor1<Vec3> 
     template class NonrigidTransformer<type,DualQuaternion>
 
 #define NONRIGID_SE3_TRANSFORMER_EXPLICIT_INSTANTIATION(type)     \
-    template class NonrigidTransformer<type,Sophus::SE3Group>
+    template class NonrigidTransformer<type,Sophus::SE3>
 
 ALL_TYPES_INSTANTIATION(NONRIGID_DQ_TRANSFORMER_EXPLICIT_INSTANTIATION);
 ALL_TYPES_INSTANTIATION(NONRIGID_SE3_TRANSFORMER_EXPLICIT_INSTANTIATION);

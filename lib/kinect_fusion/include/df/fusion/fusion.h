@@ -143,7 +143,7 @@ void fuseFrame(DeviceVoxelGrid<Scalar,CompositeVoxel<Scalar,TsdfVoxel,NonTsdfVox
                const TransformerT & transformer,
                const DepthCameraModelT & depthCameraModel,
                const ColorCameraModelT & colorCameraModel,
-               const Sophus::SE3Group<Scalar> & T_cd,
+               const Sophus::SE3<Scalar> & T_cd,
                const DeviceTensor2<DepthT> & depthMap,
                const Scalar truncationDistance,
                typename internal::FusionTypeTraits<NonTsdfVoxelTs>::template PackedInput<Scalar> ... nonTsdfInput);

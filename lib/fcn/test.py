@@ -1006,8 +1006,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(1700, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1178,7 +1178,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
+        # imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG_2D:
@@ -1204,9 +1204,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
-    seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    with open(seg_file, 'wb') as f:
-        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
+    # seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    # with open(seg_file, 'wb') as f:
+    #    cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)

@@ -218,7 +218,7 @@ namespace df {
 //}
 
 //template void computeDeformationGraphNearestNeighbors(VoxelGrid<float,Eigen::Matrix<int,4,1,Eigen::DontAlign>,DeviceResident> &,
-//                                                      const NonrigidTransformer<float,Sophus::SE3Group> &,
+//                                                      const NonrigidTransformer<float,Sophus::SE3> &,
 //                                                      const float);
 
 //template void computeDeformationGraphNearestNeighbors(VoxelGrid<float,Eigen::Matrix<int,4,1,Eigen::DontAlign>,DeviceResident> &,

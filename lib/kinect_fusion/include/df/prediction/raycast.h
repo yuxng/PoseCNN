@@ -14,7 +14,7 @@ void raycast(Tensor<3,Scalar,DeviceResident> & predictedVertices,
              Tensor<3,Scalar,DeviceResident> & predictedNormals,
              const VoxelGrid<Scalar,VoxelT,DeviceResident> & voxelGrid,
              const CameraModelT & cameraModel,
-             const Sophus::SE3Group<Scalar> & transformWorldToPrediction);
+             const Sophus::SE3<Scalar> & transformWorldToPrediction);
 
 
 } // namespace df

@@ -279,7 +279,6 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 
     if (is_textured)
     {
-/*
       std::cout << "loading texture from " << textureName << std::endl;
       texture.LoadFromFile(textureName);
 
@@ -291,11 +290,9 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
           texCoords2[i] = make_float2(assimpMesh->mTextureCoords[0][i].x,1.0 - assimpMesh->mTextureCoords[0][i].y);
       }
       texCoords.Upload(texCoords2.data(),assimpMesh->mNumVertices*sizeof(float)*2);
-*/
     }
     else
     {
-
       // vertex colors
       std::vector<float3> colors3(assimpMesh->mNumVertices);
       for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++) 
@@ -305,7 +302,6 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
       }
       colors.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
       colors.Upload(colors3.data(), assimpMesh->mNumVertices*sizeof(float)*3);
-
     }
 }
 
@@ -479,8 +475,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
-  GLfloat lightpos0[] = {drand(-1., 1.), drand(-1., 1.), drand(1., 6.), 0.};
-  GLfloat lightpos1[] = {drand(-1., 1.), drand(-1., 1.), drand(1., 6.), 0.};
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
 
   // render color image
   glColor3ub(255,255,255);
@@ -500,8 +495,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
-    glEnable(GL_LIGHT1);
-    glLightfv(GL_LIGHT1, GL_POSITION, lightpos1);
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4); 
 
     glEnable(GL_TEXTURE_2D);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -522,7 +517,6 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glDisable(GL_TEXTURE_2D);
 
     glDisable(GL_LIGHT0);
-    glDisable(GL_LIGHT1);
     glDisable(GL_LIGHTING);
   }
 
@@ -1833,6 +1827,7 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
       T_co = update * T_co;
       break;
     }
+/*
     case 2:
     {
       using namespace GlobalRegistration;
@@ -1899,13 +1894,14 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
       T_co = update * T_co;
       break;
     }
+*/
   }
 }
 
 
 // ICP
-void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                           float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
+void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
+  float znear, float zfar, float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
 {
   int iterations;
   if (setup_ == 0)

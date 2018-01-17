@@ -75,7 +75,7 @@ Eigen::Matrix<ScalarOpt,Eigen::Dynamic,1> solveSparseLinearSystem(const Nonrigid
 //                                                 const Eigen::VectorXd &,
 //                                                 const double);
 
-//template Eigen::VectorXd solveSparseLinearSystem(const NonrigidTransformer<double,Sophus::SE3Group> &,
+//template Eigen::VectorXd solveSparseLinearSystem(const NonrigidTransformer<double,Sophus::SE3> &,
 //                                                 const Eigen::SparseMatrix<double> &,
 //                                                 const Eigen::VectorXd &,
 //                                                 const double);
@@ -124,7 +124,7 @@ void updateDeformationGraphTransforms(NonrigidTransformer<Scalar,TransformT> & t
 //            std::cout << vectorizedUpdate.template block<6,1>((runningVertexCount + index)*BlockDim,0).transpose() << std::endl;
 
             // TODO: investigate an exponential mappint directly into the DualQuaternion space
-            Transform update = Sophus::SE3Group<Scalar>::exp(vectorizedUpdate.template block<6,1>((runningVertexCount + index)*BlockDim,0).template cast<Scalar>());
+            Transform update = Sophus::SE3<Scalar>::exp(vectorizedUpdate.template block<6,1>((runningVertexCount + index)*BlockDim,0).template cast<Scalar>());
 
             Transform & transform = transformer.transforms(level)[index];
 
@@ -138,7 +138,7 @@ void updateDeformationGraphTransforms(NonrigidTransformer<Scalar,TransformT> & t
 
 }
 
-//template void updateDeformationGraphTransforms(NonrigidTransformer<float,Sophus::SE3Group> &,
+//template void updateDeformationGraphTransforms(NonrigidTransformer<float,Sophus::SE3> &,
 //                                               const Eigen::VectorXf &);
 
 //template void updateDeformationGraphTransforms(NonrigidTransformer<float,DualQuaternion> &,
@@ -176,13 +176,13 @@ void icpNonrigid(NonrigidTransformer<Scalar,TransformT> & transformer,
 }
 
 
-template void icpNonrigid<float,double,Sophus::SE3Group,internal::TransformUpdateLeftMultiply>
-    (NonrigidTransformer<float,Sophus::SE3Group> &,
+template void icpNonrigid<float,double,Sophus::SE3,internal::TransformUpdateLeftMultiply>
+    (NonrigidTransformer<float,Sophus::SE3> &,
      Eigen::SparseMatrix<double> &,
      Eigen::VectorXd &, float, float);
 
-template void icpNonrigid<float,double,Sophus::SE3Group,internal::TransformUpdateRightMultiply>
-    (NonrigidTransformer<float,Sophus::SE3Group> &,
+template void icpNonrigid<float,double,Sophus::SE3,internal::TransformUpdateRightMultiply>
+    (NonrigidTransformer<float,Sophus::SE3> &,
      Eigen::SparseMatrix<double> &,
      Eigen::VectorXd &, float, float);
 
@@ -208,7 +208,7 @@ void nonrigidICP(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertic
                  const DeviceTensor2<Eigen::UnalignedVec4<Scalar> > & predictedCanonicalNormals,
                  const CameraModelT & cameraModel,
                  NonrigidTransformer<Scalar,TransformT> & transformer,
-                 const Sophus::SE3Group<Scalar> & updatePredictionToLive,
+                 const Sophus::SE3<Scalar> & updatePredictionToLive,
                  const Eigen::Matrix<Scalar,2,1> & depthRange,
                  const uint numIterations,
                  const Scalar diagonalRegularization,
@@ -302,7 +302,7 @@ template void nonrigidICP<type,opt_type,camera##CameraModel<type>,transform, K, 
     const DeviceTensor2<Eigen::UnalignedVec4<type>  > &,                                                                        \
     const camera##CameraModel<type> &,                                                                                          \
     NonrigidTransformer<type,transform> &,                                                                                      \
-    const Sophus::SE3Group<type> &,                                                                                             \
+    const Sophus::SE3<type> &,                                                                                             \
     const Eigen::Matrix<type,2,1> &,                                                                                            \
     const uint, const type, const type);                                                                                        \
                                                                                                                                 \
@@ -314,7 +314,7 @@ template void nonrigidICP<type,opt_type,camera##CameraModel<type>,transform, K, 
     const DeviceTensor2<Eigen::UnalignedVec4<type>  > &,                                                                        \
     const camera##CameraModel<type> &,                                                                                          \
     NonrigidTransformer<type,transform> &,                                                                                      \
-    const Sophus::SE3Group<type> &,                                                                                             \
+    const Sophus::SE3<type> &,                                                                                             \
     const Eigen::Matrix<type,2,1> &,                                                                                            \
     const uint, const type, const type,                                                                                         \
     DeviceTensor2<Eigen::UnalignedVec4<uchar> > )
@@ -324,14 +324,14 @@ template void nonrigidICP<type,opt_type,camera##CameraModel<type>,transform, K, 
 NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, DualQuaternion, 4, Left);
 NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, DualQuaternion, 4, Right);
 
-NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, Sophus::SE3Group, 4, Left);
-NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, Sophus::SE3Group, 4, Right);
+NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, Sophus::SE3, 4, Left);
+NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Poly3, Sophus::SE3, 4, Right);
 
 
 NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, DualQuaternion, 4, Left);
 NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, DualQuaternion, 4, Right);
 
-NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, Sophus::SE3Group, 4, Left);
-NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, Sophus::SE3Group, 4, Right);
+NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, Sophus::SE3, 4, Left);
+NONRIGID_ICP_EXPLICIT_INSTANTIATION(float, double, Linear, Sophus::SE3, 4, Right);
 
 } // namespace df

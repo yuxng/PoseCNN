@@ -95,7 +95,7 @@ bool blendDualQuaternions(DualQuaternion<Scalar,Eigen::DontAlign> & blendedTrans
 }
 
 template <typename Scalar, template <typename,int...> class TransformT>
-NonrigidTransformer<Scalar,TransformT>::DeviceModule::DeviceModule(const Sophus::SE3Group<Scalar> & transformWorldToLive,
+NonrigidTransformer<Scalar,TransformT>::DeviceModule::DeviceModule(const Sophus::SE3<Scalar> & transformWorldToLive,
                                                                    const VoxelGrid<Scalar,Eigen::UnalignedVec<int,4>,DeviceResident> & nearestNeighborGrid,
                                                                    const DeviceTensor1<Vec3> & deviceBaseLevelVertices,
                                                                    const DeviceTensor1<DualQuaternion<Scalar,Eigen::DontAlign> > & deviceBaseLevelTransforms,
@@ -147,7 +147,7 @@ NonrigidTransformer<Scalar,TransformT>::DeviceModule::transformWorldToLive(const
 
 //private:
 
-//    Sophus::SE3Group<Scalar> transformWorldToLive_;
+//    Sophus::SE3<Scalar> transformWorldToLive_;
 
 //};
 

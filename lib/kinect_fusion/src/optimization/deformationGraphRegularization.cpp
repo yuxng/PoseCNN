@@ -312,13 +312,13 @@ template void computeRegularizerNormalEquations<float,double,DualQuaternion,inte
                                                       Eigen::SparseMatrix<double> &,
                                                       Eigen::VectorXd &);
 
-template void computeRegularizerNormalEquations<float,double,Sophus::SE3Group,internal::TransformUpdateLeftMultiply>
-                                                     (const NonrigidTransformer<float,Sophus::SE3Group> &,
+template void computeRegularizerNormalEquations<float,double,Sophus::SE3,internal::TransformUpdateLeftMultiply>
+                                                     (const NonrigidTransformer<float,Sophus::SE3> &,
                                                       Eigen::SparseMatrix<double> &,
                                                       Eigen::VectorXd &);
 
-template void computeRegularizerNormalEquations<float,double,Sophus::SE3Group,internal::TransformUpdateRightMultiply>
-                                                     (const NonrigidTransformer<float,Sophus::SE3Group> &,
+template void computeRegularizerNormalEquations<float,double,Sophus::SE3,internal::TransformUpdateRightMultiply>
+                                                     (const NonrigidTransformer<float,Sophus::SE3> &,
                                                       Eigen::SparseMatrix<double> &,
                                                       Eigen::VectorXd &);
 

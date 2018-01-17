@@ -10,10 +10,10 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
-# import matching_loss.matching_loss_op as matching_loss_op
-# import matching_loss.matching_loss_op_grad
 import hough_voting_layer.hough_voting_op as hough_voting_op
 import hough_voting_layer.hough_voting_op_grad
+import hough_voting_gpu_layer.hough_voting_gpu_op as hough_voting_gpu_op
+import hough_voting_gpu_layer.hough_voting_gpu_op_grad
 import roi_pooling_layer.roi_pooling_op as roi_pool_op
 import roi_pooling_layer.roi_pooling_op_grad
 from gru2d import GRU2DCell
@@ -233,6 +233,10 @@ class Network(object):
     @layer
     def hough_voting(self, input, is_train, name):
         return hough_voting_op.hough_voting(input[0], input[1], input[2], input[3], input[4], is_train, name=name)
+
+    @layer
+    def hough_voting_gpu(self, input, is_train, name):
+        return hough_voting_gpu_op.hough_voting_gpu(input[0], input[1], input[2], input[3], input[4], is_train, name=name)
 
     @layer
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):

@@ -5,7 +5,7 @@
 namespace df {
 
 template <typename T>
-inline Sophus::SE3Group<T> poseFromJson(const picojson::value & poseSpec) {
+inline Sophus::SE3<T> poseFromJson(const picojson::value & poseSpec) {
 
     std::cout << "pose: " << poseSpec.serialize(true) << std::endl;
 
@@ -24,7 +24,7 @@ inline Sophus::SE3Group<T> poseFromJson(const picojson::value & poseSpec) {
         }
     }
 
-    return Sophus::SE3Group<T>(M);
+    return Sophus::SE3<T>(M);
 
 }
 

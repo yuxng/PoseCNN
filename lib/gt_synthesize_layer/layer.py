@@ -64,20 +64,11 @@ class GtSynthesizeLayer(object):
         if iter < 10000:
             is_syn = 0
         else:
-            ratio = min(len(self._roidb) / cfg.TRAIN.SYNNUM, cfg.TRAIN.SYN_RATIO)
-            if ratio == 0:
-                ratio = min(cfg.TRAIN.SYNNUM / len(self._roidb), cfg.TRAIN.SYN_RATIO)
-                r = np.random.randint(ratio+1, size=1)[0]
-                if r == 0:
-                     is_syn = 0
-                else:
-                     is_syn = 1
+            r = np.random.randint(cfg.TRAIN.SYN_RATIO+1, size=1)[0]
+            if r == 0:
+                is_syn = 0
             else:
-                r = np.random.randint(ratio+1, size=1)[0]
-                if r == 0:
-                    is_syn = 1
-                else:
-                    is_syn = 0
+                is_syn = 1
 
         db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
         minibatch_db = [self._roidb[i] for i in db_inds]

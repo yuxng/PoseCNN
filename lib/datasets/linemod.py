@@ -266,7 +266,13 @@ class linemod(datasets.imdb):
         return image.astype(np.uint8)
 
 
-    def evaluate_result(self, i, segmentation, gt_labels, meta_data, output_dir):
+    def evaluate_result(self, im_ind, segmentation, gt_labels, meta_data, output_dir):
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
 
         # evaluate segmentation
         n_cl = self.num_classes
@@ -291,6 +297,12 @@ class linemod(datasets.imdb):
             poses = segmentation['poses']
             poses_new = segmentation['poses_refined']
             poses_icp = segmentation['poses_icp']
+
+            # save matlab result
+            results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, results, do_compression=True)
 
             poses_gt = meta_data['poses']
             if len(poses_gt.shape) == 2:

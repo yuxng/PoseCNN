@@ -28,15 +28,10 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(xFusion_ROOT "/var/Projects/Deep_Pose/lib/kinect_fusion")
+set(xFusion_ROOT "/home/yuxiang/Projects/Deep_Pose/lib/kinect_fusion")
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
 set(xFusion_LIBRARY_DIRS ${xFusion_ROOT}/build)
 set(xFusion_LIBRARIES kfusion)
-
-set(super4pcs_ROOT "/var/Projects/Super4PCS")
-set(super4pcs_INCLUDE_DIRS ${super4pcs_ROOT}/src)
-set(super4pcs_LIBRARY_DIRS ${super4pcs_ROOT}/build/src/super4pcs/algorithms)
-set(super4pcs_LIBRARIES super4pcs_algo)
 
 # TODO:
 set(SUITESPARSE_INCLUDE_DIRS "/usr/include/suitesparse" CACHE PATH "suitesparse include directory")
@@ -44,6 +39,8 @@ set(SUITESPARSE_LIBRARIES "cholmod;metis")
 
 message(STATUS "xFusion root: ${xFusion_ROOT}")
 message(STATUS "pangolin: ${Pangolin_INCLUDE_DIRS}")
+
+list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
 include_directories(${Pangolin_INCLUDE_DIRS}
                     ${xFusion_INCLUDE_DIRS}
@@ -53,18 +50,15 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${OpenCV_INCLUDE_DIRS}
                     ${PCL_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
-                    ${super4pcs_INCLUDE_DIRS}
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
 
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
-                 ${super4pcs_LIBRARY_DIRS}
                  ${OpenEXR_LIBRARY_DIRS}
                  ${PCL_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
                ${xFusion_LIBRARIES}
-               ${super4pcs_LIBRARIES}
                ${DEPTHSENSE_LIBRARIES}
                ${SUITESPARSE_LIBRARIES}
                ${OpenEXR_LIBRARIES}
@@ -82,7 +76,6 @@ cuda_add_library(
   synthesize.cpp
   thread_rand.cpp
   Hypothesis.cpp
-  app.cpp
 )
 
 #cuda_add_executable(synthesize

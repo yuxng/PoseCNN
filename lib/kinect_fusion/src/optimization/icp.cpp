@@ -17,17 +17,17 @@ template <typename Scalar,
           typename CameraModelT,
           int DPred,
           typename ... DebugArgsT>
-Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
+Sophus::SE3<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > & liveVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predVertices,
                              const DeviceTensor2<Eigen::UnalignedVec<Scalar,DPred> > & predNormals,
                              const CameraModelT & cameraModel,
-                             const Sophus::SE3Group<Scalar> & predictionPose,
+                             const Sophus::SE3<Scalar> & predictionPose,
                              const Eigen::Matrix<Scalar,2,1> & depthRange,
                              const Scalar maxError,
                              const uint numIterations,
                              DebugArgsT ... debugArgs) {
 
-    typedef Sophus::SE3Group<Scalar> SE3;
+    typedef Sophus::SE3<Scalar> SE3;
 
     const uint width = liveVertices.dimensionSize(0);
     const uint height = liveVertices.dimensionSize(1);
@@ -40,8 +40,8 @@ Sophus::SE3Group<Scalar> icp(const DeviceTensor2<Eigen::UnalignedVec3<Scalar> > 
     const dim3 grid(128,8,1);
     const dim3 block(intDivideAndCeil(width,grid.x),intDivideAndCeil(height,grid.y));
 
-    Eigen::Matrix<Scalar,6,1> initialPose = SE3::log(predictionPose);
-    Sophus::SE3Group<Scalar> accumulatedUpdate;
+    Eigen::Matrix<Scalar,6,1> initialPose = predictionPose.log();
+    Sophus::SE3<Scalar> accumulatedUpdate;
 
     for (uint iter = 0; iter < numIterations; ++iter) {
 

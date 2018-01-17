@@ -11,7 +11,7 @@ class RigidTransformer {
 public:
 
     typedef Eigen::Matrix<Scalar,3,1,Eigen::DontAlign> Vec3;
-    typedef Sophus::SE3Group<Scalar> Transform;
+    typedef Sophus::SE3<Scalar> Transform;
 
     inline __host__ __device__ Vec3 transformWorldToLive(Vec3 world) const {
         return transform_*world;

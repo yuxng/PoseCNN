@@ -81,13 +81,13 @@ if __name__ == '__main__':
     num_classes = 22
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
+    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn_lighting/'
 
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
 
     for i in xrange(num_images):
-        
+
         # render a synthetic image
         im_syn = np.zeros((height, width, 4), dtype=np.uint8)
         depth_syn = np.zeros((height, width), dtype=np.float32)

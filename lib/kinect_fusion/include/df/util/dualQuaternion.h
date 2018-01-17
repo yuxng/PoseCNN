@@ -69,7 +69,7 @@ public:
 
     template <int OtherOptions>
     __host__ __device__
-    inline DualQuaternion(const Sophus::SE3Group<Scalar,OtherOptions> & transform) {
+    inline DualQuaternion(const Sophus::SE3<Scalar,OtherOptions> & transform) {
 
         *this = transform;
 
@@ -89,7 +89,7 @@ public:
 
     template <int OtherOptions>
     __host__ __device__
-    inline DualQuaternion<Scalar,Options> & operator=(const Sophus::SE3Group<Scalar,OtherOptions> & transform) {
+    inline DualQuaternion<Scalar,Options> & operator=(const Sophus::SE3<Scalar,OtherOptions> & transform) {
 
         // TODO: this could probably be simplified for speed
         *this = DualQuaternion(Quaternion(1,0,0,0),
@@ -201,9 +201,9 @@ public:
     }
 
     __host__ __device__
-    inline operator Sophus::SE3Group<Scalar>() const {
+    inline operator Sophus::SE3<Scalar>() const {
 
-        return Sophus::SE3Group<Scalar>(nondual_, translation() );
+        return Sophus::SE3<Scalar>(nondual_, translation() );
 
     }
 
