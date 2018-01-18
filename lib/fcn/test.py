@@ -1178,7 +1178,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        # imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
+        imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
 
         if cfg.TEST.VISUALIZE:
             if cfg.TEST.VERTEX_REG_2D:
