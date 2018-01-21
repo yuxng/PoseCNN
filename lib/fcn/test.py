@@ -107,7 +107,7 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
-def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, extents, num_classes):
+def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, extents, points, num_classes):
     """segment image
     """
 
@@ -169,14 +169,14 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
-                         net.meta_data: meta_data_blob, net.extents: extents, net.poses: pose_blob}
+                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
         if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
-                         net.meta_data: meta_data_blob, net.extents: extents, net.poses: pose_blob}
+                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
@@ -189,7 +189,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             if cfg.TEST.POSE_REG:
                 labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
-                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_pred')])
+                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
                 # combine poses
                 num = rois.shape[0]
                 poses = poses_init
@@ -1006,8 +1006,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(1700, num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(1100, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1105,7 +1105,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print rois
             print poses
         else:
-            labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb.num_classes)
+            labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb._points_all, imdb.num_classes)
 
         labels = unpad_im(labels, 16)
         im_scale = cfg.TEST.SCALES_BASE[0]

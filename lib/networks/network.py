@@ -10,6 +10,8 @@ import computing_flow_layer.computing_flow_op as compute_flow_op
 import computing_flow_layer.computing_flow_op_grad
 import triplet_loss.triplet_loss_op as triplet_loss_op
 import triplet_loss.triplet_loss_op_grad
+import average_distance_loss.average_distance_loss_op as average_distance_loss_op
+import average_distance_loss.average_distance_loss_op_grad
 import hough_voting_layer.hough_voting_op as hough_voting_op
 import hough_voting_layer.hough_voting_op_grad
 import hough_voting_gpu_layer.hough_voting_gpu_op as hough_voting_gpu_op
@@ -217,6 +219,10 @@ class Network(object):
     @layer
     def triplet_loss(self, input, margin, name):
         return triplet_loss_op.triplet_loss(input[0], input[1], tf.cast(input[2], tf.int32), margin, name=name)
+
+    @layer
+    def average_distance_loss(self, input, name):
+        return average_distance_loss_op.average_distance_loss(input[0], input[1], input[2], input[3], name=name)
 
     @layer
     def matching_loss(self, input, filename_model, name):
