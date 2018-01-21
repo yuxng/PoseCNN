@@ -29,17 +29,18 @@ class vgg16_convs(Network):
             self.poses = tf.placeholder(tf.float32, shape=[None, 13])
             self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
             self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
+            self.points = tf.placeholder(tf.float32, shape=[num_classes, None, 3])
 
         # define a queue
         queue_size = 25
         if input_format == 'RGBD':
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
-                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
+                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data})
+                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
@@ -47,11 +48,11 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data = q.dequeue()
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data})
+                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
@@ -168,4 +169,11 @@ class vgg16_convs(Network):
                          .fc(4096, num_in=4096, name='fc7')
                          .dropout(self.keep_prob_queue, name='drop7')
                          .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
-                         .tanh(name='poses_pred'))
+                         .tanh(name='poses_tanh'))
+
+                    (self.feed('poses_tanh', 'poses_weight')
+                         .multiply(name='poses_mul')
+                         .l2_normalize(dim=1, name='poses_pred'))
+
+                    (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points')
+                         .average_distance_loss(name='loss_pose'))

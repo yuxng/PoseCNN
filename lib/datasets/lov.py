@@ -30,7 +30,7 @@ class lov(datasets.imdb):
                               (192, 0, 0), (0, 192, 0), (0, 0, 192)]
 
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        self._points = self._load_object_points()
+        self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
@@ -130,14 +130,21 @@ class lov(datasets.imdb):
     def _load_object_points(self):
 
         points = [[] for _ in xrange(len(self._classes))]
+        num = np.inf
 
         for i in xrange(1, len(self._classes)):
             point_file = os.path.join(self._lov_path, 'models', self._classes[i], 'points.xyz')
             print point_file
             assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
             points[i] = np.loadtxt(point_file)
+            if points[i].shape[0] < num:
+                num = points[i].shape[0]
 
-        return points
+        points_all = np.zeros((self.num_classes, num, 3), dtype=np.float32)
+        for i in xrange(1, len(self._classes)):
+            points_all[i, :, :] = points[i][:num, :]
+
+        return points, points_all
 
 
     def _load_object_extents(self):

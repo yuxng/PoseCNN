@@ -18,7 +18,7 @@ import scipy.io
 # from normals import gpu_normals
 from transforms3d.quaternions import mat2quat, quat2mat
 
-def get_minibatch(roidb, extents, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn):
+def get_minibatch(roidb, extents, points, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn):
     """Given a roidb, construct a minibatch sampled from it."""
 
     # Get the input image blob, formatted for tensorflow
@@ -42,7 +42,8 @@ def get_minibatch(roidb, extents, num_classes, backgrounds, intrinsic_matrix, db
              'data_vertex_targets': vertex_target_blob,
              'data_vertex_weights': vertex_weight_blob,
              'data_pose': pose_blob,
-             'data_extents': extents}
+             'data_extents': extents,
+             'data_points': 10 * points}
 
     return blobs
 
