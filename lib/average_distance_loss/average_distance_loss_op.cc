@@ -41,6 +41,7 @@ REGISTER_OP("Averagedistance")
     .Input("bottom_target: T")
     .Input("bottom_weight: T")
     .Input("bottom_point: T")
+    .Input("bottom_symmetry: T")
     .Output("loss: T")
     .Output("bottom_diff: T");
 
@@ -74,6 +75,9 @@ class AveragedistanceOp : public OpKernel {
     const Tensor& bottom_point = context->input(3);
     const T* point = bottom_point.flat<T>().data();
 
+    const Tensor& bottom_symmetry = context->input(4);
+    const T* symmetry = bottom_symmetry.flat<T>().data();
+
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_prediction.dims() == 2,
                 errors::InvalidArgument("prediction must be 2-dimensional"));
@@ -86,6 +90,9 @@ class AveragedistanceOp : public OpKernel {
 
     OP_REQUIRES(context, bottom_point.dims() == 3,
                 errors::InvalidArgument("point must be 3-dimensional"));
+
+    OP_REQUIRES(context, bottom_symmetry.dims() == 1,
+                errors::InvalidArgument("symmetry must be 1-dimensional"));
 
     // batch size
     int batch_size = bottom_prediction.dim_size(0);
@@ -208,12 +215,12 @@ REGISTER_KERNEL_BUILDER(Name("Averagedistance").Device(DEVICE_CPU).TypeConstrain
 // GPU implementation for forward pass
 bool AveragedistanceForwardLaucher(OpKernelContext* context,
     const float* bottom_prediction, const float* bottom_target, const float* bottom_weight, const float* bottom_point,
-    const int batch_size, const int num_classes, const int num_points,
+    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
     float* top_data, float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void AveragedistanceKernel(
     OpKernelContext* context, const Tensor* bottom_prediction, const Tensor* bottom_target, const Tensor* bottom_weight,
-    const Tensor* bottom_point, const int batch_size, const int num_classes, const int num_points,
+    const Tensor* bottom_point, const Tensor* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
     const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_diff) 
 {
   Tensor* top_data = nullptr;
@@ -227,7 +234,7 @@ static void AveragedistanceKernel(
 
    AveragedistanceForwardLaucher(context,
     bottom_prediction->flat<float>().data(), bottom_target->flat<float>().data(), bottom_weight->flat<float>().data(),
-    bottom_point->flat<float>().data(), batch_size, num_classes, num_points,
+    bottom_point->flat<float>().data(), bottom_symmetry->flat<float>().data(), batch_size, num_classes, num_points,
     top_data->flat<float>().data(), bottom_diff->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
@@ -247,6 +254,7 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
     const Tensor& bottom_target = context->input(1);
     const Tensor& bottom_weight = context->input(2);
     const Tensor& bottom_point = context->input(3);
+    const Tensor& bottom_symmetry = context->input(4);
 
     // data should have 4 dimensions.
     OP_REQUIRES(context, bottom_prediction.dims() == 2,
@@ -260,6 +268,9 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
 
     OP_REQUIRES(context, bottom_point.dims() == 3,
                 errors::InvalidArgument("point must be 3-dimensional"));
+
+    OP_REQUIRES(context, bottom_symmetry.dims() == 1,
+                errors::InvalidArgument("symmetry must be 1-dimensional"));
 
     // batch size
     int batch_size = bottom_prediction.dim_size(0);
@@ -275,7 +286,7 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
     // bottom diff
     TensorShape output_shape_diff = bottom_prediction.shape();
 
-    AveragedistanceKernel(context, &bottom_prediction, &bottom_target, &bottom_weight, &bottom_point, batch_size, num_classes,
+    AveragedistanceKernel(context, &bottom_prediction, &bottom_target, &bottom_weight, &bottom_point, &bottom_symmetry, batch_size, num_classes,
       num_points, output_shape, output_shape_diff);
   }
  private:

@@ -18,7 +18,7 @@ import scipy.io
 # from normals import gpu_normals
 from transforms3d.quaternions import mat2quat, quat2mat
 
-def get_minibatch(roidb, extents, points, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn):
+def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn):
     """Given a roidb, construct a minibatch sampled from it."""
 
     # Get the input image blob, formatted for tensorflow
@@ -33,6 +33,14 @@ def get_minibatch(roidb, extents, points, num_classes, backgrounds, intrinsic_ma
     if cfg.TRAIN.VISUALIZE:
         _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
 
+    # rescale the points
+    point_blob = points.copy()
+    for i in xrange(1, num_classes):
+        if symmetry[i] > 0:
+            point_blob[i, :, :] = 20 * point_blob[i, :, :]
+        else:
+            point_blob[i, :, :] = 10 * point_blob[i, :, :]
+
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,
              'data_image_normal': im_normal_blob,
@@ -43,7 +51,8 @@ def get_minibatch(roidb, extents, points, num_classes, backgrounds, intrinsic_ma
              'data_vertex_weights': vertex_weight_blob,
              'data_pose': pose_blob,
              'data_extents': extents,
-             'data_points': 10 * points}
+             'data_points': point_blob,
+             'data_symmetry': symmetry}
 
     return blobs
 

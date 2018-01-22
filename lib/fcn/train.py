@@ -300,7 +300,7 @@ def load_and_enqueue(sess, net, data_layer, coord):
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
                                net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data'], \
-                               net.points: blobs['data_points']}
+                               net.points: blobs['data_points'], net.symmetry: blobs['data_symmetry']}
                 else:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
@@ -414,7 +414,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         if cfg.TRAIN.SINGLE_FRAME:
             # data layer
             if cfg.TRAIN.SYNTHESIZE:
-                data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
+                data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
             else:
                 data_layer = GtSingleDataLayer(roidb, imdb.num_classes, imdb._extents)
         else:

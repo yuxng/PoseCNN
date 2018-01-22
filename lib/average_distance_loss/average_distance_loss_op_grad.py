@@ -10,4 +10,4 @@ def _average_distance_grad(op, grad, _):
   # compute gradient
   data_grad = average_distance_loss_op.average_distance_loss_grad(diff, grad)
 
-  return [data_grad, None, None, None]  # List of one Tensor, since we have four input
+  return [data_grad, None, None, None, None]  # List of one Tensor, since we have five input

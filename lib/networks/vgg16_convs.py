@@ -30,17 +30,20 @@ class vgg16_convs(Network):
             self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
             self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
             self.points = tf.placeholder(tf.float32, shape=[num_classes, None, 3])
+            self.symmetry = tf.placeholder(tf.float32, shape=[num_classes])
 
         # define a queue
         queue_size = 25
         if input_format == 'RGBD':
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
-                                             self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points = q.dequeue()
-                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points})
+                                             self.vertex_targets, self.vertex_weights, self.poses, \
+                                             self.extents, self.meta_data, self.points, self.symmetry])
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
+                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
+                                    'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
+                                    'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
@@ -48,11 +51,11 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points = q.dequeue()
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points})
+                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
@@ -175,5 +178,5 @@ class vgg16_convs(Network):
                          .multiply(name='poses_mul')
                          .l2_normalize(dim=1, name='poses_pred'))
 
-                    (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points')
+                    (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
                          .average_distance_loss(name='loss_pose'))

@@ -107,7 +107,7 @@ def _get_image_blob(im, im_depth, meta_data):
     return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
 
-def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, extents, points, num_classes):
+def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, extents, points, symmetry, num_classes):
     """segment image
     """
 
@@ -176,7 +176,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
-                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.poses: pose_blob}
+                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.symmetry: symmetry, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
@@ -622,7 +622,7 @@ def _unscale_vertmap(vertmap, labels, extents, num_classes):
 
 
 def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, center_map_gt, center_map, 
-  labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
+  labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes, points):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -698,12 +698,17 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         for i in xrange(1, num_classes):
             index = np.where(labels_gt == i)
             if len(index[0]) > 0:
-                num = len(index[0])
                 # extract 3D points
-                x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                # num = len(index[0])
+                # x3d = np.ones((4, num), dtype=np.float32)
+                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                x3d[0, :] = points[i,:,0]
+                x3d[1, :] = points[i,:,1]
+                x3d[2, :] = points[i,:,2]
 
                 # projection
                 ind = np.where(cls_indexes == i)[0][0]
@@ -711,7 +716,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[i], 255.0), s=10)
 
         ax.set_title('gt projection')
         ax.invert_yaxis()
@@ -725,12 +731,17 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             cls = int(rois[i, 1])
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0:
-                num = len(index[0])
                 # extract 3D points
-                x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                # num = len(index[0])
+                # x3d = np.ones((4, num), dtype=np.float32)
+                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+
+                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                x3d[0, :] = points[cls,:,0]
+                x3d[1, :] = points[cls,:,1]
+                x3d[2, :] = points[cls,:,2]
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -739,7 +750,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
 
         ax.set_title('projection')
         ax.invert_yaxis()
@@ -1105,7 +1117,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print rois
             print poses
         else:
-            labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb._points_all, imdb.num_classes)
+            labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb._points_all, imdb._symmetry, imdb.num_classes)
 
         labels = unpad_im(labels, 16)
         im_scale = cfg.TEST.SCALES_BASE[0]
@@ -1190,7 +1202,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
-                    meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes)
+                    meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes, imdb._points_all)
             elif cfg.TEST.VERTEX_REG_3D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
