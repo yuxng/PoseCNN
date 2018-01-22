@@ -63,14 +63,11 @@ class GtSynthesizeLayer(object):
     def _get_next_minibatch(self, iter):
         """Return the blobs to be used for the next minibatch."""
 
-        if iter < 10000:
+        r = np.random.randint(cfg.TRAIN.SYN_RATIO+1, size=1)[0]
+        if r == 0:
             is_syn = 0
         else:
-            r = np.random.randint(cfg.TRAIN.SYN_RATIO+1, size=1)[0]
-            if r == 0:
-                is_syn = 0
-            else:
-                is_syn = 1
+            is_syn = 1
 
         db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
         minibatch_db = [self._roidb[i] for i in db_inds]

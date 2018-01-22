@@ -10,11 +10,11 @@
 """Test a FCN on an image database."""
 
 import _init_paths
-from synthesize import synthesizer
 import argparse
 import os, sys
 from transforms3d.quaternions import quat2mat
 from fcn.config import cfg, cfg_from_file, get_output_dir
+from synthesize import synthesizer
 import scipy.io
 import cv2
 import numpy as np
@@ -83,12 +83,15 @@ if __name__ == '__main__':
     znear = 0.25;
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
+    root = '/home/yuxiang/Datasets/LINEMOD_Dataset/data_syn_lighting/' + classes_all[which_class] + '/'
+
+    if not os.path.exists(root):
+        os.makedirs(root)
 
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
 
-    extent_file = '/var/Projects/Deep_Pose/data/LINEMOD/extents.txt'
+    extent_file = '/home/yuxiang/Projects/Deep_Pose/data/LINEMOD/extents.txt'
     extents = np.zeros((9, 3), dtype=np.float32)
     extents[1:, :] = np.loadtxt(extent_file).astype(np.float32)
     print extents
@@ -119,7 +122,7 @@ if __name__ == '__main__':
         label[I[0], I[1]] = 0
 
         I = np.where(label == which_class + 1)
-        if len(I[0]) < 400:
+        if len(I[0]) < 800:
             continue
 
         # convert pose
