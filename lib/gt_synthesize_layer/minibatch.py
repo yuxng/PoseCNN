@@ -37,7 +37,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     point_blob = points.copy()
     for i in xrange(1, num_classes):
         if symmetry[i] > 0:
-            point_blob[i, :, :] = 20 * point_blob[i, :, :]
+            point_blob[i, :, :] = 40 * point_blob[i, :, :]
         else:
             point_blob[i, :, :] = 10 * point_blob[i, :, :]
 

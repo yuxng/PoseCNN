@@ -602,7 +602,6 @@ jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
 void Synthesizer::render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
 {
-  bool is_textured = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -615,7 +614,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int num_classes = pose_nums_.size();
   // sample the number of objects in the scene
   int num;
-  if (irand(0, 8) == 0)
+  if (irand(0, 2) == 0)
     num = 2;
   else
     num = 1;
@@ -728,6 +727,8 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     }
   }
 
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+
   // render color image
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
@@ -743,6 +744,13 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     pangolin::OpenGlMatrix mvMatrix(mv);
     mvMatrix.Load();
 
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.6); 
+
+    glEnable(GL_COLOR_MATERIAL);
     glEnableClientState(GL_VERTEX_ARRAY);
     texturedVertices_[class_id].Bind();
     glVertexPointer(3,GL_FLOAT,0,0);
@@ -756,6 +764,11 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     vertexColors_[class_id].Unbind();
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
+    glDisable(GL_COLOR_MATERIAL);
+
+    glDisable(GL_LIGHT0);
+    glDisable(GL_LIGHTING);
+
   }
 
   // read color image
