@@ -222,7 +222,7 @@ class Network(object):
 
     @layer
     def average_distance_loss(self, input, name):
-        return average_distance_loss_op.average_distance_loss(input[0], input[1], input[2], input[3], name=name)
+        return average_distance_loss_op.average_distance_loss(input[0], input[1], input[2], input[3], input[4], name=name)
 
     @layer
     def matching_loss(self, input, filename_model, name):

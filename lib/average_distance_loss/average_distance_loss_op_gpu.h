@@ -21,7 +21,7 @@ namespace tensorflow {
 // argmax indices are not written.
 void AveragedistanceForwardLaucher(OpKernelContext* context,
     const float* bottom_prediction, const float* bottom_target, const float* bottom_weight, const float* bottom_point,
-    const int batch_size, const int num_classes, const int num_points,
+    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
     float* top_data, float* bottom_diff, const Eigen::GpuDevice& d);
 
 bool AveragedistanceBackwardLaucher(const float* top_diff, const float* bottom_diff, const int batch_size,
