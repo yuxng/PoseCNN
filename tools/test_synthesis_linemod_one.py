@@ -19,7 +19,6 @@ import scipy.io
 import cv2
 import numpy as np
 
-
 def parse_args():
     """
     Parse input arguments
@@ -70,6 +69,9 @@ if __name__ == '__main__':
 
     args = parse_args()
 
+    which_class = 7
+    classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
+
     num_images = 80000
     height = 480
     width = 640
@@ -79,27 +81,31 @@ if __name__ == '__main__':
     py = 242.04899
     zfar = 6.0
     znear = 0.25;
-    num_classes = 9
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/Datasets/LINEMOD_Dataset/data_syn/'
+    root = '/home/yuxiang/Datasets/LINEMOD_Dataset/data_syn_lighting/' + classes_all[which_class] + '/'
+
+    if not os.path.exists(root):
+        os.makedirs(root)
 
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
 
+    extent_file = '/home/yuxiang/Projects/Deep_Pose/data/LINEMOD/extents.txt'
+    extents = np.zeros((9, 3), dtype=np.float32)
+    extents[1:, :] = np.loadtxt(extent_file).astype(np.float32)
+    print extents
+
     i = 0
     while i < num_images:
-
+        
         # render a synthetic image
         im_syn = np.zeros((height, width, 4), dtype=np.uint8)
         depth_syn = np.zeros((height, width), dtype=np.float32)
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
-        class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
-        poses = np.zeros((num_classes, 7), dtype=np.float32)
-        centers = np.zeros((num_classes, 2), dtype=np.float32)
-        vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
-        vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
-        synthesizer_.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, vertex_targets, vertex_weights, fx, fy, px, py, znear, zfar, 10.0)
+        poses = np.zeros((1, 7), dtype=np.float32)
+        centers = np.zeros((1, 2), dtype=np.float32)
+        synthesizer_.render_one(im_syn, depth_syn, vertmap_syn, poses, centers, extents, fx, fy, px, py, znear, zfar, int(which_class))
         im_syn = im_syn[::-1, :, :]
         depth_syn = depth_syn[::-1, :]
 
@@ -112,31 +118,25 @@ if __name__ == '__main__':
         label = np.round(vertmap_syn[:, :, 0]) + 1
         label[np.isnan(label)] = 0
 
-        flag = 1
-        for j in xrange(1, num_classes):
-            I = np.where(label == j)
-            if len(I[0]) < 800:
-                flag = 0
-                break
-        if flag == 0:
+        I = np.where(label != which_class + 1)
+        label[I[0], I[1]] = 0
+
+        I = np.where(label == which_class + 1)
+        if len(I[0]) < 800:
             continue
 
         # convert pose
-        index = np.where(class_indexes >= 0)[0]
-        num = len(index)
-        qt = np.zeros((3, 4, num), dtype=np.float32)
-        for j in xrange(num):
-            ind = index[j]
-            qt[:, :3, j] = quat2mat(poses[ind, :4])
-            qt[:, 3, j] = poses[ind, 4:]
+        qt = np.zeros((3, 4, 1), dtype=np.float32)
+        qt[:, :3, 0] = quat2mat(poses[0, :4])
+        qt[:, 3, 0] = poses[0, 4:]
 
         # process the vertmap
         vertmap_syn[:, :, 0] = vertmap_syn[:, :, 0] - np.round(vertmap_syn[:, :, 0])
         vertmap_syn[np.isnan(vertmap_syn)] = 0
 
         # metadata
-        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], 'vertmap': vertmap_syn, \
-                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
+        metadata = {'poses': qt, 'center': centers, 'vertmap': vertmap_syn, \
+                    'cls_indexes': which_class + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
 
         # save image
         filename = root + '{:06d}-color.png'.format(i)
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
-        print filename
         scipy.io.savemat(filename, metadata, do_compression=True)
+        print filename
 
         i += 1
