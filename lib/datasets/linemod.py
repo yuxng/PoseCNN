@@ -162,7 +162,7 @@ class linemod(datasets.imdb):
         for i in xrange(1, len(self._classes)):
             points_all[i, :, :] = points[i][:num, :]
 
-        return points, points_all
+        return points[1], points_all
 
 
     def _load_object_extents(self):
@@ -337,7 +337,7 @@ class linemod(datasets.imdb):
             num = poses_gt.shape[2]
 
             for j in xrange(num):
-                if meta_data['cls_indexes'][j] <= 0:
+                if meta_data['cls_indexes'][j] != self._cls_index:
                     continue
                 cls = self._classes[int(meta_data['cls_indexes'][j])]
                 print cls

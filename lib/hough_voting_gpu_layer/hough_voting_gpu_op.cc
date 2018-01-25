@@ -341,6 +341,9 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
 
     int num_rois;
     copy_num_rois(&num_rois, num_rois_device);
+    // dummy output
+    if (num_rois == 0)
+      num_rois = 1;
 
     // Create output tensors
     // top_box

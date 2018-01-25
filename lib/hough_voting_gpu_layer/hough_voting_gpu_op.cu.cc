@@ -463,6 +463,15 @@ void HoughVotingLaucher(OpKernelContext* context,
       class_indexes_host[count] = c;
       count++;
     }
+    else
+      printf("class %d with only pixels %d\n", c, array_sizes_host[c]);
+  }
+
+  if (count == 0)
+  {
+    free(array_sizes_host);
+    free(class_indexes_host);
+    return;
   }
 
   TensorShape output_shape_class_indexes;

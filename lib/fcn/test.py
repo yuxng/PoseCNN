@@ -664,6 +664,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     if cfg.TEST.VERTEX_REG_2D:
         # show centers
         for i in xrange(rois.shape[0]):
+            if rois[i, 1] == 0:
+                continue
             cx = (rois[i, 2] + rois[i, 4]) / 2
             cy = (rois[i, 3] + rois[i, 5]) / 2
             w = rois[i, 4] - rois[i, 2]
@@ -730,7 +732,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         for i in xrange(rois.shape[0]):
             cls = int(rois[i, 1])
             index = np.where(labels_gt == cls)
-            if len(index[0]) > 0:
+            if len(index[0]) > 0 and cls > 0:
                 # extract 3D points
                 # num = len(index[0])
                 # x3d = np.ones((4, num), dtype=np.float32)
@@ -1096,6 +1098,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+            print imdb.metadata_path_at(i)
+        meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
         if len(labels_gt.shape) == 2:
             im_label_gt = imdb.labels_to_image(im, labels_gt)
