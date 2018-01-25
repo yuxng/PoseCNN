@@ -52,7 +52,9 @@ for split in ['train', 'val', 'keyframe', 'trainval', 'debug']:
             datasets.lov(split))
 
 # linemod dataset
-for cls in ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher']:
+for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \
+    'cat', 'cup', 'driller', 'duck', 'eggbox', \
+    'glue', 'holepuncher', 'iron', 'lamp', 'phone']:
     for split in ['train', 'test']:
         name = 'linemod_{}_{}'.format(cls, split)
         print name

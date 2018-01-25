@@ -10,15 +10,14 @@
 """Test a FCN on an image database."""
 
 import _init_paths
+from synthesize import synthesizer
 import argparse
 import os, sys
 from transforms3d.quaternions import quat2mat
 from fcn.config import cfg, cfg_from_file, get_output_dir
-from synthesize import synthesizer
 import scipy.io
 import cv2
 import numpy as np
-
 
 def parse_args():
     """
@@ -79,10 +78,10 @@ if __name__ == '__main__':
     py = 242.04899
     zfar = 6.0
     znear = 0.25;
-    num_classes = 9
+    num_classes = 15 + 1
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/Datasets/LINEMOD_Dataset/data_syn/'
+    root = '/home/yuxiang/Datasets/LINEMOD_SIXD/data_syn/'
 
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)

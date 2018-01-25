@@ -1044,14 +1044,24 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # sample a background image
             ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename = backgrounds[ind]
-            background = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+            filename_color = backgrounds[ind]
+            background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
+            try:
+                background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            except:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+
+            if len(background_color.shape) != 3:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
 
             # add background
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = background[I[0], I[1], :]
+            print im.shape, background_color.shape
+            im[I[0], I[1], :] = background_color[I[0], I[1], :]
 
             # depth
             filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
@@ -1086,17 +1096,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-
-        if imdb.num_classes == 2:
-            if not 'test' in imdb.name:
-                meta_data['cls_indexes'][:] = 1
-            else:
-                I = np.where(labels_gt == imdb._cls_index)
-                labels_gt[:, :] = 0
-                labels_gt[I[0], I[1]] = 1
-                index = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
-                meta_data['cls_indexes'][:] = 0
-                meta_data['cls_indexes'][index] = 1
 
         if len(labels_gt.shape) == 2:
             im_label_gt = imdb.labels_to_image(im, labels_gt)
@@ -1142,12 +1141,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 if cfg.TEST.POSE_REFINE:
                     labels_icp = labels.copy();
                     rois_icp = rois
-                    if imdb.num_classes == 2:
-                        I = np.where(labels_icp > 0)
-                        labels_icp[I[0], I[1]] = imdb._cls_index
-                        rois_icp = rois.copy()
-                        rois_icp[:, 1] = imdb._cls_index
-
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
                     SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
                 
