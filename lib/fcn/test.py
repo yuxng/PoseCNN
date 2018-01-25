@@ -311,7 +311,7 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     """Visual debugging of detections."""
-
+    import matplotlib.pyplot as plt
     fig = plt.figure()
 
     # show image

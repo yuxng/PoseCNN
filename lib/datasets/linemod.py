@@ -23,7 +23,7 @@ class linemod(datasets.imdb):
 
         self._classes = ('__background__', cls)
         self._class_colors = [(255, 255, 255), (255, 0, 0)]
-        self._class_weights = [1, 10]
+        self._class_weights = [1, 100]
         self._symmetry = [0, 0]
 
         self._classes_all = ('__background__', 'ape', 'benchvise', 'bowl', 'camera', 'can', \
@@ -33,7 +33,7 @@ class linemod(datasets.imdb):
                                   (255, 255, 0), (255, 0, 255), (0, 255, 255), \
                                   (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
                                   (64, 0, 0), (0, 64, 0), (0, 0, 64)]
-        self._class_weights_all = [1, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+        self._class_weights_all = [1, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
         self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0])
 
         for i in xrange(len(self._classes_all)):
@@ -130,7 +130,7 @@ class linemod(datasets.imdb):
         if self._image_set == 'train':
             image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '.txt')
         else:
-            image_set_file = os.path.join(self._linemod_path, 'indexes', self._image_set + '.txt')
+            image_set_file = os.path.join(self._linemod_path, 'indexes', 'benchvise.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
