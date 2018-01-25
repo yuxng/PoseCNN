@@ -13,7 +13,7 @@ echo Logging output to "$LOG"
 # test for semantic labeling
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/linemod/linemod_eggbox_train/vgg16_fcn_color_single_frame_linemod_eggbox_iter_20000.ckpt \
+  --model output/linemod/linemod_eggbox_train/vgg16_fcn_color_single_frame_linemod_eggbox_iter_10000.ckpt \
   --imdb linemod_eggbox_test \
   --cfg experiments/cfgs/linemod_eggbox.yml \
   --cad data/LINEMOD/models.txt \
