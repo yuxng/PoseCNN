@@ -337,9 +337,9 @@ class linemod(datasets.imdb):
             num = poses_gt.shape[2]
 
             for j in xrange(num):
-                if meta_data['cls_indexes'][j] != self._cls_index:
+                if meta_data['cls_indexes'][j] != 1:
                     continue
-                cls = self._classes[int(meta_data['cls_indexes'][j])]
+                cls = self._classes[1]
                 print cls
                 print 'gt pose'
                 print poses_gt[:, :, j]
