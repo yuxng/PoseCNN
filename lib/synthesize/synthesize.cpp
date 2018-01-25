@@ -310,7 +310,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
               unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               float* vertex_targets, float* vertex_weights, float weight)
 {
-  bool is_textured = true;
+  double threshold = 0.2; // 0.2 for YCB
+  bool is_sampling = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -321,27 +322,37 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
   // sample the number of objects in the scene
-  int num = irand(5, 9);
+  int num;
   int num_classes = pose_nums_.size();
+  std::vector<int> class_ids;
 
-  // sample object classes
-  std::vector<int> class_ids(num);
-  for (int i = 0; i < num; )
+  if (is_sampling)
   {
-    int class_id = irand(0, num_classes);
-    int flag = 1;
-    for (int j = 0; j < i; j++)
+    // sample object classes
+    num = irand(5, 9);
+    for (int i = 0; i < num; )
     {
-      if(class_id == class_ids[j])
+      int class_id = irand(0, num_classes);
+      int flag = 1;
+      for (int j = 0; j < i; j++)
       {
-        flag = 0;
-        break;
+        if(class_id == class_ids[j])
+        {
+          flag = 0;
+          break;
+        }
+      }
+      if (flag)
+      {
+        class_ids.push_back(class_id);
       }
     }
-    if (flag)
-    {
-      class_ids[i++] = class_id;
-    }
+  }
+  else
+  {
+    num = num_classes;
+    for (int i = 0; i < num_classes; i++)
+      class_ids.push_back(i);
   }
 
   if (class_indexes)
@@ -352,7 +363,6 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
 
   // store the poses
   std::vector<Sophus::SE3d> poses(num);
-  double threshold = 0.2;
 
   for (int i = 0; i < num; i++)
   {
@@ -364,8 +374,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       int seed = irand(0, pose_nums_[class_id]);
       float* pose = poses_[class_id] + seed * 7;
 
-      Eigen::Quaterniond quaternion(pose[0], pose[1], pose[2], pose[3]);
-      Sophus::SE3d::Point translation(pose[4], pose[5], pose[6]);
+      Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
@@ -385,8 +395,13 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
         poses[i] = T_co;
         if (poses_return)
         {
-          for (int j = 0; j < 7; j++)
-            poses_return[i * 7 + j] = pose[j];
+          poses_return[i * 7 + 0] = quaternion.w();
+          poses_return[i * 7 + 1] = quaternion.x();
+          poses_return[i * 7 + 2] = quaternion.y();
+          poses_return[i * 7 + 3] = quaternion.z();
+          poses_return[i * 7 + 4] = translation(0);
+          poses_return[i * 7 + 5] = translation(1);
+          poses_return[i * 7 + 6] = translation(2);
         }
         break;
       }
@@ -475,7 +490,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
-  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+  // GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(2, 5), 1.};
 
   // render color image
   glColor3ub(255,255,255);
@@ -498,23 +514,44 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4); 
 
-    glEnable(GL_TEXTURE_2D);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_[class_id].Bind();
-    texturedVertices_[class_id].Bind();
-    glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_[class_id].Bind();
-    glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_[class_id].Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_[class_id].Unbind();
-    texturedTextures_[class_id].Unbind();
-    texturedVertices_[class_id].Unbind();
-    texturedCoords_[class_id].Unbind();
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisable(GL_TEXTURE_2D);
+    if(is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnable(GL_COLOR_MATERIAL);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+      glDisable(GL_COLOR_MATERIAL);
+    }
 
     glDisable(GL_LIGHT0);
     glDisable(GL_LIGHTING);
@@ -1953,7 +1990,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   {
     int objID = int(rois[i * 6 + 1]);
     data.objID = objID;
-    if (objID < 0)
+    if (objID <= 0)
       continue;
 
     // pose

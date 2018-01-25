@@ -223,6 +223,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
 
             # read label image
             im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
+        meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
         height = im.shape[0]
         width = im.shape[1]
@@ -239,79 +240,54 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             else:
                 im = im[:, ::-1, :]
         im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
+
+        # process annotation if training for two classes
         if num_classes == 2:
-            I = np.where(im > 0)
+            I = np.where(im == roidb[i]['cls_index'])
+            im[:, :] = 0
             im[I[0], I[1]] = 1
-            for j in xrange(len(meta_data['cls_indexes'])):
-                meta_data['cls_indexes'][j] = 1
+            ind = np.where(meta_data['cls_indexes'] == roidb[i]['cls_index'])[0]
+            meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
+            if len(meta_data['poses'].shape) == 3:
+                meta_data['poses'] = meta_data['poses'][:,:,ind]
+            meta_data['center'] = meta_data['center'][ind,:]
+
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
-            if is_syn:
-                poses = meta_data['poses']
-                if len(poses.shape) == 2:
-                    poses = np.reshape(poses, (3, 4, 1))
-                if roidb[i]['flipped']:
-                    poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
+            poses = meta_data['poses']
+            if len(poses.shape) == 2:
+                poses = np.reshape(poses, (3, 4, 1))
+            if roidb[i]['flipped']:
+                poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
 
-                vertmap = meta_data['vertmap']
-                if roidb[i]['flipped']:
-                    vertmap = vertmap[:, ::-1, :]
-                vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            vertmap = meta_data['vertmap']
+            if roidb[i]['flipped']:
+                vertmap = vertmap[:, ::-1, :]
+            vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
 
-                center = meta_data['center']
-                if roidb[i]['flipped']:
-                    center[:, 0] = width - center[:, 0]
+            center = meta_data['center']
+            if roidb[i]['flipped']:
+                center[:, 0] = width - center[:, 0]
 
-                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'].flatten(), im_scale * center, poses, num_classes, vertmap, extents)
-                processed_vertex_targets.append(vertex_targets)
-                processed_vertex_weights.append(vertex_weights)
+            vertex_targets, vertex_weights = \
+                _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * center, poses, num_classes, vertmap, extents)
+            processed_vertex_targets.append(vertex_targets)
+            processed_vertex_weights.append(vertex_weights)
 
-                num = poses.shape[2]
-                qt = np.zeros((num, 13), dtype=np.float32)
-                for j in xrange(num):
-                    R = poses[:, :3, j]
-                    T = poses[:, 3, j]
+            num = poses.shape[2]
+            qt = np.zeros((num, 13), dtype=np.float32)
+            for j in xrange(num):
+                R = poses[:, :3, j]
+                T = poses[:, 3, j]
 
-                    qt[j, 0] = i
-                    qt[j, 1] = meta_data['cls_indexes'][0, j]
-                    qt[j, 2:6] = 0  # fill box later
-                    qt[j, 6:10] = mat2quat(R)
-                    qt[j, 10:] = T
-            else:
-                poses = meta_data['poses']
-                if len(poses.shape) == 2:
-                    poses = np.reshape(poses, (3, 4, 1))
-                if roidb[i]['flipped']:
-                    poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
-
-                vertmap = meta_data['vertmap']
-                if roidb[i]['flipped']:
-                    vertmap = vertmap[:, ::-1, :]
-                vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-
-                center = meta_data['center']
-                if roidb[i]['flipped']:
-                    center[:, 0] = width - center[:, 0]
-
-                vertex_targets, vertex_weights = _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * center, poses, num_classes, vertmap, extents)
-                processed_vertex_targets.append(vertex_targets)
-                processed_vertex_weights.append(vertex_weights)
-
-                num = poses.shape[2]
-                qt = np.zeros((num, 13), dtype=np.float32)
-                for j in xrange(num):
-                    R = poses[:, :3, j]
-                    T = poses[:, 3, j]
-                    # print R, T
-
-                    qt[j, 0] = i
-                    qt[j, 1] = meta_data['cls_indexes'][j, 0]
-                    qt[j, 2:6] = 0  # fill box later, roidb[i]['boxes'][j, :]
-                    qt[j, 6:10] = mat2quat(R)
-                    qt[j, 10:] = T
+                qt[j, 0] = i
+                qt[j, 1] = meta_data['cls_indexes'][j]
+                qt[j, 2:6] = 0  # fill box later
+                qt[j, 6:10] = mat2quat(R)
+                qt[j, 10:] = T
 
             pose_blob = np.concatenate((pose_blob, qt), axis=0)
 
@@ -414,7 +390,7 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
         I = np.where(im_label == i)
         if len(x) > 0:
             if cfg.TRAIN.VERTEX_REG_2D:
-                ind = np.where(cls_indexes == i)[0]    
+                ind = np.where(cls_indexes == i)[0]
                 c[0] = center[ind, 0]
                 c[1] = center[ind, 1]
                 z = poses[2, 3, ind]
@@ -500,7 +476,6 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blo
         # project the 3D box to image
         metadata = meta_data_blob[i, 0, 0, :]
         intrinsic_matrix = metadata[:9].reshape((3,3))
-        print intrinsic_matrix
         for j in xrange(pose_blob.shape[0]):
             if pose_blob[j, 0] != i:
                 continue
@@ -544,7 +519,7 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blo
         height = label.shape[0]
         width = label.shape[1]
         num_classes = label.shape[2]
-        l = np.zeros((height, width), dtype=np.int32)
+        l = 255 * np.ones((height, width), dtype=np.int32)
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             vertex_target = vertex_target_blob[i, :, :, :]
             center = np.zeros((height, width, 3), dtype=np.float32)

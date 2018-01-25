@@ -9,6 +9,7 @@
 
 from fcn.config import cfg, get_output_dir
 import argparse
+from synthesize import synthesizer
 from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
@@ -21,7 +22,6 @@ import os
 import math
 import tensorflow as tf
 import time
-from synthesize import synthesizer
 from transforms3d.quaternions import quat2mat, mat2quat
 import scipy.io
 
@@ -311,7 +311,7 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     """Visual debugging of detections."""
-
+    import matplotlib.pyplot as plt
     fig = plt.figure()
 
     # show image
@@ -664,6 +664,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     if cfg.TEST.VERTEX_REG_2D:
         # show centers
         for i in xrange(rois.shape[0]):
+            if rois[i, 1] == 0:
+                continue
             cx = (rois[i, 2] + rois[i, 4]) / 2
             cy = (rois[i, 3] + rois[i, 5]) / 2
             w = rois[i, 4] - rois[i, 2]
@@ -699,16 +701,16 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == i)
             if len(index[0]) > 0:
                 # extract 3D points
-                # num = len(index[0])
-                # x3d = np.ones((4, num), dtype=np.float32)
-                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                num = len(index[0])
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
-                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                x3d[0, :] = points[i,:,0]
-                x3d[1, :] = points[i,:,1]
-                x3d[2, :] = points[i,:,2]
+                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                # x3d[0, :] = points[i,:,0]
+                # x3d[1, :] = points[i,:,1]
+                # x3d[2, :] = points[i,:,2]
 
                 # projection
                 ind = np.where(cls_indexes == i)[0][0]
@@ -716,8 +718,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
-                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[i], 255.0), s=10)
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+                # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[i], 255.0), s=10)
 
         ax.set_title('gt projection')
         ax.invert_yaxis()
@@ -730,18 +732,18 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
         for i in xrange(rois.shape[0]):
             cls = int(rois[i, 1])
             index = np.where(labels_gt == cls)
-            if len(index[0]) > 0:
+            if len(index[0]) > 0 and cls > 0:
                 # extract 3D points
-                # num = len(index[0])
-                # x3d = np.ones((4, num), dtype=np.float32)
-                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                num = len(index[0])
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
-                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                x3d[0, :] = points[cls,:,0]
-                x3d[1, :] = points[cls,:,1]
-                x3d[2, :] = points[cls,:,2]
+                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                # x3d[0, :] = points[cls,:,0]
+                # x3d[1, :] = points[cls,:,1]
+                # x3d[2, :] = points[cls,:,2]
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -750,8 +752,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
-                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
 
         ax.set_title('projection')
         ax.invert_yaxis()
@@ -1044,14 +1046,24 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # sample a background image
             ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename = backgrounds[ind]
-            background = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+            filename_color = backgrounds[ind]
+            background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
+            try:
+                background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            except:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+
+            if len(background_color.shape) != 3:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
 
             # add background
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = background[I[0], I[1], :]
+            print im.shape, background_color.shape
+            im[I[0], I[1], :] = background_color[I[0], I[1], :]
 
             # depth
             filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
@@ -1086,17 +1098,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-
-        if imdb.num_classes == 2:
-            if not 'test' in imdb.name:
-                meta_data['cls_indexes'][:] = 1
-            else:
-                I = np.where(labels_gt == imdb._cls_index)
-                labels_gt[:, :] = 0
-                labels_gt[I[0], I[1]] = 1
-                index = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
-                meta_data['cls_indexes'][:] = 0
-                meta_data['cls_indexes'][index] = 1
+            print imdb.metadata_path_at(i)
+        meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
         if len(labels_gt.shape) == 2:
             im_label_gt = imdb.labels_to_image(im, labels_gt)
@@ -1142,12 +1145,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 if cfg.TEST.POSE_REFINE:
                     labels_icp = labels.copy();
                     rois_icp = rois
-                    if imdb.num_classes == 2:
-                        I = np.where(labels_icp > 0)
-                        labels_icp[I[0], I[1]] = imdb._cls_index
-                        rois_icp = rois.copy()
-                        rois_icp[:, 1] = imdb._cls_index
-
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
                     SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
                 
