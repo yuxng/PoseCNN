@@ -18,7 +18,7 @@ time ./tools/train_net.py --gpu 0 \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb linemod_ape_train \
   --cfg experiments/cfgs/linemod_ape.yml \
-  --iters 40000
+  --iters 20000
 
 # train for pose
 #time ./tools/train_net.py --gpu 0 \

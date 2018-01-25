@@ -31,4 +31,4 @@ TEST:
   VERTEX_REG_3D: False
   VISUALIZE: True
   POSE_REG: False
-  SYNTHETIC: False
+  SYNTHETIC: True
