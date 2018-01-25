@@ -31,6 +31,7 @@
 #include <pcl/common/geometry.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/crh.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 #include <df/camera/camera.h>
 #include <df/camera/linear.h>

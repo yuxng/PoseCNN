@@ -767,7 +767,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             for i in xrange(rois.shape[0]):
                 cls = int(rois[i, 1])
                 index = np.where(labels_gt == cls)
-                if len(index[0]) > 0:
+                if len(index[0]) > 0 and cls > 0:
                     num = len(index[0])
                     # extract 3D points
                     x3d = np.ones((4, num), dtype=np.float32)
@@ -1020,8 +1020,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(709, num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(7, num_images)
     else:
         perm = xrange(num_images)
 

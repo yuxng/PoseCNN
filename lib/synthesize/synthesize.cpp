@@ -2053,7 +2053,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         p[j] = 0;
     }
     std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
-    if (label_indexes_.size() < 400)
+    if (label_indexes_.size() < 500)
       continue;
 
     // backprojection
@@ -2066,6 +2066,8 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float Ty = 0;
     float Tz = 0;
     int c = 0;
+    std::vector<PointT> depth_points;
+    std::vector<Vec3> model_points;
     for (int j = 0; j < label_indexes_.size(); j++)
     {
       int x = label_indexes_[j] % width;
@@ -2090,6 +2092,18 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
             Tz += (dpoint(2) - vz);
             c++;
           }
+
+          Vec3 mt;
+          mt(0) = vx;
+          mt(1) = vy;
+          mt(2) = vz;
+          model_points.push_back(mt);
+
+          PointT pt;
+          pt.x = dpoint(0);
+          pt.y = dpoint(1);
+          pt.z = dpoint(2);
+          depth_points.push_back(pt);
         }
       }
     }
@@ -2113,7 +2127,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       T_co.translation()(1) = ry * Tz;
       T_co.translation()(2) = Tz;
       std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
-
+      /*
       iterations = 100;
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
       Tx = T_co.translation()(0);
@@ -2122,6 +2136,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       rx = Tx / Tz;
       ry = Ty / Tz;
       std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
+      */
     }
     else
       Tz = T_co.translation()(2);
@@ -2165,7 +2180,59 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     for (int j = 0; j < hyps.size(); j++)
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, hyps[j], iterations, maxError, 1);
 
+    // build a kd-tree of the depth points
+    PointCloud::Ptr cloud(new PointCloud);
+    cloud->width = depth_points.size();
+    cloud->height = 1;
+    cloud->points.resize(cloud->width * cloud->height);
+    for (size_t j = 0; j < cloud->points.size(); j++)
+    {
+      cloud->points[j].x = depth_points[j].x;
+      cloud->points[j].y = depth_points[j].y;
+      cloud->points[j].z = depth_points[j].z;
+    }
+    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+    kdtree.setInputCloud(cloud);
+
+    // use the metric in SegICP
+    float max_score = -FLT_MAX;
+    int choose = -1;
+    for (int j = 0; j < hyps.size(); j++)
+    {
+      float score = 0;
+      std::vector<int> flags(depth_points.size(), 0);
+      for (int k = 0; k < model_points.size(); k++)
+      {
+        Vec3 pt = hyps[j] * model_points[k];
+        PointT searchPoint;
+        searchPoint.x = pt(0);
+        searchPoint.y = pt(1);
+        searchPoint.z = pt(2);
+
+        // nearest neighbor search
+        std::vector<int> pointIdxNKNSearch(1);
+        std::vector<float> pointNKNSquaredDistance(1);
+        if (kdtree.nearestKSearch (searchPoint, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
+        {
+          if (flags[pointIdxNKNSearch[0]] == 0)
+          {
+            flags[pointIdxNKNSearch[0]] = 1;
+            score++;
+          }
+        }
+      }
+      score /= model_points.size();
+      if (score > max_score)
+      {
+        max_score = score;
+        choose = j;
+      }
+      printf("hypothesis %d, score %f\n", j, score);
+    }
+    printf("select hypothesis %d\n", choose);
+
     // chose hypothesis
+    /*
     float dis = 1000000;
     int choose = -1;
     for (int j = 0; j < hyps.size(); j++)
@@ -2182,6 +2249,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         choose = j;
       }
     }
+    */
     T_co = hyps[choose];
 
     // set output
