@@ -1101,6 +1101,17 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print imdb.metadata_path_at(i)
         meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
+        # process annotation if training for two classes
+        if imdb.num_classes == 2:
+            I = np.where(labels_gt == imdb._cls_index)
+            labels_gt[:, :] = 0
+            labels_gt[I[0], I[1]] = 1
+            ind = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
+            meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
+            if len(meta_data['poses'].shape) == 3:
+                meta_data['poses'] = meta_data['poses'][:,:,ind]
+            meta_data['center'] = meta_data['center'][ind,:]
+
         if len(labels_gt.shape) == 2:
             im_label_gt = imdb.labels_to_image(im, labels_gt)
         else:

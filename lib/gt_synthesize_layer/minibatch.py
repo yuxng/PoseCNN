@@ -112,7 +112,7 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
                 im = rgba
 
         # chromatic transform
-        if cfg.TRAIN.CHROMATIC and npr.randint(0, 2) == 0:
+        if cfg.TRAIN.CHROMATIC:
             im = chromatic_transform(im)
 
         if roidb[i]['flipped']:
