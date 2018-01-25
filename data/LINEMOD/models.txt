@@ -1,0 +1,15 @@
+data/LINEMOD/models/ape.ply
+data/LINEMOD/models/benchvise.ply
+data/LINEMOD/models/bowl.ply
+data/LINEMOD/models/camera.ply
+data/LINEMOD/models/can.ply
+data/LINEMOD/models/cat.ply
+data/LINEMOD/models/cup.ply
+data/LINEMOD/models/driller.ply
+data/LINEMOD/models/duck.ply
+data/LINEMOD/models/eggbox.ply
+data/LINEMOD/models/glue.ply
+data/LINEMOD/models/holepuncher.ply
+data/LINEMOD/models/iron.ply
+data/LINEMOD/models/lamp.ply
+data/LINEMOD/models/phone.ply
