@@ -1990,7 +1990,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   {
     int objID = int(rois[i * 6 + 1]);
     data.objID = objID;
-    if (objID < 0)
+    if (objID <= 0)
       continue;
 
     // pose

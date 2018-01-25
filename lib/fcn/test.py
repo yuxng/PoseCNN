@@ -9,6 +9,7 @@
 
 from fcn.config import cfg, get_output_dir
 import argparse
+from synthesize import synthesizer
 from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
@@ -21,7 +22,6 @@ import os
 import math
 import tensorflow as tf
 import time
-from synthesize import synthesizer
 from transforms3d.quaternions import quat2mat, mat2quat
 import scipy.io
 
@@ -701,16 +701,16 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == i)
             if len(index[0]) > 0:
                 # extract 3D points
-                # num = len(index[0])
-                # x3d = np.ones((4, num), dtype=np.float32)
-                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                num = len(index[0])
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
-                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                x3d[0, :] = points[i,:,0]
-                x3d[1, :] = points[i,:,1]
-                x3d[2, :] = points[i,:,2]
+                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                # x3d[0, :] = points[i,:,0]
+                # x3d[1, :] = points[i,:,1]
+                # x3d[2, :] = points[i,:,2]
 
                 # projection
                 ind = np.where(cls_indexes == i)[0][0]
@@ -718,8 +718,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
-                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[i], 255.0), s=10)
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[i], 255.0), alpha=0.05)
+                # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[i], 255.0), s=10)
 
         ax.set_title('gt projection')
         ax.invert_yaxis()
@@ -734,16 +734,16 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0 and cls > 0:
                 # extract 3D points
-                # num = len(index[0])
-                # x3d = np.ones((4, num), dtype=np.float32)
-                # x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                # x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                # x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                num = len(index[0])
+                x3d = np.ones((4, num), dtype=np.float32)
+                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
 
-                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                x3d[0, :] = points[cls,:,0]
-                x3d[1, :] = points[cls,:,1]
-                x3d[2, :] = points[cls,:,2]
+                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                # x3d[0, :] = points[cls,:,0]
+                # x3d[1, :] = points[cls,:,1]
+                # x3d[2, :] = points[cls,:,2]
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -752,8 +752,8 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                # plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
-                plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
 
         ax.set_title('projection')
         ax.invert_yaxis()
