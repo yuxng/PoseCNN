@@ -34,7 +34,7 @@ class linemod(datasets.imdb):
                                   (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
                                   (64, 0, 0), (0, 64, 0), (0, 0, 64)]
         self._class_weights_all = [1, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
-        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0])
+        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
         for i in xrange(len(self._classes_all)):
             if self._cls == self._classes_all[i]:
@@ -345,6 +345,8 @@ class linemod(datasets.imdb):
                 print poses_gt[:, :, j]
 
                 for k in xrange(rois.shape[0]):
+                    if rois[k, 1] != meta_data['cls_indexes'][j]:
+                        continue
 
                     print 'estimated pose'
                     RT = np.zeros((3, 4), dtype=np.float32)
@@ -371,12 +373,16 @@ class linemod(datasets.imdb):
                     error_translation = te(RT[:, 3], poses_gt[:, 3, j])
                     print 'translation error: {}'.format(error_translation)
 
+                    error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                        poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    print 'reprojection error: {}'.format(error_reprojection)
+
                     # compute pose error
                     if cls == 'eggbox' or cls == 'glue':
                         error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                     else:
                         error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                    print 'error: {}'.format(error)
+                    print 'average distance error: {}\n'.format(error)
 
                     if cfg.TEST.POSE_REFINE:
                         error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
@@ -385,11 +391,15 @@ class linemod(datasets.imdb):
                         error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
                         print 'translation error new: {}'.format(error_translation_new)
 
+                        error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_new[:3, :3], RT_new[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'reprojection error new: {}'.format(error_reprojection_new)
+
                         if cls == 'eggbox' or cls == 'glue':
                             error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         else:
                             error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                        print 'error new: {}'.format(error_new)
+                        print 'average distance error new: {}\n'.format(error_new)
 
                         error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
                         print 'rotation error icp: {}'.format(error_rotation_icp)
@@ -397,11 +407,15 @@ class linemod(datasets.imdb):
                         error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
                         print 'translation error icp: {}'.format(error_translation_icp)
 
+                        error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_icp[:3, :3], RT_icp[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'reprojection error icp: {}'.format(error_reprojection_icp)
+
                         if cls == 'eggbox' or cls == 'glue':
                             error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         else:
                             error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                        print 'error icp: {}'.format(error_icp)
+                        print 'average distance error icp: {}'.format(error_icp)
 
                     print 'threshold: {}'.format(0.1 * np.linalg.norm(self._extents[1, :]))
 
@@ -447,6 +461,7 @@ class linemod(datasets.imdb):
             if cfg.TEST.POSE_REG:
                 # load meta data
                 meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+                meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
                 ind = np.where(meta_data['cls_indexes'] == self._cls_index)[0]
                 meta_data['cls_indexes'][:] = 0
                 meta_data['cls_indexes'][ind] = 1
@@ -468,6 +483,8 @@ class linemod(datasets.imdb):
                     count_all += 1
 
                     for k in xrange(rois.shape[0]):
+                        if rois[k, 1] != meta_data['cls_indexes'][j]:
+                            continue
 
                         RT = np.zeros((3, 4), dtype=np.float32)
                         RT[:3, :3] = quat2mat(poses[k, :4])

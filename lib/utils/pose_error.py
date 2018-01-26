@@ -22,6 +22,36 @@ def transform_pts_Rt(pts, R, t):
     pts_t = R.dot(pts.T) + t.reshape((3, 1))
     return pts_t.T
 
+def reproj(K, R_est, t_est, R_gt, t_gt, pts):
+    """
+    reprojection error.
+    :param K intrinsic matrix
+    :param R_est, t_est: Estimated pose (3x3 rot. matrix and 3x1 trans. vector).
+    :param R_gt, t_gt: GT pose (3x3 rot. matrix and 3x1 trans. vector).
+    :param model: Object model given by a dictionary where item 'pts'
+    is nx3 ndarray with 3D model points.
+    :return: Error of pose_est w.r.t. pose_gt.
+    """
+    pts_est = transform_pts_Rt(pts, R_est, t_est)
+    pts_gt = transform_pts_Rt(pts, R_gt, t_gt)
+
+    pixels_est = K.dot(pts_est.T)
+    pixels_est = pixels_est.T
+    pixels_gt = K.dot(pts_gt.T)
+    pixels_gt = pixels_gt.T
+
+    n = pts.shape[0]
+    est = np.zeros((n, 2), dtype=np.float32);
+    est[:, 0] = np.divide(pixels_est[:, 0], pixels_est[:, 2])
+    est[:, 1] = np.divide(pixels_est[:, 1], pixels_est[:, 2])
+
+    gt = np.zeros((n, 2), dtype=np.float32);
+    gt[:, 0] = np.divide(pixels_gt[:, 0], pixels_gt[:, 2])
+    gt[:, 1] = np.divide(pixels_gt[:, 1], pixels_gt[:, 2])
+
+    e = np.linalg.norm(est - gt, axis=1).mean()
+    return e
+
 def add(R_est, t_est, R_gt, t_gt, pts):
     """
     Average Distance of Model Points for objects with no indistinguishable views
