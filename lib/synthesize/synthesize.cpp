@@ -310,7 +310,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
               unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               float* vertex_targets, float* vertex_weights, float weight)
 {
-  bool is_textured = true;
+  double threshold = 0.2; // 0.2 for YCB
+  bool is_sampling = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -321,27 +322,37 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
   // sample the number of objects in the scene
-  int num = irand(5, 9);
+  int num;
   int num_classes = pose_nums_.size();
+  std::vector<int> class_ids;
 
-  // sample object classes
-  std::vector<int> class_ids(num);
-  for (int i = 0; i < num; )
+  if (is_sampling)
   {
-    int class_id = irand(0, num_classes);
-    int flag = 1;
-    for (int j = 0; j < i; j++)
+    // sample object classes
+    num = irand(5, 9);
+    for (int i = 0; i < num; )
     {
-      if(class_id == class_ids[j])
+      int class_id = irand(0, num_classes);
+      int flag = 1;
+      for (int j = 0; j < i; j++)
       {
-        flag = 0;
-        break;
+        if(class_id == class_ids[j])
+        {
+          flag = 0;
+          break;
+        }
+      }
+      if (flag)
+      {
+        class_ids.push_back(class_id);
       }
     }
-    if (flag)
-    {
-      class_ids[i++] = class_id;
-    }
+  }
+  else
+  {
+    num = num_classes;
+    for (int i = 0; i < num_classes; i++)
+      class_ids.push_back(i);
   }
 
   if (class_indexes)
@@ -352,7 +363,6 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
 
   // store the poses
   std::vector<Sophus::SE3d> poses(num);
-  double threshold = 0.2;
 
   for (int i = 0; i < num; i++)
   {
@@ -364,8 +374,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       int seed = irand(0, pose_nums_[class_id]);
       float* pose = poses_[class_id] + seed * 7;
 
-      Eigen::Quaterniond quaternion(pose[0], pose[1], pose[2], pose[3]);
-      Sophus::SE3d::Point translation(pose[4], pose[5], pose[6]);
+      Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
@@ -385,8 +395,13 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
         poses[i] = T_co;
         if (poses_return)
         {
-          for (int j = 0; j < 7; j++)
-            poses_return[i * 7 + j] = pose[j];
+          poses_return[i * 7 + 0] = quaternion.w();
+          poses_return[i * 7 + 1] = quaternion.x();
+          poses_return[i * 7 + 2] = quaternion.y();
+          poses_return[i * 7 + 3] = quaternion.z();
+          poses_return[i * 7 + 4] = translation(0);
+          poses_return[i * 7 + 5] = translation(1);
+          poses_return[i * 7 + 6] = translation(2);
         }
         break;
       }
@@ -475,7 +490,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
-  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+  // GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(2, 5), 1.};
 
   // render color image
   glColor3ub(255,255,255);
@@ -498,23 +514,44 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4); 
 
-    glEnable(GL_TEXTURE_2D);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    texturedTextures_[class_id].Bind();
-    texturedVertices_[class_id].Bind();
-    glVertexPointer(3,GL_FLOAT,0,0);
-    texturedCoords_[class_id].Bind();
-    glTexCoordPointer(2,GL_FLOAT,0,0);
-    texturedIndices_[class_id].Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_[class_id].Unbind();
-    texturedTextures_[class_id].Unbind();
-    texturedVertices_[class_id].Unbind();
-    texturedCoords_[class_id].Unbind();
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisable(GL_TEXTURE_2D);
+    if(is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnable(GL_COLOR_MATERIAL);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+      glDisable(GL_COLOR_MATERIAL);
+    }
 
     glDisable(GL_LIGHT0);
     glDisable(GL_LIGHTING);
@@ -602,7 +639,6 @@ jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
 void Synthesizer::render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
 {
-  bool is_textured = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -615,7 +651,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int num_classes = pose_nums_.size();
   // sample the number of objects in the scene
   int num;
-  if (irand(0, 8) == 0)
+  if (irand(0, 2) == 0)
     num = 2;
   else
     num = 1;
@@ -728,6 +764,8 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     }
   }
 
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
+
   // render color image
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
@@ -743,6 +781,13 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     pangolin::OpenGlMatrix mvMatrix(mv);
     mvMatrix.Load();
 
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.6); 
+
+    glEnable(GL_COLOR_MATERIAL);
     glEnableClientState(GL_VERTEX_ARRAY);
     texturedVertices_[class_id].Bind();
     glVertexPointer(3,GL_FLOAT,0,0);
@@ -756,6 +801,11 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     vertexColors_[class_id].Unbind();
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
+    glDisable(GL_COLOR_MATERIAL);
+
+    glDisable(GL_LIGHT0);
+    glDisable(GL_LIGHTING);
+
   }
 
   // read color image
@@ -1940,12 +1990,12 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   {
     int objID = int(rois[i * 6 + 1]);
     data.objID = objID;
-    if (objID < 0)
+    if (objID <= 0)
       continue;
 
     // pose
     float* pose = poses + i * 7;
-    std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
+    // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
     Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
     Sophus::SE3f T_co(quaternion, translation);
@@ -2002,9 +2052,12 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       else
         p[j] = 0;
     }
-    std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
-    if (label_indexes_.size() < 400)
+
+    if (label_indexes_.size() < 500)
+    {
+      std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
       continue;
+    }
 
     // backprojection
     depth_map_device_->copyFrom(*depth_map_);
@@ -2016,6 +2069,8 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     float Ty = 0;
     float Tz = 0;
     int c = 0;
+    std::vector<PointT> depth_points;
+    std::vector<Vec3> model_points;
     for (int j = 0; j < label_indexes_.size(); j++)
     {
       int x = label_indexes_[j] % width;
@@ -2040,6 +2095,18 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
             Tz += (dpoint(2) - vz);
             c++;
           }
+
+          Vec3 mt;
+          mt(0) = vx;
+          mt(1) = vy;
+          mt(2) = vz;
+          model_points.push_back(mt);
+
+          PointT pt;
+          pt.x = dpoint(0);
+          pt.y = dpoint(1);
+          pt.z = dpoint(2);
+          depth_points.push_back(pt);
         }
       }
     }
@@ -2056,14 +2123,14 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       Tx /= c;
       Ty /= c;
       Tz /= c;
-      std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
+      // std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
 
       // modify translation
       T_co.translation()(0) = rx * Tz;
       T_co.translation()(1) = ry * Tz;
       T_co.translation()(2) = Tz;
-      std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
-
+      // std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+/*
       iterations = 100;
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
       Tx = T_co.translation()(0);
@@ -2071,7 +2138,8 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       Tz = T_co.translation()(2);
       rx = Tx / Tz;
       ry = Ty / Tz;
-      std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
+*/
+      // std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
     }
     else
       Tz = T_co.translation()(2);
@@ -2113,9 +2181,78 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     
     iterations = 8;
     for (int j = 0; j < hyps.size(); j++)
+    {
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, hyps[j], iterations, maxError, 1);
+      std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl;
+    }
+
+    // build a kd-tree of the depth points
+    PointCloud::Ptr cloud(new PointCloud);
+    cloud->width = depth_points.size();
+    cloud->height = 1;
+    cloud->points.resize(cloud->width * cloud->height);
+    for (size_t j = 0; j < cloud->points.size(); j++)
+    {
+      cloud->points[j].x = depth_points[j].x;
+      cloud->points[j].y = depth_points[j].y;
+      cloud->points[j].z = depth_points[j].z;
+    }
+    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+    kdtree.setInputCloud(cloud);
+
+    // use the metric in SegICP
+    float max_score = -FLT_MAX;
+    int choose = -1;
+    for (int j = 0; j < hyps.size(); j++)
+    {
+      float score = 0;
+      std::vector<int> flags(depth_points.size(), 0);
+      for (int k = 0; k < model_points.size(); k++)
+      {
+        Vec3 pt = hyps[j] * model_points[k];
+        PointT searchPoint;
+        searchPoint.x = pt(0);
+        searchPoint.y = pt(1);
+        searchPoint.z = pt(2);
+
+        std::vector<int> pointIdxRadiusSearch;
+        std::vector<float> pointRadiusSquaredDistance;
+        float radius = 0.01;
+        if (kdtree.radiusSearch (searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+        {
+          if (flags[pointIdxRadiusSearch[0]] == 0)
+          {
+            flags[pointIdxRadiusSearch[0]] = 1;
+            score++;
+          }
+        }
+/*
+        // nearest neighbor search
+        std::vector<int> pointIdxNKNSearch(1);
+        std::vector<float> pointNKNSquaredDistance(1);
+        if (kdtree.nearestKSearch (searchPoint, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
+        {
+          // printf("index %d, distance %f, flag %d\n", pointIdxNKNSearch[0], pointNKNSquaredDistance[0], flags[pointIdxNKNSearch[0]]);
+          if (flags[pointIdxNKNSearch[0]] == 0)
+          {
+            flags[pointIdxNKNSearch[0]] = 1;
+            score++;
+          }
+        }
+*/
+      }
+      score /= model_points.size();
+      if (score > max_score)
+      {
+        max_score = score;
+        choose = j;
+      }
+      printf("hypothesis %d, score %f\n", j, score);
+    }
+    printf("select hypothesis %d\n", choose);
 
     // chose hypothesis
+    /*
     float dis = 1000000;
     int choose = -1;
     for (int j = 0; j < hyps.size(); j++)
@@ -2132,6 +2269,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         choose = j;
       }
     }
+    */
     T_co = hyps[choose];
 
     // set output

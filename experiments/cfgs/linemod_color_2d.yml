@@ -6,30 +6,28 @@ TRAIN:
   MOMENTUM: 0.9
   GAMMA: 0.1
   STEPSIZE: 60000
-  SCALES_BASE: !!python/tuple [1.5]
+  SCALES_BASE: !!python/tuple [1.0]
   IMS_PER_BATCH: 2
-  NUM_CLASSES: 2
+  NUM_CLASSES: 9
   NUM_UNITS: 64
-  SNAPSHOT_ITERS: 20000
-  SNAPSHOT_INFIX: linemod_holepuncher
-  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
+  SNAPSHOT_ITERS: 1000
+  SNAPSHOT_INFIX: linemod
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d
   USE_FLIPPED: False
-  CHROMATIC: True
+  CHROMATIC: False
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
-  VERTEX_W: 10.0
   VISUALIZE: False
-  POSE_REG: True
+  POSE_REG: False
   SYNTHESIZE: True
   SYNROOT: 'data/LINEMOD/data_syn/'
   SYNNUM: 80000
   SYN_RATIO: 5
 TEST:
   SINGLE_FRAME: True
-  SCALES_BASE: !!python/tuple [1.5]
+  SCALES_BASE: !!python/tuple [1.0]
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VISUALIZE: True
-  POSE_REG: True
+  POSE_REG: False
   SYNTHETIC: False
-  POSE_REFINE: True

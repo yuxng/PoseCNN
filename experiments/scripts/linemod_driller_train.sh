@@ -13,18 +13,18 @@ echo Logging output to "$LOG"
 export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 
 # train for labeling
-#time ./tools/train_net.py --gpu 0 \
-#  --network vgg16_convs \
-#  --weights data/imagenet_models/vgg16_convs.npy \
-#  --imdb linemod_driller_train \
-#  --cfg experiments/cfgs/linemod_driller.yml \
-#  --iters 40000
+time ./tools/train_net.py --gpu 0 \
+  --network vgg16_convs \
+  --weights data/imagenet_models/vgg16_convs.npy \
+  --imdb linemod_driller_train \
+  --cfg experiments/cfgs/linemod_driller.yml \
+  --iters 20000
 
 # train for pose
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16.npy \
-  --ckpt output/linemod/linemod_driller_train/vgg16_fcn_color_single_frame_linemod_driller_iter_40000.ckpt \
+  --ckpt output/linemod/linemod_driller_train/vgg16_fcn_color_single_frame_linemod_driller_iter_20000.ckpt \
   --imdb linemod_driller_train \
   --cfg experiments/cfgs/linemod_driller_pose.yml \
-  --iters 80000
+  --iters 40000

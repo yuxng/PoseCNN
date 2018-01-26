@@ -77,7 +77,7 @@ def chromatic_transform(im, label=None, d_h=None, d_s=None, d_l=None):
     """
     # Set random hue, luminosity and saturation which ranges from -0.1 to 0.1
     if d_h is None:
-        d_h = (np.random.rand(1) - 0.5) * 0.2 * 180
+        d_h = (np.random.rand(1) - 0.5) * 0. * 180
     if d_l is None:
         d_l = (np.random.rand(1) - 0.5) * 0.2 * 256
     if d_s is None:

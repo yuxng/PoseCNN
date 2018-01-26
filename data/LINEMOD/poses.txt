@@ -1,0 +1,15 @@
+data/LINEMOD/poses/ape.txt
+data/LINEMOD/poses/benchvise.txt
+data/LINEMOD/poses/bowl.txt
+data/LINEMOD/poses/camera.txt
+data/LINEMOD/poses/can.txt
+data/LINEMOD/poses/cat.txt
+data/LINEMOD/poses/cup.txt
+data/LINEMOD/poses/driller.txt
+data/LINEMOD/poses/duck.txt
+data/LINEMOD/poses/eggbox.txt
+data/LINEMOD/poses/glue.txt
+data/LINEMOD/poses/holepuncher.txt
+data/LINEMOD/poses/iron.txt
+data/LINEMOD/poses/lamp.txt
+data/LINEMOD/poses/phone.txt

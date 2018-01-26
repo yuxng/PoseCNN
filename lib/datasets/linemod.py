@@ -15,6 +15,7 @@ class linemod(datasets.imdb):
     def __init__(self, cls, image_set, linemod_path = None):
         datasets.imdb.__init__(self, 'linemod_' + cls + '_' + image_set)
         self._cls = cls
+
         self._image_set = image_set
         self._linemod_path = self._get_default_path() if linemod_path is None \
                             else linemod_path
@@ -23,15 +24,29 @@ class linemod(datasets.imdb):
         self._classes = ('__background__', cls)
         self._class_colors = [(255, 255, 255), (255, 0, 0)]
         self._class_weights = [1, 100]
-        self._classes_all = ('__background__', 'ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
+        self._symmetry = [0, 0]
+
+        self._classes_all = ('__background__', 'ape', 'benchvise', 'bowl', 'camera', 'can', \
+                         'cat', 'cup', 'driller', 'duck', 'eggbox', \
+                         'glue', 'holepuncher', 'iron', 'lamp', 'phone')
+        self._class_colors_all = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), \
+                                  (255, 255, 0), (255, 0, 255), (0, 255, 255), \
+                                  (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
+                                  (64, 0, 0), (0, 64, 0), (0, 0, 64)]
+        self._class_weights_all = [1, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
         for i in xrange(len(self._classes_all)):
             if self._cls == self._classes_all[i]:
                 self._cls_index = i
+                self._class_colors[1] = self._class_colors_all[i]
+                self._class_weights[1] = self._class_weights_all[i]
+                self._symmetry[1] = self._symmetry_all[i]
                 break
 
+        self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
-        self._points = self._load_object_points()
+
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -111,10 +126,11 @@ class linemod(datasets.imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
+
         if self._image_set == 'train':
             image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '.txt')
         else:
-            image_set_file = os.path.join(self._linemod_path, 'indexes', self._image_set + '.txt')
+            image_set_file = os.path.join(self._linemod_path, 'indexes', 'benchvise.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
@@ -131,12 +147,22 @@ class linemod(datasets.imdb):
 
     def _load_object_points(self):
 
-        point_file = os.path.join(self._linemod_path, 'models', self._cls + '.xyz')
-        assert os.path.exists(point_file), \
-                'Path does not exist: {}'.format(point_file)
+        points = [[] for _ in xrange(len(self._classes))]
+        num = np.inf
 
-        points = np.loadtxt(point_file)
-        return points
+        for i in xrange(1, len(self._classes)):
+            point_file = os.path.join(self._linemod_path, 'models', self._classes[i] + '.xyz')
+            print point_file
+            assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
+            points[i] = np.loadtxt(point_file)
+            if points[i].shape[0] < num:
+                num = points[i].shape[0]
+
+        points_all = np.zeros((self.num_classes, num, 3), dtype=np.float32)
+        for i in xrange(1, len(self._classes)):
+            points_all[i, :, :] = points[i][:num, :]
+
+        return points[1], points_all
 
 
     def _load_object_extents(self):
@@ -146,13 +172,8 @@ class linemod(datasets.imdb):
                 'Path does not exist: {}'.format(extent_file)
 
         extents = np.zeros((self.num_classes, 3), dtype=np.float32)
-
         extents_all = np.loadtxt(extent_file)
-        classes_all = ['ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher']
-        for i in xrange(len(classes_all)):
-            if self._cls == classes_all[i]:
-                extents[1, :] = extents_all[i, :]
-                break
+        extents[1, :] = extents_all[self._cls_index - 1, :]
 
         return extents
 
@@ -217,13 +238,19 @@ class linemod(datasets.imdb):
 
         # metadata path
         metadata_path = self.metadata_path_from_index(index)
+
+        # parse image name
+        pos = index.find('/')
+        video_id = index[:pos]
         
         return {'image': image_path,
                 'depth': depth_path,
                 'label': label_path,
                 'meta_data': metadata_path,
+                'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
+                'cls_index': self._cls_index,
                 'flipped': False}
 
     def _process_label_image(self, label_image):
@@ -310,14 +337,16 @@ class linemod(datasets.imdb):
             num = poses_gt.shape[2]
 
             for j in xrange(num):
-                if meta_data['cls_indexes'][j] <= 0:
+                if meta_data['cls_indexes'][j] != 1:
                     continue
-                cls = self._classes[int(meta_data['cls_indexes'][j])]
+                cls = self._classes[1]
                 print cls
                 print 'gt pose'
                 print poses_gt[:, :, j]
 
                 for k in xrange(rois.shape[0]):
+                    if rois[k, 1] != meta_data['cls_indexes'][j]:
+                        continue
 
                     print 'estimated pose'
                     RT = np.zeros((3, 4), dtype=np.float32)
@@ -344,12 +373,16 @@ class linemod(datasets.imdb):
                     error_translation = te(RT[:, 3], poses_gt[:, 3, j])
                     print 'translation error: {}'.format(error_translation)
 
+                    error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                        poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    print 'reprojection error: {}'.format(error_reprojection)
+
                     # compute pose error
                     if cls == 'eggbox' or cls == 'glue':
                         error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                     else:
                         error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                    print 'error: {}'.format(error)
+                    print 'average distance error: {}\n'.format(error)
 
                     if cfg.TEST.POSE_REFINE:
                         error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
@@ -358,11 +391,15 @@ class linemod(datasets.imdb):
                         error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
                         print 'translation error new: {}'.format(error_translation_new)
 
+                        error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_new[:3, :3], RT_new[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'reprojection error new: {}'.format(error_reprojection_new)
+
                         if cls == 'eggbox' or cls == 'glue':
                             error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         else:
                             error_new = add(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                        print 'error new: {}'.format(error_new)
+                        print 'average distance error new: {}\n'.format(error_new)
 
                         error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
                         print 'rotation error icp: {}'.format(error_rotation_icp)
@@ -370,11 +407,15 @@ class linemod(datasets.imdb):
                         error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
                         print 'translation error icp: {}'.format(error_translation_icp)
 
+                        error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_icp[:3, :3], RT_icp[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        print 'reprojection error icp: {}'.format(error_reprojection_icp)
+
                         if cls == 'eggbox' or cls == 'glue':
                             error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         else:
                             error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
-                        print 'error icp: {}'.format(error_icp)
+                        print 'average distance error icp: {}'.format(error_icp)
 
                     print 'threshold: {}'.format(0.1 * np.linalg.norm(self._extents[1, :]))
 
@@ -420,6 +461,7 @@ class linemod(datasets.imdb):
             if cfg.TEST.POSE_REG:
                 # load meta data
                 meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+                meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
                 ind = np.where(meta_data['cls_indexes'] == self._cls_index)[0]
                 meta_data['cls_indexes'][:] = 0
                 meta_data['cls_indexes'][ind] = 1
@@ -441,6 +483,8 @@ class linemod(datasets.imdb):
                     count_all += 1
 
                     for k in xrange(rois.shape[0]):
+                        if rois[k, 1] != meta_data['cls_indexes'][j]:
+                            continue
 
                         RT = np.zeros((3, 4), dtype=np.float32)
                         RT[:3, :3] = quat2mat(poses[k, :4])

@@ -299,7 +299,8 @@ def load_and_enqueue(sess, net, data_layer, coord):
                 if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                               net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
+                               net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data'], \
+                               net.points: blobs['data_points'], net.symmetry: blobs['data_symmetry']}
                 else:
                     feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
         else:
@@ -346,8 +347,7 @@ def loss_cross_entropy_single_frame(scores, labels):
 def loss_quaternion(pose_pred, pose_targets, pose_weights):
 
     with tf.name_scope('loss'):
-        prediction = tf.nn.l2_normalize( tf.multiply(pose_weights, pose_pred), dim = 1)
-        distances = 1 - tf.square( tf.reduce_sum(tf.multiply(prediction, pose_targets), reduction_indices=[1]) )
+        distances = 1 - tf.square( tf.reduce_sum(tf.multiply(pose_pred, pose_targets), reduction_indices=[1]) )
         weights = tf.reduce_mean(pose_weights, reduction_indices=[1])
         loss = tf.div( tf.reduce_sum(tf.multiply(weights, distances)), tf.reduce_sum(weights) )
 
@@ -372,14 +372,15 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                 vertex_pred = network.get_output('vertex_pred')
                 vertex_targets = network.get_output('vertex_targets')
                 vertex_weights = network.get_output('vertex_weights')
-                loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) )
+                loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
 
                 if cfg.TRAIN.POSE_REG:
-                    pose_pred = network.get_output('poses_pred')
-                    pose_targets = network.get_output('poses_target')
-                    pose_weights = network.get_output('poses_weight')
+                    # pose_pred = network.get_output('poses_pred')
+                    # pose_targets = network.get_output('poses_target')
+                    # pose_weights = network.get_output('poses_weight')
                     # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
-                    loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
+                    # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
+                    loss_pose = network.get_output('loss_pose')[0]
                     loss = loss_cls + loss_vertex + loss_pose
                 else:
                     loss = loss_cls + loss_vertex
@@ -413,7 +414,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         if cfg.TRAIN.SINGLE_FRAME:
             # data layer
             if cfg.TRAIN.SYNTHESIZE:
-                data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
+                data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
             else:
                 data_layer = GtSingleDataLayer(roidb, imdb.num_classes, imdb._extents)
         else:

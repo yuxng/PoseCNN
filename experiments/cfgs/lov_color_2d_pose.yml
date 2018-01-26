@@ -12,7 +12,7 @@ TRAIN:
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 20000
   SNAPSHOT_INFIX: lov
-  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose_add
   USE_FLIPPED: False
   CHROMATIC: False
   VERTEX_REG_2D: True
