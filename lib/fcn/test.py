@@ -1020,8 +1020,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(7, num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(256, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1098,7 +1098,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
             # load meta data
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
-            print imdb.metadata_path_at(i)
         meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
         # process annotation if training for two classes
@@ -1156,6 +1155,11 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 if cfg.TEST.POSE_REFINE:
                     labels_icp = labels.copy();
                     rois_icp = rois
+                    if imdb.num_classes == 2:
+                        I = np.where(labels_icp > 0)
+                        labels_icp[I[0], I[1]] = imdb._cls_index
+                        rois_icp = rois.copy()
+                        rois_icp[:, 1] = imdb._cls_index
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
                     SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
                 
@@ -1196,11 +1200,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         _t['misc'].toc()
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
-              .format(i + 1, num_images, _t['im_segment'].diff, _t['misc'].diff)
-
-        imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
+              .format(i, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
         if cfg.TEST.VISUALIZE:
+            imdb.evaluate_result(i, seg, labels_gt, meta_data, output_dir)
             if cfg.TEST.VERTEX_REG_2D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
@@ -1224,9 +1227,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
-    # seg_file = os.path.join(output_dir, 'segmentations.pkl')
-    # with open(seg_file, 'wb') as f:
-    #    cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
+    seg_file = os.path.join(output_dir, 'segmentations.pkl')
+    with open(seg_file, 'wb') as f:
+        cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)

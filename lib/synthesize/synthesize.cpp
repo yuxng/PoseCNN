@@ -1995,7 +1995,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 
     // pose
     float* pose = poses + i * 7;
-    std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
+    // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
     Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
     Sophus::SE3f T_co(quaternion, translation);
@@ -2052,9 +2052,12 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       else
         p[j] = 0;
     }
-    std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
+
     if (label_indexes_.size() < 500)
+    {
+      std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
       continue;
+    }
 
     // backprojection
     depth_map_device_->copyFrom(*depth_map_);
@@ -2120,14 +2123,14 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       Tx /= c;
       Ty /= c;
       Tz /= c;
-      std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
+      // std::cout << "Center with " << c << " points: " << Tx << " " << Ty << " " << Tz << std::endl;
 
       // modify translation
       T_co.translation()(0) = rx * Tz;
       T_co.translation()(1) = ry * Tz;
       T_co.translation()(2) = Tz;
-      std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
-      /*
+      // std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+/*
       iterations = 100;
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
       Tx = T_co.translation()(0);
@@ -2135,8 +2138,8 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       Tz = T_co.translation()(2);
       rx = Tx / Tz;
       ry = Ty / Tz;
-      std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
-      */
+*/
+      // std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
     }
     else
       Tz = T_co.translation()(2);
@@ -2178,7 +2181,10 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     
     iterations = 8;
     for (int j = 0; j < hyps.size(); j++)
+    {
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, hyps[j], iterations, maxError, 1);
+      std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl;
+    }
 
     // build a kd-tree of the depth points
     PointCloud::Ptr cloud(new PointCloud);
@@ -2209,17 +2215,31 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         searchPoint.y = pt(1);
         searchPoint.z = pt(2);
 
+        std::vector<int> pointIdxRadiusSearch;
+        std::vector<float> pointRadiusSquaredDistance;
+        float radius = 0.01;
+        if (kdtree.radiusSearch (searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+        {
+          if (flags[pointIdxRadiusSearch[0]] == 0)
+          {
+            flags[pointIdxRadiusSearch[0]] = 1;
+            score++;
+          }
+        }
+/*
         // nearest neighbor search
         std::vector<int> pointIdxNKNSearch(1);
         std::vector<float> pointNKNSquaredDistance(1);
         if (kdtree.nearestKSearch (searchPoint, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
         {
+          // printf("index %d, distance %f, flag %d\n", pointIdxNKNSearch[0], pointNKNSquaredDistance[0], flags[pointIdxNKNSearch[0]]);
           if (flags[pointIdxNKNSearch[0]] == 0)
           {
             flags[pointIdxNKNSearch[0]] = 1;
             score++;
           }
         }
+*/
       }
       score /= model_points.size();
       if (score > max_score)

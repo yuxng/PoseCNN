@@ -20,9 +20,9 @@ echo Logging output to "$LOG"
 #  --pose data/LINEMOD/poses.txt \
 #  --background data/cache/backgrounds.pkl
 
-if [ -f $PWD/output/linemod/linemod_ape_test/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_80000/segmentations.pkl ]
+if [ -f $PWD/output/linemod/linemod_ape_test/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_40000/segmentations.pkl ]
 then
-  rm $PWD/output/linemod/linemod_ape_test/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_80000/segmentations.pkl
+  rm $PWD/output/linemod/linemod_ape_test/vgg16_fcn_color_single_frame_pose_linemod_ape_iter_40000/segmentations.pkl
 fi
 
 # test for pose regression
