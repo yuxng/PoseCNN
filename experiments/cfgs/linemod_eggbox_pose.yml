@@ -23,7 +23,7 @@ TRAIN:
   SYNTHESIZE: True
   SYNROOT: 'data/LINEMOD/data_syn/'
   SYNNUM: 80000
-  SYN_RATIO: 5 
+  SYN_RATIO: 5
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]

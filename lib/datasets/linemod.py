@@ -34,7 +34,7 @@ class linemod(datasets.imdb):
                                   (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
                                   (64, 0, 0), (0, 64, 0), (0, 0, 64)]
         self._class_weights_all = [1, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
-        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0])
 
         for i in xrange(len(self._classes_all)):
             if self._cls == self._classes_all[i]:

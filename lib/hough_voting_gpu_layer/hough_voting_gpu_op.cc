@@ -36,6 +36,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 REGISTER_OP("Houghvotinggpu")
     .Attr("T: {float, double}")
     .Attr("is_train: int")
+    .Attr("threshold_vote: int")
     .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("bottom_extents: T")
@@ -80,7 +81,7 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int votingThreshold, 
+    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, 
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d);
 
 void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_rois_tensor, int num_classes)
@@ -130,6 +131,9 @@ class HoughvotinggpuOp : public OpKernel {
     OP_REQUIRES(context, is_train_ >= 0,
                 errors::InvalidArgument("Need is_train >= 0, got ",
                                         is_train_));
+
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_vote", &threshold_vote_));
   }
 
   // bottom_label: (batch_size, height, width)
@@ -263,6 +267,7 @@ class HoughvotinggpuOp : public OpKernel {
   }
  private:
   int is_train_;
+  int threshold_vote_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvotinggpu").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotinggpuOp<CPUDevice, float>);
@@ -281,6 +286,9 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     OP_REQUIRES(context, is_train_ >= 0,
                 errors::InvalidArgument("Need is_train >= 0, got ",
                                         is_train_));
+
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_vote", &threshold_vote_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -319,7 +327,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     int num_gt = bottom_gt.dim_size(0);
 
     float inlierThreshold = 0.95;
-    int votingThreshold = 500;
+    int labelThreshold = 500;
     Tensor top_box_tensor_tmp, top_pose_tensor_tmp, top_target_tensor_tmp, top_weight_tensor_tmp, num_rois_tensor_tmp;
     allocate_outputs(context, &top_box_tensor_tmp, &top_pose_tensor_tmp, &top_target_tensor_tmp, &top_weight_tensor_tmp, &num_rois_tensor_tmp, num_classes);
     float* top_box = top_box_tensor_tmp.flat<float>().data();
@@ -335,7 +343,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * VERTEX_CHANNELS * num_classes;
       const float* meta_data = bottom_meta_data.flat<float>().data() + n * num_meta_data;
       HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, height, width, num_classes, num_gt,
-        is_train_, inlierThreshold, votingThreshold,
+        is_train_, inlierThreshold, labelThreshold, threshold_vote_,
         top_box, top_pose, top_target, top_weight, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
     }
 
@@ -384,6 +392,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
   }
  private:
   int is_train_;
+  int threshold_vote_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvotinggpu").Device(DEVICE_GPU).TypeConstraint<float>("T"), HoughvotinggpuOp<Eigen::GpuDevice, float>);

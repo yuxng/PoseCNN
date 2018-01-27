@@ -204,17 +204,61 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
 }
 
 
+__global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes, int* num_max, float* hough_space, 
+  int height, int width, float threshold)
+{
+  CUDA_1D_KERNEL_LOOP(index, nthreads) 
+  {
+    // (ind, cx, cy) is an element in the hough space
+    int ind = index / (height * width);
+    int n = index % (height * width);
+    int cx = n % width;
+    int cy = n / width;
+    int kernel_size = 3;
+
+    if (hough_space[index] > threshold)
+    {
+      // check if the location is local maximum
+      int flag = 0;
+      for (int x = cx - kernel_size; x <= cx + kernel_size; x++)
+      {
+        for (int y = cy - kernel_size; y <= cy + kernel_size; y++)
+        {
+          if (x >= 0 && x < width && y >= 0 && y < height)
+          {
+            if (hough_space[ind * height * width + y * width + x] > hough_space[index])
+            {
+              flag = 1;
+              break;
+            }
+          }
+        }
+      }
+
+      if (flag == 0)
+      {
+        // add the location to max_indexes
+        int max_index = atomicAdd(num_max, 1);
+        max_indexes[max_index] = index;
+      }
+    }
+  }
+}
+
+
 __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* top_pose, float* top_target, float* top_weight,
-    const float* extents, const float* meta_data, const float* gt, float* hough_data, int* max_indexes, int* class_indexes,
+    const float* extents, const float* meta_data, const float* gt, float* hough_space, float* hough_data, int* max_indexes, int* class_indexes,
     int is_train, int batch_index, const int height, const int width, const int num_classes, const int num_gt, int* num_rois) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
     float scale = 0.05;
-    int cls = class_indexes[index];
     int max_index = max_indexes[index];
-    int x = max_index % width;
-    int y = max_index / width;
+    int ind = max_index / (height * width);
+    int cls = class_indexes[ind];
+    int n = max_index % (height * width);
+    int x = n % width;
+    int y = n / width;
 
     float fx = meta_data[0];
     float fy = meta_data[4];
@@ -223,7 +267,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
     float rx = (x - px) / fx;
     float ry = (y - py) / fy;
 
-    int offset = index * height * width * 3 + 3 * (y * width + x);
+    int offset = ind * height * width * 3 + 3 * (y * width + x);
     float bb_distance = hough_data[offset];
     float bb_height = hough_data[offset + 1];
     float bb_width = hough_data[offset + 2];
@@ -365,7 +409,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
     else
     {
       int roi_index = atomicAdd(num_rois, 1);
-      top_box[roi_index * 6 + 0] = batch_index;
+      top_box[roi_index * 6 + 0] = hough_space[max_index];
       top_box[roi_index * 6 + 1] = cls;
       top_box[roi_index * 6 + 2] = x - bb_width * (0.5 + scale);
       top_box[roi_index * 6 + 3] = y - bb_height * (0.5 + scale);
@@ -421,7 +465,7 @@ void set_gradients(float* top_label, float* top_vertex, int batch_size, int heig
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int votingThreshold, 
+    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, 
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -458,7 +502,7 @@ void HoughVotingLaucher(OpKernelContext* context,
   int count = 0;
   for (int c = 1; c < num_classes; c++)
   {
-    if (array_sizes_host[c] > votingThreshold)
+    if (array_sizes_host[c] > labelThreshold)
     {
       class_indexes_host[count] = c;
       count++;
@@ -526,23 +570,45 @@ void HoughVotingLaucher(OpKernelContext* context,
   }
 
   // step 3: find the maximum in hough space
-  // cublasHandle_t handle;
-  // cublasStatus_t status = cublasCreate(&handle);
-  int* max_indexes_host = (int*)malloc(count * sizeof(int));
-  memset(max_indexes_host, 0, count * sizeof(int));
-  for (int i = 0; i < count; i++)
-  {
-    float *hmax = thrust::max_element(thrust::device, hough_space + i * height * width, hough_space + (i+1) * height * width);
-    max_indexes_host[i] = hmax - (hough_space + i * height * width);
-    // status = cublasIsamax(handle, height * width, hough_space + i * height * width, 1, &(max_indexes[i]));
-  }
+  int dim = 1;
+  TensorShape output_shape_num_max;
+  TensorShapeUtils::MakeShape(&dim, 1, &output_shape_num_max);
+  Tensor num_max_tensor;
+  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_num_max, &num_max_tensor));
+  int* num_max = num_max_tensor.flat<int>().data();
+  if (cudaMemset(num_max, 0, sizeof(int)) != cudaSuccess)
+    fprintf(stderr, "reset error\n");
+
+  dim = 1024;
   TensorShape output_shape_max_indexes;
-  TensorShapeUtils::MakeShape(&count, 1, &output_shape_max_indexes);
+  TensorShapeUtils::MakeShape(&dim, 1, &output_shape_max_indexes);
   Tensor max_indexes_tensor;
   OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_max_indexes, &max_indexes_tensor));
-  int* max_indexes = max_indexes_tensor.flat<int>().data();
-  cudaMemcpy(max_indexes, max_indexes_host, count * sizeof(int), cudaMemcpyHostToDevice);
+  int* max_indexes = max_indexes_tensor.flat<int>().data(); 
+  if (cudaMemset(max_indexes, 0, dim * sizeof(int)) != cudaSuccess)
+    fprintf(stderr, "reset error\n");
 
+  if (votingThreshold > 0)
+  {
+    output_size = count * height * width;
+    compute_max_indexes_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
+                       kThreadsPerBlock, 0, d.stream()>>>(
+      output_size, max_indexes, num_max, hough_space, height, width, votingThreshold);
+    cudaThreadSynchronize();
+  }
+  else
+  {
+    int* max_indexes_host = (int*)malloc(count * sizeof(int));
+    memset(max_indexes_host, 0, count * sizeof(int));
+    for (int i = 0; i < count; i++)
+    {
+      float *hmax = thrust::max_element(thrust::device, hough_space + i * height * width, hough_space + (i+1) * height * width);
+      max_indexes_host[i] = hmax - hough_space;
+    }
+    cudaMemcpy(num_max, &count, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(max_indexes, max_indexes_host, count * sizeof(int), cudaMemcpyHostToDevice);
+    free(max_indexes_host);
+  }
   err = cudaGetLastError();
   if(cudaSuccess != err)
   {
@@ -551,18 +617,19 @@ void HoughVotingLaucher(OpKernelContext* context,
   }
 
   // step 4: compute outputs
-  output_size = count;
+  int num_max_host;
+  cudaMemcpy(&num_max_host, num_max, sizeof(int), cudaMemcpyDeviceToHost);
+  output_size = num_max_host;
   compute_rois_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, top_box, top_pose, top_target, top_weight,
-      extents, meta_data, gt, hough_data, max_indexes, class_indexes,
+      extents, meta_data, gt, hough_space, hough_data, max_indexes, class_indexes,
       is_train, batch_index, height, width, num_classes, num_gt, num_rois);
   cudaThreadSynchronize();
   
   // clean up
   free(array_sizes_host);
   free(class_indexes_host);
-  free(max_indexes_host);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)

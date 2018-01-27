@@ -14,6 +14,7 @@ from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
+from utils.nms import *
 from utils.pose_error import *
 import numpy as np
 import cv2
@@ -190,6 +191,12 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
                               net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
+                # non-maximum suppression
+                keep = nms(rois, 0.5)
+                rois = rois[keep, :]
+                poses_init = poses_init[keep, :]
+                poses_pred = poses_pred[keep, :]
+
                 # combine poses
                 num = rois.shape[0]
                 poses = poses_init
@@ -200,6 +207,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             else:
                 labels_2d, probs, vertex_pred, rois, poses = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
+
+                # non-maximum suppression
+                keep = nms(rois, 0.5)
+                rois = rois[keep, :]
+                poses = poses[keep, :]
 
                 #labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
                 #vertex_pred = []
@@ -1020,8 +1032,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(256, num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(256, num_images)
     else:
         perm = xrange(num_images)
 

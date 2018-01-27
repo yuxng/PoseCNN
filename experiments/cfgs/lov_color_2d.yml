@@ -13,8 +13,8 @@ TRAIN:
   SNAPSHOT_ITERS: 20000
   SNAPSHOT_INFIX: lov
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d
-  USE_FLIPPED: False
-  CHROMATIC: False
+  USE_FLIPPED: True
+  CHROMATIC: True
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VISUALIZE: False

@@ -83,6 +83,8 @@ if __name__ == '__main__':
 
     imdb = get_imdb(args.imdb_name)
     print 'Loaded dataset `{:s}` for training'.format(imdb.name)
+    print 'symmetry'
+    print imdb._symmetry
     roidb = get_training_roidb(imdb)
 
     output_dir = get_output_dir(imdb, None)

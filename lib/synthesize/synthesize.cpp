@@ -1741,83 +1741,6 @@ void Synthesizer::estimatePose(
 }
 
 
-void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi)
-{
-  if (setup_ == 0)
-    setup(width, height);
-
-  int num = rois_.size();
-  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
-
-  // render color image
-  glEnable(GL_DEPTH_TEST);
-  glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-  glColor3ub(255,255,255);
-  gtView_->ActivateScissorAndClear();
-  float threshold = 0.1;
-
-  for (int i = 0; i < num_roi; i++)
-  {
-    if (outputs[i * 8 + 7] < threshold)
-      continue;
-    Eigen::Quaternionf quaternion(outputs[i * 8 + 0], outputs[i * 8 + 1], outputs[i * 8 + 2], outputs[i * 8 + 3]);
-    Sophus::SE3f::Point translation(outputs[i * 8 + 4], outputs[i * 8 + 5], outputs[i * 8 + 6]);
-    const Sophus::SE3f T_co(quaternion, translation);
-
-    int class_id = int(rois[i * 6 + 1]) - 1;
-
-    glMatrixMode(GL_PROJECTION);
-    projectionMatrix.Load();
-    glMatrixMode(GL_MODELVIEW);
-
-    Eigen::Matrix4f mv = T_co.cast<float>().matrix();
-    pangolin::OpenGlMatrix mvMatrix(mv);
-    mvMatrix.Load();
-
-    if (is_textured_[class_id])
-    {
-      glEnable(GL_TEXTURE_2D);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-      texturedTextures_[class_id].Bind();
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedCoords_[class_id].Bind();
-      glTexCoordPointer(2,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedTextures_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      texturedCoords_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-      glDisable(GL_TEXTURE_2D);
-    }
-    else
-    {
-      glEnableClientState(GL_VERTEX_ARRAY);
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      glEnableClientState(GL_COLOR_ARRAY);
-      vertexColors_[class_id].Bind();
-      glColorPointer(3,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      vertexColors_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_COLOR_ARRAY);
-    }
-  }
-
-  pangolin::FinishFrame();
-  std::string filename = std::to_string(counter_++);
-  pangolin::SaveWindowOnRender(filename);
-}
-
-
 void Synthesizer::refinePose(int width, int height, int objID, float znear, float zfar,
   const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int algorithm)
 {
@@ -2284,6 +2207,82 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     outputs_icp[i * 7 + 5] = translation_new(1);
     outputs_icp[i * 7 + 6] = translation_new(2);
   }
+
+  visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs_icp, num_roi);
+}
+
+
+void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi)
+{
+  if (setup_ == 0)
+    setup(width, height);
+
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
+
+  // render color image
+  glEnable(GL_DEPTH_TEST);
+  glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  float threshold = 0.1;
+
+  for (int i = 0; i < num_roi; i++)
+  {
+    Eigen::Quaternionf quaternion(outputs[i * 7 + 0], outputs[i * 7 + 1], outputs[i * 7 + 2], outputs[i * 7 + 3]);
+    Sophus::SE3f::Point translation(outputs[i * 7 + 4], outputs[i * 7 + 5], outputs[i * 7 + 6]);
+    const Sophus::SE3f T_co(quaternion, translation);
+
+    int class_id = int(rois[i * 6 + 1]) - 1;
+
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+
+    Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+    pangolin::OpenGlMatrix mvMatrix(mv);
+    mvMatrix.Load();
+
+    if (is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+    }
+  }
+
+  pangolin::FinishFrame();
+  // std::string filename = std::to_string(counter_++);
+  // pangolin::SaveWindowOnRender(filename);
 }
 
 
