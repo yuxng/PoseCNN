@@ -191,11 +191,13 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
                               net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
+
                 # non-maximum suppression
                 keep = nms(rois, 0.5)
                 rois = rois[keep, :]
                 poses_init = poses_init[keep, :]
                 poses_pred = poses_pred[keep, :]
+                print rois
 
                 # combine poses
                 num = rois.shape[0]
@@ -207,7 +209,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
             else:
                 labels_2d, probs, vertex_pred, rois, poses = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
-
+                print rois
                 # non-maximum suppression
                 keep = nms(rois, 0.5)
                 rois = rois[keep, :]

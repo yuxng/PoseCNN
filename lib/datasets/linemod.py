@@ -354,6 +354,13 @@ class linemod(datasets.imdb):
                     RT[:, 3] = poses[k, 4:7]
                     print RT
 
+                    # quaternion loss
+                    print mat2quat(poses_gt[:3, :3, j])
+                    print mat2quat(RT[:3, :3])
+                    d = mat2quat(poses_gt[:3, :3, j]).dot(mat2quat(RT[:3, :3]))
+                    loss = 1 - d * d
+                    print 'quaternion loss {}'.format(loss)
+
                     if cfg.TEST.POSE_REFINE:
                         print 'translation refined pose'
                         RT_new = np.zeros((3, 4), dtype=np.float32)

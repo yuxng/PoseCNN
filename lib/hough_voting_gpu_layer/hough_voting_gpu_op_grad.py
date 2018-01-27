@@ -8,7 +8,7 @@ def _hough_voting_gpu_shape(op):
   dims_vertex = op.inputs[1].get_shape().as_list()
   num_classes = dims_vertex[3] / 3
 
-  output_shape_0 = tf.TensorShape([None, 6])
+  output_shape_0 = tf.TensorShape([None, 7])
   output_shape_1 = tf.TensorShape([None, 7])
   output_shape_2 = tf.TensorShape([None, 4 * num_classes])
   output_shape_3 = tf.TensorShape([None, 4 * num_classes])

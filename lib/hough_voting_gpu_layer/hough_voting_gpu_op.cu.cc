@@ -275,12 +275,13 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
     if (is_train)
     {
       int roi_index = atomicAdd(num_rois, 9);
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x - bb_width * (0.5 + scale);
-      top_box[roi_index * 6 + 3] = y - bb_height * (0.5 + scale);
-      top_box[roi_index * 6 + 4] = x + bb_width * (0.5 + scale);
-      top_box[roi_index * 6 + 5] = y + bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x - bb_width * (0.5 + scale);
+      top_box[roi_index * 7 + 3] = y - bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 4] = x + bb_width * (0.5 + scale);
+      top_box[roi_index * 7 + 5] = y + bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       for (int i = 0; i < 9; i++)
       {
@@ -308,7 +309,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 
       if (gt_ind != -1)
       {
-        float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 6 + 2);
+        float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 7 + 2);
         if (overlap > 0.2)
         {
           for (int i = 0; i < 9; i++)
@@ -324,97 +325,110 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
             top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 3] = 1;
           }
         }
+        else
+          printf("small overlap\n");
       }
+      else
+        printf("no gt pose\n");
 
       // add jittering boxes
-      float x1 = top_box[roi_index * 6 + 2];
-      float y1 = top_box[roi_index * 6 + 3];
-      float x2 = top_box[roi_index * 6 + 4];
-      float y2 = top_box[roi_index * 6 + 5];
+      float x1 = top_box[roi_index * 7 + 2];
+      float y1 = top_box[roi_index * 7 + 3];
+      float x2 = top_box[roi_index * 7 + 4];
+      float y2 = top_box[roi_index * 7 + 5];
       float ww = x2 - x1;
       float hh = y2 - y1;
 
       // (-1, -1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (+1, -1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (-1, +1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (+1, +1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (0, -1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1;
-      top_box[roi_index * 6 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1;
+      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (-1, 0)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (0, +1)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1;
-      top_box[roi_index * 6 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1;
+      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       // (+1, 0)
       roi_index++;
-      top_box[roi_index * 6 + 0] = batch_index;
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 6 + 3] = y1;
-      top_box[roi_index * 6 + 4] = top_box[roi_index * 6 + 2] + ww;
-      top_box[roi_index * 6 + 5] = top_box[roi_index * 6 + 3] + hh;
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
+      top_box[roi_index * 7 + 3] = y1;
+      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
+      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
     }
     else
     {
       int roi_index = atomicAdd(num_rois, 1);
-      top_box[roi_index * 6 + 0] = hough_space[max_index];
-      top_box[roi_index * 6 + 1] = cls;
-      top_box[roi_index * 6 + 2] = x - bb_width * (0.5 + scale);
-      top_box[roi_index * 6 + 3] = y - bb_height * (0.5 + scale);
-      top_box[roi_index * 6 + 4] = x + bb_width * (0.5 + scale);
-      top_box[roi_index * 6 + 5] = y + bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 0] = batch_index;
+      top_box[roi_index * 7 + 1] = cls;
+      top_box[roi_index * 7 + 2] = x - bb_width * (0.5 + scale);
+      top_box[roi_index * 7 + 3] = y - bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 4] = x + bb_width * (0.5 + scale);
+      top_box[roi_index * 7 + 5] = y + bb_height * (0.5 + scale);
+      top_box[roi_index * 7 + 6] = hough_space[max_index];
 
       top_pose[roi_index * 7 + 0] = 1;
       top_pose[roi_index * 7 + 1] = 0;
@@ -431,7 +445,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, int num_classes)
 {
   int num = 1024;
-  cudaMemset(top_box, 0, num * 6 * sizeof(float));
+  cudaMemset(top_box, 0, num * 7 * sizeof(float));
   cudaMemset(top_pose, 0, num * 7 * sizeof(float));
   cudaMemset(top_target, 0, num * 4 *num_classes * sizeof(float));
   cudaMemset(top_weight, 0, num * 4 * num_classes * sizeof(float));
@@ -448,7 +462,7 @@ void copy_num_rois(int* num_rois, int* num_rois_device)
 void copy_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight,
   float* top_box_final, float* top_pose_final, float* top_target_final, float* top_weight_final, int num_classes, int num_rois)
 {
-  cudaMemcpy(top_box_final, top_box, num_rois * 6 * sizeof(float), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(top_box_final, top_box, num_rois * 7 * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_pose_final, top_pose, num_rois * 7 * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_target_final, top_target, num_rois * 4 * num_classes * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_weight_final, top_weight, num_rois * 4 * num_classes * sizeof(float), cudaMemcpyDeviceToDevice);
