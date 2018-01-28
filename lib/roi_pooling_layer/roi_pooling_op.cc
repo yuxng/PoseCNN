@@ -248,14 +248,14 @@ REGISTER_KERNEL_BUILDER(Name("RoiPool").Device(DEVICE_CPU).TypeConstraint<float>
 REGISTER_KERNEL_BUILDER(Name("RoiPool").Device(DEVICE_CPU).TypeConstraint<double>("T"), RoiPoolOp<CPUDevice, double>);
 
 bool ROIPoolForwardLaucher(
-    const float* bottom_data, const float spatial_scale, const int pool_channel, const int num_rois, const int height,
+    const float* bottom_data, const float spatial_scale, const int pool_channel, const int num_rois, const int channel_rois, const int height,
     const int width, const int channels, const int pooled_height,
     const int pooled_width, const float* bottom_rois,
     float* top_data, int* argmax_data, const Eigen::GpuDevice& d);
 
 static void RoiPoolingKernel(
     OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_rois,
-    const float spatial_scale, const int pool_channel, const int num_rois, const int height,
+    const float spatial_scale, const int pool_channel, const int num_rois, const int channel_rois, const int height,
     const int width, const int channels, const int pooled_height,
     const int pooled_width, const TensorShape& tensor_output_shape) 
 {
@@ -269,7 +269,7 @@ static void RoiPoolingKernel(
   }
 
   ROIPoolForwardLaucher(
-    bottom_data->flat<float>().data(), spatial_scale, pool_channel, num_rois, height,
+    bottom_data->flat<float>().data(), spatial_scale, pool_channel, num_rois, channel_rois, height,
     width, channels, pooled_height, pooled_width, bottom_rois->flat<float>().data(),
     output->flat<float>().data(), argmax->flat<int>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
@@ -319,6 +319,7 @@ class RoiPoolOp<Eigen::GpuDevice, T> : public OpKernel {
 
     // Number of ROIs
     int num_rois = bottom_rois.dim_size(0);
+    int channel_rois = bottom_rois.dim_size(1);
     // batch size
     int batch_size = bottom_data.dim_size(0);
     // data height
@@ -340,7 +341,7 @@ class RoiPoolOp<Eigen::GpuDevice, T> : public OpKernel {
     TensorShape output_shape;
     TensorShapeUtils::MakeShape(dims, 4, &output_shape);
 
-    RoiPoolingKernel(context, &bottom_data, &bottom_rois, spatial_scale_, pool_channel_, num_rois, data_height,
+    RoiPoolingKernel(context, &bottom_data, &bottom_rois, spatial_scale_, pool_channel_, num_rois, channel_rois, data_height,
       data_width, num_channels, pooled_height_, pooled_width_, output_shape);
 
   }
@@ -355,13 +356,13 @@ REGISTER_KERNEL_BUILDER(Name("RoiPool").Device(DEVICE_GPU).TypeConstraint<float>
 
 
 bool ROIPoolBackwardLaucher(const float* top_diff, const float spatial_scale, const int pool_channel, const int batch_size, const int num_rois,
-    const int height, const int width, const int channels, const int pooled_height,
+    const int channel_rois, const int height, const int width, const int channels, const int pooled_height,
     const int pooled_width, const float* bottom_rois,
     float* bottom_diff, const int* argmax_data, const Eigen::GpuDevice& d);
 
 static void RoiPoolingGradKernel(
     OpKernelContext* context, const Tensor* bottom_data, const Tensor* bottom_rois, const Tensor* argmax_data, const Tensor* out_backprop,
-    const float spatial_scale, const int pool_channel, const int batch_size, const int num_rois, const int height,
+    const float spatial_scale, const int pool_channel, const int batch_size, const int num_rois, const int channel_rois, const int height,
     const int width, const int channels, const int pooled_height,
     const int pooled_width, const TensorShape& tensor_output_shape) 
 {
@@ -373,7 +374,7 @@ static void RoiPoolingGradKernel(
   }
 
   ROIPoolBackwardLaucher(
-    out_backprop->flat<float>().data(), spatial_scale, pool_channel, batch_size, num_rois, height,
+    out_backprop->flat<float>().data(), spatial_scale, pool_channel, batch_size, num_rois, channel_rois, height,
     width, channels, pooled_height, pooled_width, bottom_rois->flat<float>().data(),
     output->flat<float>().data(), argmax_data->flat<int>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
@@ -431,6 +432,7 @@ class RoiPoolGradOp : public OpKernel {
 
     // Number of ROIs
     int num_rois = bottom_rois.dim_size(0);
+    int channel_rois = bottom_rois.dim_size(1);
     // batch size
     int batch_size = bottom_data.dim_size(0);
     // data height
@@ -445,7 +447,7 @@ class RoiPoolGradOp : public OpKernel {
 
     RoiPoolingGradKernel(
       context, &bottom_data, &bottom_rois, &argmax_data, &out_backprop,
-      spatial_scale_, pool_channel_, batch_size, num_rois, height, width, channels, pooled_height_,
+      spatial_scale_, pool_channel_, batch_size, num_rois, channel_rois, height, width, channels, pooled_height_,
       pooled_width_, output_shape);
 
   }

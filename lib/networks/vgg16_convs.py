@@ -150,7 +150,7 @@ class vgg16_convs(Network):
             if self.vertex_reg_2d:
 
                 (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                     .hough_voting_gpu(self.is_train, name='hough'))
+                     .hough_voting_gpu(self.is_train, -1, name='hough'))
 
                 self.layers['rois'] = self.get_output('hough')[0]
                 self.layers['poses_init'] = self.get_output('hough')[1]

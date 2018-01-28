@@ -34,7 +34,7 @@ class linemod(datasets.imdb):
                                   (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
                                   (64, 0, 0), (0, 64, 0), (0, 0, 64)]
         self._class_weights_all = [1, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
-        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        self._symmetry_all = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0])
 
         for i in xrange(len(self._classes_all)):
             if self._cls == self._classes_all[i]:
@@ -353,6 +353,13 @@ class linemod(datasets.imdb):
                     RT[:3, :3] = quat2mat(poses[k, :4])
                     RT[:, 3] = poses[k, 4:7]
                     print RT
+
+                    # quaternion loss
+                    print mat2quat(poses_gt[:3, :3, j])
+                    print mat2quat(RT[:3, :3])
+                    d = mat2quat(poses_gt[:3, :3, j]).dot(mat2quat(RT[:3, :3]))
+                    loss = 1 - d * d
+                    print 'quaternion loss {}'.format(loss)
 
                     if cfg.TEST.POSE_REFINE:
                         print 'translation refined pose'

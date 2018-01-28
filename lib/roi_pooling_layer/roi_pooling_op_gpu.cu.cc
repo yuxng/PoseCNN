@@ -19,7 +19,7 @@ using namespace tensorflow;
 template <typename Dtype>
 __global__ void ROIPoolForward(const int nthreads, const Dtype* bottom_data,
     const Dtype spatial_scale, const int pool_channel, const int height, const int width, 
-    const int channels, const int pooled_height, const int pooled_width,
+    const int channels, const int pooled_height, const int pooled_width, const int channel_rois,
     const Dtype* bottom_rois, Dtype* top_data, int* argmax_data) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
@@ -42,13 +42,13 @@ __global__ void ROIPoolForward(const int nthreads, const Dtype* bottom_data,
     int ph = n % pooled_height;
     n /= pooled_height;
 
-    bottom_rois += n * 6;
-    int roi_batch_ind = int(bottom_rois[0]);
-    int roi_cls = int(bottom_rois[1]);
-    int roi_start_w = round(bottom_rois[2] * spatial_scale);
-    int roi_start_h = round(bottom_rois[3] * spatial_scale);
-    int roi_end_w = round(bottom_rois[4] * spatial_scale);
-    int roi_end_h = round(bottom_rois[5] * spatial_scale);
+    const Dtype* offset_bottom_rois = bottom_rois + n * channel_rois;
+    int roi_batch_ind = int(offset_bottom_rois[0]);
+    int roi_cls = int(offset_bottom_rois[1]);
+    int roi_start_w = round(offset_bottom_rois[2] * spatial_scale);
+    int roi_start_h = round(offset_bottom_rois[3] * spatial_scale);
+    int roi_end_w = round(offset_bottom_rois[4] * spatial_scale);
+    int roi_end_h = round(offset_bottom_rois[5] * spatial_scale);
 
     // Force malformed ROIs to be 1x1
     int roi_width = max(roi_end_w - roi_start_w + 1, 1);
@@ -101,7 +101,7 @@ __global__ void ROIPoolForward(const int nthreads, const Dtype* bottom_data,
 }
 
 bool ROIPoolForwardLaucher(
-    const float* bottom_data, const float spatial_scale, const int pool_channel, const int num_rois, const int height,
+    const float* bottom_data, const float spatial_scale, const int pool_channel, const int num_rois, const int channel_rois, const int height,
     const int width, const int channels, const int pooled_height,
     const int pooled_width, const float* bottom_rois,
     float* top_data, int* argmax_data, const Eigen::GpuDevice& d) 
@@ -118,7 +118,7 @@ bool ROIPoolForwardLaucher(
   ROIPoolForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, bottom_data, spatial_scale, pool_channel, height, width, channels, pooled_height,
-      pooled_width, bottom_rois, top_data, argmax_data);
+      pooled_width, channel_rois, bottom_rois, top_data, argmax_data);
 
   err = cudaGetLastError();
   if(cudaSuccess != err)
@@ -133,7 +133,7 @@ bool ROIPoolForwardLaucher(
 
 template <typename Dtype>
 __global__ void ROIPoolBackward(const int nthreads, const Dtype* top_diff,
-    const int* argmax_data, const int num_rois, const Dtype spatial_scale, const int pool_channel,
+    const int* argmax_data, const int num_rois, const int channel_rois, const Dtype spatial_scale, const int pool_channel,
     const int height, const int width, const int channels, 
     const int pooled_height, const int pooled_width, Dtype* bottom_diff,
     const Dtype* bottom_rois) {
@@ -152,7 +152,7 @@ __global__ void ROIPoolBackward(const int nthreads, const Dtype* top_diff,
     // Accumulate gradient over all ROIs that pooled this element
     for (int roi_n = 0; roi_n < num_rois; ++roi_n) 
     {
-      const Dtype* offset_bottom_rois = bottom_rois + roi_n * 6;
+      const Dtype* offset_bottom_rois = bottom_rois + roi_n * channel_rois;
       int roi_batch_ind = int(offset_bottom_rois[0]);
       int roi_cls = int(offset_bottom_rois[1]);
       // Skip if ROI's batch index doesn't match n
@@ -230,7 +230,7 @@ __global__ void ROIPoolBackward(const int nthreads, const Dtype* top_diff,
 
 
 bool ROIPoolBackwardLaucher(const float* top_diff, const float spatial_scale, const int pool_channel, const int batch_size, const int num_rois,
-    const int height, const int width, const int channels, const int pooled_height,
+    const int channel_rois, const int height, const int width, const int channels, const int pooled_height,
     const int pooled_width, const float* bottom_rois,
     float* bottom_diff, const int* argmax_data, const Eigen::GpuDevice& d) 
 {
@@ -240,7 +240,7 @@ bool ROIPoolBackwardLaucher(const float* top_diff, const float spatial_scale, co
 
   ROIPoolBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, top_diff, argmax_data, num_rois, spatial_scale, pool_channel, height, width, channels, pooled_height,
+      output_size, top_diff, argmax_data, num_rois, channel_rois, spatial_scale, pool_channel, height, width, channels, pooled_height,
       pooled_width, bottom_diff, bottom_rois);
 
   err = cudaGetLastError();

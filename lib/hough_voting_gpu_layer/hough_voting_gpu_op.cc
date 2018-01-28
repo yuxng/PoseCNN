@@ -36,6 +36,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 REGISTER_OP("Houghvotinggpu")
     .Attr("T: {float, double}")
     .Attr("is_train: int")
+    .Attr("threshold_vote: int")
     .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
     .Input("bottom_extents: T")
@@ -67,10 +68,10 @@ inline float angle_distance(cv::Point2f x, cv::Point2f n, cv::Point2f p);
 
 void hough_voting(const int* labelmap, const float* vertmap, std::vector<std::vector<cv::Point3f>> bb3Ds,
   int batch, int height, int width, int num_classes, int is_train,
-  float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs);
+  float fx, float fy, float px, float py, std::vector<cv::Vec<float, 14> >& outputs);
 
 void compute_target_weight(int height, int width, float* target, float* weight, std::vector<std::vector<cv::Point3f>> bb3Ds, 
-  const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> > outputs);
+  const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 14> > outputs);
 
 inline void compute_width_height(const int* labelmap, const float* vertmap, cv::Point2f center, 
   std::vector<std::vector<cv::Point3f>> bb3Ds, cv::Mat camMat, float inlierThreshold, 
@@ -80,7 +81,7 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int votingThreshold, 
+    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, 
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d);
 
 void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_rois_tensor, int num_classes)
@@ -89,7 +90,7 @@ void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* 
   int dims[2];
 
   dims[0] = num;
-  dims[1] = 6;
+  dims[1] = 7;
   TensorShape output_shape;
   TensorShapeUtils::MakeShape(dims, 2, &output_shape);
   OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT, output_shape, top_box_tensor));
@@ -130,11 +131,14 @@ class HoughvotinggpuOp : public OpKernel {
     OP_REQUIRES(context, is_train_ >= 0,
                 errors::InvalidArgument("Need is_train >= 0, got ",
                                         is_train_));
+
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_vote", &threshold_vote_));
   }
 
   // bottom_label: (batch_size, height, width)
   // bottom_vertex: (batch_size, height, width, 3 * num_classes)
-  // top_box: (num, 6) i.e., batch_index, cls, x1, y1, x2, y2
+  // top_box: (num, 7) i.e., batch_index, cls, x1, y1, x2, y2, score
   void Compute(OpKernelContext* context) override 
   {
     // Grab the input tensor
@@ -174,7 +178,7 @@ class HoughvotinggpuOp : public OpKernel {
     int num_gt = bottom_gt.dim_size(0);
 
     // for each image, run hough voting
-    std::vector<cv::Vec<float, 13> > outputs;
+    std::vector<cv::Vec<float, 14> > outputs;
     const float* extents = bottom_extents.flat<float>().data();
 
     // bb3Ds
@@ -199,14 +203,9 @@ class HoughvotinggpuOp : public OpKernel {
     {
       std::cout << "no detection" << std::endl;
       // add a dummy detection to the output
-      cv::Vec<float, 13> roi;
+      cv::Vec<float, 14> roi;
       roi(0) = 0;
       roi(1) = -1;
-      roi(2) = 0;
-      roi(3) = 0;
-      roi(4) = 1;
-      roi(5) = 1;
-      roi(6) = 1;
       outputs.push_back(roi);
     }
 
@@ -214,7 +213,7 @@ class HoughvotinggpuOp : public OpKernel {
     // top_box
     int dims[2];
     dims[0] = outputs.size();
-    dims[1] = 6;
+    dims[1] = 7;
     TensorShape output_shape;
     TensorShapeUtils::MakeShape(dims, 2, &output_shape);
 
@@ -249,13 +248,13 @@ class HoughvotinggpuOp : public OpKernel {
     
     for(int n = 0; n < outputs.size(); n++)
     {
-      cv::Vec<float, 13> roi = outputs[n];
-
-      for (int i = 0; i < 6; i++)
-        top_box[n * 6 + i] = roi(i);
+      cv::Vec<float, 14> roi = outputs[n];
 
       for (int i = 0; i < 7; i++)
-        top_pose[n * 7 + i] = roi(6 + i);
+        top_box[n * 7 + i] = roi(i);
+
+      for (int i = 0; i < 7; i++)
+        top_pose[n * 7 + i] = roi(7 + i);
     }
 
     if (is_train_)
@@ -263,6 +262,7 @@ class HoughvotinggpuOp : public OpKernel {
   }
  private:
   int is_train_;
+  int threshold_vote_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvotinggpu").Device(DEVICE_CPU).TypeConstraint<float>("T"), HoughvotinggpuOp<CPUDevice, float>);
@@ -281,6 +281,9 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     OP_REQUIRES(context, is_train_ >= 0,
                 errors::InvalidArgument("Need is_train >= 0, got ",
                                         is_train_));
+
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_vote", &threshold_vote_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -319,7 +322,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     int num_gt = bottom_gt.dim_size(0);
 
     float inlierThreshold = 0.95;
-    int votingThreshold = 500;
+    int labelThreshold = 500;
     Tensor top_box_tensor_tmp, top_pose_tensor_tmp, top_target_tensor_tmp, top_weight_tensor_tmp, num_rois_tensor_tmp;
     allocate_outputs(context, &top_box_tensor_tmp, &top_pose_tensor_tmp, &top_target_tensor_tmp, &top_weight_tensor_tmp, &num_rois_tensor_tmp, num_classes);
     float* top_box = top_box_tensor_tmp.flat<float>().data();
@@ -335,7 +338,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * VERTEX_CHANNELS * num_classes;
       const float* meta_data = bottom_meta_data.flat<float>().data() + n * num_meta_data;
       HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, height, width, num_classes, num_gt,
-        is_train_, inlierThreshold, votingThreshold,
+        is_train_, inlierThreshold, labelThreshold, threshold_vote_,
         top_box, top_pose, top_target, top_weight, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
     }
 
@@ -349,7 +352,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     // top_box
     int dims[2];
     dims[0] = num_rois;
-    dims[1] = 6;
+    dims[1] = 7;
     TensorShape output_shape;
     TensorShapeUtils::MakeShape(dims, 2, &output_shape);
 
@@ -384,6 +387,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
   }
  private:
   int is_train_;
+  int threshold_vote_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Houghvotinggpu").Device(DEVICE_GPU).TypeConstraint<float>("T"), HoughvotinggpuOp<Eigen::GpuDevice, float>);
@@ -437,7 +441,7 @@ REGISTER_KERNEL_BUILDER(Name("HoughvotinggpuGrad").Device(DEVICE_GPU).TypeConstr
 
 void hough_voting(const int* labelmap, const float* vertmap, std::vector<std::vector<cv::Point3f>> bb3Ds, 
   int batch, int height, int width, int num_classes, int is_train,
-  float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> >& outputs)
+  float fx, float fy, float px, float py, std::vector<cv::Vec<float, 14> >& outputs)
 {
   float inlierThreshold = 0.9;
   int votingThreshold = 50;
@@ -526,7 +530,7 @@ void hough_voting(const int* labelmap, const float* vertmap, std::vector<std::ve
       compute_width_height(labelmap, vertmap, center, bb3Ds, camMat, inlierThreshold, height, width, c, num_classes, bb_width, bb_height, bb_distance);
 
       // construct output
-      cv::Vec<float, 13> roi;
+      cv::Vec<float, 14> roi;
       roi(0) = batch;
       roi(1) = c;
 
@@ -537,16 +541,19 @@ void hough_voting(const int* labelmap, const float* vertmap, std::vector<std::ve
       roi(4) = center.x + bb_width * (0.5 + scale);
       roi(5) = center.y + bb_height * (0.5 + scale);
 
+      // score
+      roi(6) = max_vote;
+
       // pose
       float rx = (center.x - px) / fx;
       float ry = (center.y - py) / fy;
-      roi(6) = 1;
-      roi(7) = 0;
+      roi(7) = 1;
       roi(8) = 0;
       roi(9) = 0;
-      roi(10) = rx * bb_distance;
-      roi(11) = ry * bb_distance;
-      roi(12) = bb_distance;
+      roi(10) = 0;
+      roi(11) = rx * bb_distance;
+      roi(12) = ry * bb_distance;
+      roi(13) = bb_distance;
 
       outputs.push_back(roi);
 
@@ -709,7 +716,7 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
 
 // compute the pose target and weight
 void compute_target_weight(int height, int width, float* target, float* weight, std::vector<std::vector<cv::Point3f>> bb3Ds, 
-  const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 13> > outputs)
+  const float* poses_gt, int num_gt, int num_classes, float fx, float fy, float px, float py, std::vector<cv::Vec<float, 14> > outputs)
 {
   int num = outputs.size();
   float threshold = 0.2;
@@ -745,7 +752,7 @@ void compute_target_weight(int height, int width, float* target, float* weight, 
 
   for (int i = 0; i < num; i++)
   {
-    cv::Vec<float, 13> roi = outputs[i];
+    cv::Vec<float, 14> roi = outputs[i];
     int batch_id = int(roi(0));
     int class_id = int(roi(1));
 
