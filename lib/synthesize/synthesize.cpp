@@ -1918,7 +1918,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 
     // pose
     float* pose = poses + i * 7;
-    // std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
+    std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
     Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
     Sophus::SE3f T_co(quaternion, translation);
@@ -2109,91 +2109,96 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl;
     }
 
-    // build a kd-tree of the depth points
-    PointCloud::Ptr cloud(new PointCloud);
-    cloud->width = depth_points.size();
-    cloud->height = 1;
-    cloud->points.resize(cloud->width * cloud->height);
-    for (size_t j = 0; j < cloud->points.size(); j++)
+    if (depth_points.size() > 0)
     {
-      cloud->points[j].x = depth_points[j].x;
-      cloud->points[j].y = depth_points[j].y;
-      cloud->points[j].z = depth_points[j].z;
-    }
-    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-    kdtree.setInputCloud(cloud);
-
-    // use the metric in SegICP
-    float max_score = -FLT_MAX;
-    int choose = -1;
-    for (int j = 0; j < hyps.size(); j++)
-    {
-      float score = 0;
-      std::vector<int> flags(depth_points.size(), 0);
-      for (int k = 0; k < model_points.size(); k++)
+      // build a kd-tree of the depth points
+      PointCloud::Ptr cloud(new PointCloud);
+      cloud->width = depth_points.size();
+      cloud->height = 1;
+      cloud->points.resize(cloud->width * cloud->height);
+      for (size_t j = 0; j < cloud->points.size(); j++)
       {
-        Vec3 pt = hyps[j] * model_points[k];
-        PointT searchPoint;
-        searchPoint.x = pt(0);
-        searchPoint.y = pt(1);
-        searchPoint.z = pt(2);
+        cloud->points[j].x = depth_points[j].x;
+        cloud->points[j].y = depth_points[j].y;
+        cloud->points[j].z = depth_points[j].z;
+      }
+      pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+      kdtree.setInputCloud(cloud);
 
-        std::vector<int> pointIdxRadiusSearch;
-        std::vector<float> pointRadiusSquaredDistance;
-        float radius = 0.01;
-        if (kdtree.radiusSearch (searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+      // use the metric in SegICP
+      float max_score = -FLT_MAX;
+      int choose = -1;
+      for (int j = 0; j < hyps.size(); j++)
+      {
+        float score = 0;
+        std::vector<int> flags(depth_points.size(), 0);
+        for (int k = 0; k < model_points.size(); k++)
         {
-          if (flags[pointIdxRadiusSearch[0]] == 0)
+          Vec3 pt = hyps[j] * model_points[k];
+          PointT searchPoint;
+          searchPoint.x = pt(0);
+          searchPoint.y = pt(1);
+          searchPoint.z = pt(2);
+
+          std::vector<int> pointIdxRadiusSearch;
+          std::vector<float> pointRadiusSquaredDistance;
+          float radius = 0.01;
+          if (kdtree.radiusSearch (searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
           {
-            flags[pointIdxRadiusSearch[0]] = 1;
-            score++;
+            if (flags[pointIdxRadiusSearch[0]] == 0)
+            {
+              flags[pointIdxRadiusSearch[0]] = 1;
+              score++;
+            }
           }
-        }
 /*
-        // nearest neighbor search
-        std::vector<int> pointIdxNKNSearch(1);
-        std::vector<float> pointNKNSquaredDistance(1);
-        if (kdtree.nearestKSearch (searchPoint, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
-        {
-          // printf("index %d, distance %f, flag %d\n", pointIdxNKNSearch[0], pointNKNSquaredDistance[0], flags[pointIdxNKNSearch[0]]);
-          if (flags[pointIdxNKNSearch[0]] == 0)
+          // nearest neighbor search
+          std::vector<int> pointIdxNKNSearch(1);
+          std::vector<float> pointNKNSquaredDistance(1);
+          if (kdtree.nearestKSearch (searchPoint, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
           {
-            flags[pointIdxNKNSearch[0]] = 1;
-            score++;
+            // printf("index %d, distance %f, flag %d\n", pointIdxNKNSearch[0], pointNKNSquaredDistance[0], flags[pointIdxNKNSearch[0]]);
+            if (flags[pointIdxNKNSearch[0]] == 0)
+            {
+              flags[pointIdxNKNSearch[0]] = 1;
+              score++;
+            }
           }
-        }
 */
+        }
+        score /= model_points.size();
+        if (score > max_score)
+        {
+          max_score = score;
+          choose = j;
+        }
+        printf("hypothesis %d, score %f\n", j, score);
       }
-      score /= model_points.size();
-      if (score > max_score)
-      {
-        max_score = score;
-        choose = j;
-      }
-      printf("hypothesis %d, score %f\n", j, score);
-    }
-    printf("select hypothesis %d\n", choose);
+      printf("select hypothesis %d\n", choose);
 
-    // chose hypothesis
-    /*
-    float dis = 1000000;
-    int choose = -1;
-    for (int j = 0; j < hyps.size(); j++)
-    {
-      float cx = hyps[j].translation()(0) / hyps[j].translation()(2);
-      float cy = hyps[j].translation()(1) / hyps[j].translation()(2);
-      float distance = std::sqrt( (cx - rx) * (cx - rx) + (cy - ry) * (cy - ry) );
-      // float distance = (translation_1 - hyps[j].translation()).norm();
-      std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl << "distance: " << distance << std::endl;
-      std::cout << "anglur distance: " << T_co.unit_quaternion().angularDistance(hyps[j].unit_quaternion()) << std::endl;
-      if (distance < dis)
+      // chose hypothesis
+      /*
+      float dis = 1000000;
+      int choose = -1;
+      for (int j = 0; j < hyps.size(); j++)
       {
-        dis = distance;
-        choose = j;
+        float cx = hyps[j].translation()(0) / hyps[j].translation()(2);
+        float cy = hyps[j].translation()(1) / hyps[j].translation()(2);
+        float distance = std::sqrt( (cx - rx) * (cx - rx) + (cy - ry) * (cy - ry) );
+        // float distance = (translation_1 - hyps[j].translation()).norm();
+        std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl << "distance: " << distance << std::endl;
+        std::cout << "anglur distance: " << T_co.unit_quaternion().angularDistance(hyps[j].unit_quaternion()) << std::endl;
+        if (distance < dis)
+        {
+          dis = distance;
+          choose = j;
+        }
       }
+      */
+      T_co = hyps[choose];
     }
-    */
-    T_co = hyps[choose];
+    else
+      T_co = hyps[0];
 
     // set output
     Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
@@ -2228,6 +2233,10 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
 
   for (int i = 0; i < num_roi; i++)
   {
+    if ((outputs[i * 7 + 0] * outputs[i * 7 + 0] + outputs[i * 7 + 1] * outputs[i * 7 + 1] +
+        outputs[i * 7 + 2] * outputs[i * 7 + 2] + outputs[i * 7 + 3] * outputs[i * 7 + 3]) == 0)
+      continue;
+
     Eigen::Quaternionf quaternion(outputs[i * 7 + 0], outputs[i * 7 + 1], outputs[i * 7 + 2], outputs[i * 7 + 3]);
     Sophus::SE3f::Point translation(outputs[i * 7 + 4], outputs[i * 7 + 5], outputs[i * 7 + 6]);
     const Sophus::SE3f T_co(quaternion, translation);
