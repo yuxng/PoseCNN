@@ -20,10 +20,10 @@ echo Logging output to "$LOG"
 #  --pose data/LINEMOD/poses.txt \
 #  --background data/cache/backgrounds.pkl
 
-if [ -f $PWD/output/linemod/linemod_glue_test/vgg16_fcn_color_single_frame_pose_linemod_glue_iter_80000/segmentations.pkl ]
-then
-  rm $PWD/output/linemod/linemod_glue_test/vgg16_fcn_color_single_frame_pose_linemod_glue_iter_80000/segmentations.pkl
-fi
+#if [ -f $PWD/output/linemod/linemod_glue_test/vgg16_fcn_color_single_frame_pose_linemod_glue_iter_80000/segmentations.pkl ]
+#then
+#  rm $PWD/output/linemod/linemod_glue_test/vgg16_fcn_color_single_frame_pose_linemod_glue_iter_80000/segmentations.pkl
+#fi
 
 # test for pose regression
 time ./tools/test_net.py --gpu 0 \

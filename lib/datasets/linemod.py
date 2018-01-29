@@ -478,6 +478,12 @@ class linemod(datasets.imdb):
                 poses_new = segmentations[im_ind]['poses_refined']
                 poses_icp = segmentations[im_ind]['poses_icp']
 
+                # save matlab result
+                results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+                filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+                print filename
+                scipy.io.savemat(filename, results, do_compression=True)
+
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))

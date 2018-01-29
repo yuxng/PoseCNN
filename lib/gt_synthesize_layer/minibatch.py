@@ -39,7 +39,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
         if symmetry[i] > 0:
             point_blob[i, :, :] = 40 * point_blob[i, :, :]
         else:
-            point_blob[i, :, :] = 10 * point_blob[i, :, :]
+            point_blob[i, :, :] = 20 * point_blob[i, :, :]
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,

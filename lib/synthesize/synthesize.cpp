@@ -2053,15 +2053,15 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       T_co.translation()(1) = ry * Tz;
       T_co.translation()(2) = Tz;
       // std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
-/*
-      iterations = 100;
+
+      iterations = 50;
       refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
       Tx = T_co.translation()(0);
       Ty = T_co.translation()(1);
       Tz = T_co.translation()(2);
       rx = Tx / Tz;
       ry = Ty / Tz;
-*/
+
       // std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
     }
     else
