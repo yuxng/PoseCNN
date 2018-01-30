@@ -36,10 +36,12 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     # rescale the points
     point_blob = points.copy()
     for i in xrange(1, num_classes):
+        # compute the rescaling factor for the points
+        weight = 2.0 / np.amax(extents[i, :])
         if symmetry[i] > 0:
-            point_blob[i, :, :] = 40 * point_blob[i, :, :]
+            point_blob[i, :, :] = 4 * weight * point_blob[i, :, :]
         else:
-            point_blob[i, :, :] = 20 * point_blob[i, :, :]
+            point_blob[i, :, :] = weight * point_blob[i, :, :]
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,
