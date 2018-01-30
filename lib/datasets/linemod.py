@@ -128,9 +128,13 @@ class linemod(datasets.imdb):
         """
 
         if self._image_set == 'train':
-            image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '.txt')
-        else:
-            image_set_file = os.path.join(self._linemod_path, 'indexes', 'benchvise.txt')
+            image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '_all.txt')
+        elif self._image_set == 'test':
+            image_set_file = os.path.join(self._linemod_path, 'indexes', 'benchvise_all.txt')
+        elif self._image_set == 'train_few':
+            image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '_train.txt')
+        elif self._image_set == 'test_few':
+            image_set_file = os.path.join(self._linemod_path, 'indexes', self._cls + '_test.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
@@ -455,7 +459,7 @@ class linemod(datasets.imdb):
             # read ground truth labels
             im = cv2.imread(self.label_path_from_index(index), cv2.IMREAD_UNCHANGED)
             gt_labels = im.astype(np.float32)
-            if self._image_set == 'test':
+            if 'test' in self._image_set:
                 I = np.where(gt_labels == self._cls_index)
                 gt_labels[:, :] = 0
                 gt_labels[I[0], I[1]] = 1

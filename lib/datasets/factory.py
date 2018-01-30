@@ -55,7 +55,7 @@ for split in ['train', 'val', 'keyframe', 'trainval', 'debug']:
 for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \
     'cat', 'cup', 'driller', 'duck', 'eggbox', \
     'glue', 'holepuncher', 'iron', 'lamp', 'phone']:
-    for split in ['train', 'test']:
+    for split in ['train', 'test', 'train_few', 'test_few']:
         name = 'linemod_{}_{}'.format(cls, split)
         print name
         __sets[name] = (lambda cls=cls, split=split:
