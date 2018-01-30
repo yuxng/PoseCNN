@@ -1976,7 +1976,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
         p[j] = 0;
     }
 
-    if (label_indexes_.size() < 500)
+    if (label_indexes_.size() <= 0)
     {
       std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
       continue;
