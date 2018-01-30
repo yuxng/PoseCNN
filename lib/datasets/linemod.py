@@ -452,6 +452,7 @@ class linemod(datasets.imdb):
         count_correct = 0
         count_correct_refined = 0
         count_correct_icp = 0
+        count_correct_pixel = 0
         threshold = 0.1 * np.linalg.norm(self._extents[1, :])
 
         # for each image
@@ -518,6 +519,12 @@ class linemod(datasets.imdb):
 
                         error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
                         error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+
+                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                        if error_reprojection < 5:
+                            count_correct_pixel += 1
 
                         # compute pose error
                         if cls == 'eggbox' or cls == 'glue':
@@ -605,6 +612,7 @@ class linemod(datasets.imdb):
             if cfg.TEST.POSE_REFINE:
                 print 'correct poses after refinement: {}, all poses: {}, accuracy: {}'.format(count_correct_refined, count_all, float(count_correct_refined) / float(count_all))
                 print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))
+            print 'correct poses reprojection: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel, count_all, float(count_correct_pixel) / float(count_all))
 
 
 if __name__ == '__main__':

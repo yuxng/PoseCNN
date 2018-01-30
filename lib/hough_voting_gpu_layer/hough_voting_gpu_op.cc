@@ -322,7 +322,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     int num_gt = bottom_gt.dim_size(0);
 
     float inlierThreshold = 0.95;
-    int labelThreshold = 0;
+    int labelThreshold = 400;
     Tensor top_box_tensor_tmp, top_pose_tensor_tmp, top_target_tensor_tmp, top_weight_tensor_tmp, num_rois_tensor_tmp;
     allocate_outputs(context, &top_box_tensor_tmp, &top_pose_tensor_tmp, &top_target_tensor_tmp, &top_weight_tensor_tmp, &num_rois_tensor_tmp, num_classes);
     float* top_box = top_box_tensor_tmp.flat<float>().data();

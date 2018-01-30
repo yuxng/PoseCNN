@@ -325,11 +325,11 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
             top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 3] = 1;
           }
         }
-        else
-          printf("small overlap\n");
+        // else
+        //  printf("small overlap\n");
       }
-      else
-        printf("no gt pose\n");
+      // else
+      //  printf("no gt pose\n");
 
       // add jittering boxes
       float x1 = top_box[roi_index * 7 + 2];
@@ -521,8 +521,8 @@ void HoughVotingLaucher(OpKernelContext* context,
       class_indexes_host[count] = c;
       count++;
     }
-    else
-      printf("class %d with only pixels %d\n", c, array_sizes_host[c]);
+    // else
+    //  printf("class %d with only pixels %d\n", c, array_sizes_host[c]);
   }
 
   if (count == 0)

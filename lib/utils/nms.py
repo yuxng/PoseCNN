@@ -1,6 +1,7 @@
 import numpy as np
 
 def nms(dets, thresh):
+    cls = dets[:, 1]
     x1 = dets[:, 2]
     y1 = dets[:, 3]
     x2 = dets[:, 4]
@@ -24,7 +25,8 @@ def nms(dets, thresh):
         inter = w * h
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
-        inds = np.where(ovr <= thresh)[0]
+        inds = np.where(~((ovr > thresh) & (cls[order[1:]] == cls[i])))[0]
+        #inds = np.where(ovr <= thresh)[0]
         order = order[inds + 1]
 
     return keep
