@@ -806,6 +806,113 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
     plt.show()
 
 
+def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center_map, 
+  labels, rois, poses, poses_new, intrinsic_matrix, num_classes, points):
+    """Visual debugging of detections."""
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+
+    # show image
+    ax = fig.add_subplot(2, 3, 1)
+    im = im[:, :, (2, 1, 0)]
+    plt.imshow(im)
+    ax.set_title('input image')
+
+    # show class label
+    ax = fig.add_subplot(2, 3, 2)
+    plt.imshow(im_labels)
+    ax.set_title('class labels')      
+
+    if cfg.TEST.VERTEX_REG_2D:
+        # show centers
+        for i in xrange(rois.shape[0]):
+            if rois[i, 1] == 0:
+                continue
+            cx = (rois[i, 2] + rois[i, 4]) / 2
+            cy = (rois[i, 3] + rois[i, 5]) / 2
+            w = rois[i, 4] - rois[i, 2]
+            h = rois[i, 5] - rois[i, 3]
+            if not np.isinf(cx) and not np.isinf(cy):
+                plt.plot(cx, cy, 'yo')
+
+                # show boxes
+                plt.gca().add_patch(
+                    plt.Rectangle((cx-w/2, cy-h/2), w, h, fill=False,
+                                   edgecolor='g', linewidth=3))
+        
+    # show vertex map
+    ax = fig.add_subplot(2, 3, 4)
+    plt.imshow(center_map[:,:,0])
+    ax.set_title('centers x')
+
+    ax = fig.add_subplot(2, 3, 5)
+    plt.imshow(center_map[:,:,1])
+    ax.set_title('centers y')
+    
+    ax = fig.add_subplot(2, 3, 6)
+    plt.imshow(center_map[:,:,2])
+    ax.set_title('centers z: {:6f}'.format(poses[0, 6]))
+
+    # show projection of the poses
+    if cfg.TEST.POSE_REG:
+
+        ax = fig.add_subplot(2, 3, 3, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(rois.shape[0]):
+            cls = int(rois[i, 1])
+            if cls > 0:
+                # extract 3D points
+                x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                x3d[0, :] = points[cls,:,0]
+                x3d[1, :] = points[cls,:,1]
+                x3d[2, :] = points[cls,:,2]
+
+                # projection
+                RT = np.zeros((3, 4), dtype=np.float32)
+                RT[:3, :3] = quat2mat(poses[i, :4])
+                RT[:, 3] = poses[i, 4:7]
+                x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
+
+        ax.set_title('projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
+        if cfg.TEST.POSE_REFINE:
+            ax = fig.add_subplot(2, 3, 3, aspect='equal')
+            plt.imshow(im)
+            ax.invert_yaxis()
+            for i in xrange(rois.shape[0]):
+                cls = int(rois[i, 1])
+                if cls > 0:
+                    # extract 3D points
+                    x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                    x3d[0, :] = points[cls,:,0]
+                    x3d[1, :] = points[cls,:,1]
+                    x3d[2, :] = points[cls,:,2]
+
+                    # projection
+                    RT = np.zeros((3, 4), dtype=np.float32)
+                    RT[:3, :3] = quat2mat(poses_new[i, :4])
+                    RT[:, 3] = poses_new[i, 4:7]
+                    x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+                    x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+                    x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+                    plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+            ax.set_title('projection refined by ICP')
+            ax.invert_yaxis()
+            ax.set_xlim([0, im.shape[1]])
+            ax.set_ylim([im.shape[0], 0])
+
+    plt.show()
+
+
 
 def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors, vertmap, vertmap_target,
   labels, labels_gt, rois, poses, poses_new, intrinsic_matrix, vertmap_gt, poses_gt, cls_indexes, num_classes):
@@ -1247,6 +1354,135 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
+
+
+
+
+###################
+# test single frame
+###################
+def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_filenames, meta_data):
+
+    num_images = len(rgb_filenames)
+    segmentations = [[] for _ in xrange(num_images)]
+
+    # timers
+    _t = {'im_segment' : Timer(), 'misc' : Timer()}
+
+    # voxelizer
+    voxelizer = Voxelizer(cfg.TEST.GRID_SIZE, imdb.num_classes)
+    voxelizer.setup(-3, -3, -3, 3, 3, 4)
+
+    # construct colors
+    colors = np.zeros((3 * imdb.num_classes), dtype=np.uint8)
+    for i in range(imdb.num_classes):
+        colors[i * 3 + 0] = imdb._class_colors[i][0]
+        colors[i * 3 + 1] = imdb._class_colors[i][1]
+        colors[i * 3 + 2] = imdb._class_colors[i][2]
+
+    if cfg.TEST.VISUALIZE:
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(num_images)
+    else:
+        perm = xrange(num_images)
+
+    if (cfg.TEST.VERTEX_REG_2D and cfg.TEST.POSE_REFINE) or (cfg.TEST.VERTEX_REG_3D and cfg.TEST.POSE_REG):
+        SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+
+    for i in perm:
+
+        # read color image
+        rgba = pad_im(cv2.imread(rgb_filenames[i], cv2.IMREAD_UNCHANGED), 16)
+        if rgba.shape[2] == 4:
+            im = np.copy(rgba[:,:,:3])
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            im[I[0], I[1], :] = 0
+        else:
+            im = rgba
+
+        # read depth image
+        im_depth = pad_im(cv2.imread(depth_filenames[i], cv2.IMREAD_UNCHANGED), 16)
+
+        _t['im_segment'].tic()
+
+        labels, probs, vertex_pred, rois, poses = im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, imdb._extents, imdb._points_all, imdb._symmetry, imdb.num_classes)
+
+        labels = unpad_im(labels, 16)
+        im_scale = cfg.TEST.SCALES_BASE[0]
+        # build the label image
+        im_label = imdb.labels_to_image(im, labels)
+
+        poses_new = []
+        poses_icp = []
+        if cfg.TEST.VERTEX_REG_2D:
+            if cfg.TEST.POSE_REG:
+                # pose refinement
+                fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
+                fy = meta_data['intrinsic_matrix'][1, 1] * im_scale
+                px = meta_data['intrinsic_matrix'][0, 2] * im_scale
+                py = meta_data['intrinsic_matrix'][1, 2] * im_scale
+                factor = meta_data['factor_depth']
+                znear = 0.25
+                zfar = 6.0
+                poses_new = np.zeros((poses.shape[0], 7), dtype=np.float32)        
+                poses_icp = np.zeros((poses.shape[0], 7), dtype=np.float32)     
+                error_threshold = 0.01
+                if cfg.TEST.POSE_REFINE:
+                    labels_icp = labels.copy();
+                    rois_icp = rois
+                    if imdb.num_classes == 2:
+                        I = np.where(labels_icp > 0)
+                        labels_icp[I[0], I[1]] = imdb._cls_index
+                        rois_icp = rois.copy()
+                        rois_icp[:, 1] = imdb._cls_index
+                    im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
+                
+        elif cfg.TEST.VERTEX_REG_3D:
+            fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
+            fy = meta_data['intrinsic_matrix'][1, 1] * im_scale
+            px = meta_data['intrinsic_matrix'][0, 2] * im_scale
+            py = meta_data['intrinsic_matrix'][1, 2] * im_scale
+            factor = meta_data['factor_depth']
+            znear = 0.25
+            zfar = 6.0
+            poses_new = np.zeros((3, 4, imdb.num_classes), dtype=np.float32)
+            im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            SYN.estimate_poses_3d(labels, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
+
+            num = 0
+            for j in xrange(imdb.num_classes):
+                if poses_new[2, 3, j] > 0:
+                    num += 1
+            rois = np.zeros((num, 6), dtype=np.float32)
+            poses = np.zeros((num, 7), dtype=np.float32)
+            count = 0
+            for j in xrange(imdb.num_classes):
+                if poses_new[2, 3, j] > 0:
+                    rois[count, 1] = j
+                    poses[count, :4] = mat2quat(poses_new[:3, :3, j])
+                    poses[count, 4:] = poses_new[:, 3, j]
+                    rois[count, 2:] = _get_bb2D(imdb._extents[j, :], poses[count, :], meta_data['intrinsic_matrix']) * im_scale
+                    count += 1
+            poses_new = []
+
+        _t['im_segment'].toc()
+
+        _t['misc'].tic()
+        labels_new = cv2.resize(labels, None, None, fx=1.0/im_scale, fy=1.0/im_scale, interpolation=cv2.INTER_NEAREST)
+        seg = {'labels': labels_new, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+        segmentations[i] = seg
+        _t['misc'].toc()
+
+        print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
+              .format(i, num_images, _t['im_segment'].diff, _t['misc'].diff)
+
+        if cfg.TEST.VISUALIZE:
+            vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
+            vis_segmentations_vertmaps_detection(im, im_depth, im_label, imdb._class_colors, vertmap, 
+                labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], imdb.num_classes, imdb._points_all)
+
 
 def _render_synthetic_image(SYN, num_classes, backgrounds, intrinsic_matrix):
     """Builds an input blob from the images in the roidb at the specified

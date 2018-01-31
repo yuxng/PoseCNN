@@ -179,12 +179,14 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
       // vote
       if (angle_distance(cx, cy, x, y, u, v) > inlierThreshold && d > 0)
       {
-        hough_space[index]++;
-        distance += d;
-
         project_box(cls, extents, meta_data, d, &threshold);
         float dx = fabsf(x - cx);
         float dy = fabsf(y - cy);
+        if (dx < threshold && dy < threshold)
+        {
+          hough_space[index]++;
+          distance += d;
+        }
         if (dx > bb_width && dx < threshold && dy < threshold)
           bb_width = dx;
         if (dy > bb_height && dx < threshold && dy < threshold)
