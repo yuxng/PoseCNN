@@ -325,9 +325,15 @@ class lov(datasets.imdb):
             poses = segmentation['poses']
             poses_new = segmentation['poses_refined']
             poses_icp = segmentation['poses_icp']
+            if cfg.TEST.VERTEX_REG_3D:
+                rois_rgb = segmentation['rois_rgb']
+                poses_rgb = segmentation['poses_rgb']
 
             # save matlab result
-            results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            if cfg.TEST.VERTEX_REG_2D:
+                results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            else:
+                results = {'labels': sg_labels, 'rois_rgb': rois_rgb, 'poses_rgb': poses_rgb, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
             filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
             print filename
             scipy.io.savemat(filename, results, do_compression=True)
