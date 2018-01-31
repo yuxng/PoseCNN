@@ -1170,7 +1170,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
     if cfg.TEST.VISUALIZE:
         perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(256, num_images)
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
