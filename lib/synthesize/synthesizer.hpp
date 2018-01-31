@@ -12,12 +12,12 @@ class Synthesizer
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
 
-  void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
-    float fx, float fy, float px, float py, float* outputs,  float* gt_poses, int num_gt);
+  void estimatePose2D(const int* labelmap, const float* vertmap, const float* extents,
+        int width, int height, int num_classes, float fx, float fy, float px, float py, float* output);
 
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError);
 
-  void estimatePose(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
+  void estimatePose3D(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
         int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
 };

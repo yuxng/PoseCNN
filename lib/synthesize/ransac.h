@@ -51,7 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	cv::Rect bb; // 2D bounding box of the object under this pose hypothesis
 	
 	std::vector<std::pair<cv::Point3d, cv::Point3d> > inlierPts; // list of object coordinate - camera coordinate correspondences that support this hypothesis
-	std::vector<std::pair<cv::Point2d, cv::Point2d> > inlierPts2D; // list of object coordinate - camera coordinate correspondences that support this hypothesis
+	std::vector<std::pair<cv::Point3d, cv::Point2d> > inlierPts2D; // list of object coordinate - camera coordinate correspondences that support this hypothesis
 	
 	int maxPixels; // how many pixels should be maximally drawn to score this hyp
 	int effPixels; // how many pixels habe effectively drawn (bounded by projection size)

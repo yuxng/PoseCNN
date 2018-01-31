@@ -1282,7 +1282,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         rois_icp = rois.copy()
                         rois_icp[:, 1] = imdb._cls_index
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-                    SYN.estimate_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
+                    SYN.refine_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
                 
         elif cfg.TEST.VERTEX_REG_3D:
             fx = meta_data['intrinsic_matrix'][0, 0] * im_scale
@@ -1294,7 +1294,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             zfar = 6.0
             poses_new = np.zeros((3, 4, imdb.num_classes), dtype=np.float32)
             im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-            SYN.estimate_poses_3d(labels, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
+            #SYN.estimate_poses_3d(labels, im_depth, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py, factor)
+            SYN.estimate_poses_2d(labels, vertex_pred, imdb._extents, poses_new, imdb.num_classes, fx, fy, px, py)
 
             num = 0
             for j in xrange(imdb.num_classes):
@@ -1359,7 +1360,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
 
 
 ###################
-# test single frame
+# test image sets
 ###################
 def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_filenames, meta_data):
 

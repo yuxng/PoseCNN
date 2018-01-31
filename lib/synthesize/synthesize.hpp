@@ -93,7 +93,8 @@ struct DataForOpt
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
   df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device;
 
-  TransHyp* hyp; 
+  TransHyp* hyp;
+  cv::Mat* camMat;
 };
 
 class Synthesizer
@@ -120,19 +121,6 @@ class Synthesizer
 
   jp::jp_trans_t quat2our(const Sophus::SE3d T_co);
 
-  // hough voting
-  void estimateCenter(const int* labelmap, const float* vertmap, const float* extents, int height, int width, int num_classes, int preemptive_batch,
-                      float fx, float fy, float px, float py, float* outputs, float* gt_poses, int num_gt);
-  inline void filterInliers2D(TransHyp& hyp, int maxInliers);
-  inline void updateHyp2D(TransHyp& hyp, int maxPixels);
-  inline void countInliers2D(TransHyp& hyp, const float * vertmap, const std::vector<std::vector<int>>& labels, float inlierThreshold, int width, int num_classes, int pixelBatch);
-  inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
-  std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
-  inline bool samplePoint2D(jp::id_t objID, std::vector<cv::Point2f>& eyePts, std::vector<cv::Point2f>& objPts, const cv::Point2f& pt2D, const float* vertmap, int width, int num_classes);
-  inline cv::Point2f getMode2D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, int width, int num_classes);
-  void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
-  void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
-
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError);
@@ -141,13 +129,26 @@ class Synthesizer
   void refinePose(int width, int height, int objID, float znear, float zfar,
                   const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int is_icp);
 
-  // pose estimation
-  void estimatePose(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
+  // pose estimation with color
+  void estimatePose2D(const int* labelmap, const float* vertmap, const float* extents,
+        int width, int height, int num_classes, float fx, float fy, float px, float py, float* output);
+  inline void filterInliers2D(TransHyp& hyp, int maxInliers);
+  inline void updateHyp2D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
+  inline void countInliers2D(TransHyp& hyp, const cv::Mat& camMat, const std::vector<std::vector<int>>& labels, const float* vertmap,
+      const float* extents, float inlierThreshold, int width, int num_classes, int pixelBatch);
+  inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
+  std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
+  inline bool samplePoint2D(jp::id_t objID, int width, int num_classes, std::vector<cv::Point2f>& pts2D, 
+    std::vector<cv::Point3f>& pts3D, const cv::Point2f& pt2D, const float* vertmap, const float* extents, float minDist2D, float minDist3D);
+  void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
+  void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
+
+  // pose estimation with depth
+  void estimatePose3D(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
         int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
   inline void updateHyp3D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
   inline void filterInliers3D(TransHyp& hyp, int maxInliers);
-  inline void countInliers3D(TransHyp& hyp, const std::vector<std::vector<int>>& labels, const float* vertmap, const float* extents, const jp::img_coord_t& eyeData,
-      float inlierThreshold, int width, int num_classes, int minArea, int pixelBatch);
+  inline void countInliers3D(TransHyp& hyp, const std::vector<std::vector<int>>& labels, const float* vertmap, const float* extents, const jp::img_coord_t& eyeData,float inlierThreshold, int width, int num_classes, int pixelBatch);
   inline bool samplePoint3D(jp::id_t objID, int width, int num_classes, std::vector<cv::Point3f>& eyePts, std::vector<cv::Point3f>& objPts, const cv::Point2f& pt2D,
       const float* vertmap, const float* extents, const jp::img_coord_t& eyeData, float minDist3D);
   inline cv::Point3f getMode3D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, const float* extents, int width, int num_classes);
@@ -155,7 +156,8 @@ class Synthesizer
   void getEye(unsigned char* rawdepth, jp::img_coord_t& img, jp::img_depth_t& img_depth, int width, int height, float fx, float fy, float px, float py, float depth_factor);
   jp::coord3_t pxToEye(int x, int y, jp::depth_t depth, float fx, float fy, float px, float py, float depth_factor);
 
-  double refineWithOpt(TransHyp& hyp, int iterations);
+  double refineWithOpt(TransHyp& hyp, cv::Mat& camMat, int iterations, int is_3D);
+  inline double pointLineDistance(const cv::Point3f& pt1, const cv::Point3f& pt2, const cv::Point3f& pt3);
 
  private:
   int counter_;

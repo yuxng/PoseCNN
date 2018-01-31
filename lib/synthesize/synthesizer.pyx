@@ -16,9 +16,9 @@ cdef extern from "synthesizer.hpp":
         void setup(int, int )
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
-        void estimateCenter(int*, float*, float*, int, int, int, int, float, float, float, float, float*, float*, int)
         void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, float*, float*, float*, float*, float)
-        void estimatePose(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
+        void estimatePose2D(int*, float*, float*, int, int, int, float, float, float, float, float*)
+        void estimatePose3D(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
 
 cdef class PySynthesizer:
     cdef Synthesizer *synthesizer     # hold a C++ instance which we're wrapping
@@ -57,19 +57,7 @@ cdef class PySynthesizer:
                    &vertmap[0, 0, 0], &poses[0, 0], &centers[0, 0], &extents[0, 0])
 
 
-    def estimate_centers(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.float32_t, ndim=3] vertmap, \
-               np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=2] centers, \
-               np.ndarray[np.float32_t, ndim=2] gt_poses, int num_gt, \
-               int num_classes, int preemptive_batch,
-               np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py):
-
-        cdef int height = labels.shape[0]
-        cdef int width = labels.shape[1]
-
-        return self.synthesizer.estimateCenter(<int *>labels.data, &vertmap[0, 0, 0], &extents[0, 0], \
-                                               height, width, num_classes, preemptive_batch, fx, fy, px, py, &centers[0, 0], &gt_poses[0, 0], num_gt)
-
-    def estimate_poses(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, np.ndarray[np.float32_t, ndim=2] rois, \
+    def refine_poses(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, np.ndarray[np.float32_t, ndim=2] rois, \
                np.ndarray[np.float32_t, ndim=2] poses, np.ndarray[np.float32_t, ndim=2] poses_new, np.ndarray[np.float32_t, ndim=2] poses_icp, \
                np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py, np.float32_t znear, np.float32_t zfar, np.float32_t factor, np.float32_t error):
 
@@ -82,6 +70,17 @@ cdef class PySynthesizer:
                                                &poses_new[0, 0], &poses_icp[0, 0], error)
 
 
+    def estimate_poses_2d(self, np.ndarray[np.int32_t, ndim=2] labels, \
+               np.ndarray[np.float32_t, ndim=3] vertmap, np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=3] poses, \
+               int num_classes, np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py):
+
+        cdef int height = labels.shape[0]
+        cdef int width = labels.shape[1]
+
+        return self.synthesizer.estimatePose2D(<int *>labels.data, &vertmap[0, 0, 0], &extents[0, 0], \
+            width, height, num_classes, fx, fy, px, py, &poses[0, 0, 0])
+
+
     def estimate_poses_3d(self, np.ndarray[np.int32_t, ndim=2] labels, np.ndarray[np.uint16_t, ndim=2] depth, \
                np.ndarray[np.float32_t, ndim=3] vertmap, np.ndarray[np.float32_t, ndim=2] extents, np.ndarray[np.float32_t, ndim=3] poses, \
                int num_classes, np.float32_t fx, np.float32_t fy, np.float32_t px, np.float32_t py, np.float32_t factor):
@@ -90,5 +89,5 @@ cdef class PySynthesizer:
         cdef int width = labels.shape[1]
         cdef unsigned char* depth_buff = <unsigned char*> depth.data
 
-        return self.synthesizer.estimatePose(<int *>labels.data, depth_buff, &vertmap[0, 0, 0], &extents[0, 0], \
+        return self.synthesizer.estimatePose3D(<int *>labels.data, depth_buff, &vertmap[0, 0, 0], &extents[0, 0], \
             width, height, num_classes, fx, fy, px, py, factor, &poses[0, 0, 0])
