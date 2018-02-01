@@ -1880,81 +1880,13 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
       T_co = update * T_co;
       break;
     }
-/*
-    case 2:
-    {
-      using namespace GlobalRegistration;
-      std::vector<Point3D> set1, set2;
-
-      // set point clouds
-      for (int i = 0; i < label_indexes_.size(); i++)
-      {
-        int x = label_indexes_[i] % width;
-        int y = label_indexes_[i] / width;
-
-        if (std::isnan((*predicted_verts_)(x, y)(0)) == 0 &&
-            std::isnan((*predicted_verts_)(x, y)(1)) == 0 &&
-            std::isnan((*predicted_verts_)(x, y)(2)) == 0 &&
-            std::isnan((*predicted_verts_)(x, y)(3)) == 0)
-        {
-          Point3D ptx((*predicted_verts_)(x, y)(0), (*predicted_verts_)(x, y)(1), (*predicted_verts_)(x, y)(2));
-          set1.push_back(ptx);
-        }
-
-        if ((*vertex_map_)(x, y)(2) > 0)
-        {
-          Point3D ptx((*vertex_map_)(x, y)(0), (*vertex_map_)(x, y)(1), (*vertex_map_)(x, y)(2));
-          set2.push_back(ptx);
-        }
-      }
-
-      // PCL ICP
-      PointCloud::Ptr cloud_in (new PointCloud);
-      PointCloud::Ptr cloud_out (new PointCloud);
-      cloud_in->width = set1.size();
-      cloud_in->height = 1;
-      cloud_in->is_dense = false;
-      cloud_in->points.resize(cloud_in->width * cloud_in->height);
-
-      for (int i = 0; i < set1.size(); i++)
-      {
-        cloud_in->points[i].x = set1[i].x();
-        cloud_in->points[i].y = set1[i].y();
-        cloud_in->points[i].z = set1[i].z();
-      }
-
-      cloud_out->width = set2.size();
-      cloud_out->height = 1;
-      cloud_out->is_dense = false;
-      cloud_out->points.resize(cloud_out->width * cloud_out->height);
-
-      for (int i = 0; i < set2.size(); i++)
-      {
-        cloud_out->points[i].x = set2[i].x();
-        cloud_out->points[i].y = set2[i].y();
-        cloud_out->points[i].z = set2[i].z();
-      }
-
-      pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> pcl_icp;
-      pcl_icp.setInputCloud(cloud_in);
-      pcl_icp.setInputTarget(cloud_out);
-      pcl::PointCloud<pcl::PointXYZ> Final;
-      pcl_icp.align(Final);
-      std::cout << "has converged:" << pcl_icp.hasConverged() << " score: " << pcl_icp.getFitnessScore() << std::endl;
-      Eigen::Matrix4f transformation = pcl_icp.getFinalTransformation();
-      Sophus::SE3f update(transformation);
-
-      T_co = update * T_co;
-      break;
-    }
-*/
   }
 }
 
 
 // ICP
 void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
-  float znear, float zfar, float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
+  float znear, float zfar, float factor, int num_roi, int channel_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
 {
   int iterations;
   if (setup_ == 0)
@@ -1991,7 +1923,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
   // for each object
   for(int i = 0; i < num_roi; i++)
   {
-    int objID = int(rois[i * 6 + 1]);
+    int objID = int(rois[i * channel_roi + 1]);
     data.objID = objID;
     if (objID <= 0)
       continue;
@@ -2212,6 +2144,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       {
         float score = 0;
         std::vector<int> flags(depth_points.size(), 0);
+        #pragma omp parallel for
         for (int k = 0; k < model_points.size(); k++)
         {
           Vec3 pt = hyps[j] * model_points[k];
@@ -2293,11 +2226,11 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     outputs_icp[i * 7 + 6] = translation_new(2);
   }
 
-  visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs_icp, num_roi);
+  visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs_icp, num_roi, channel_roi);
 }
 
 
-void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi)
+void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi, int channel_roi)
 {
   if (setup_ == 0)
     setup(width, height);
@@ -2321,7 +2254,7 @@ void Synthesizer::visualizePose(int height, int width, float fx, float fy, float
     Sophus::SE3f::Point translation(outputs[i * 7 + 4], outputs[i * 7 + 5], outputs[i * 7 + 6]);
     const Sophus::SE3f T_co(quaternion, translation);
 
-    int class_id = int(rois[i * 6 + 1]) - 1;
+    int class_id = int(rois[i * channel_roi + 1]) - 1;
 
     glMatrixMode(GL_PROJECTION);
     projectionMatrix.Load();

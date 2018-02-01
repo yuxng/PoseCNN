@@ -123,8 +123,8 @@ class Synthesizer
 
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
-                float factor, int num_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError);
-  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi);
+                float factor, int num_roi, int channel_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError);
+  void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi, int channel_roi);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
   void refinePose(int width, int height, int objID, float znear, float zfar,
                   const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int is_icp);

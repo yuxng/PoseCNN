@@ -16,7 +16,7 @@ cdef extern from "synthesizer.hpp":
         void setup(int, int )
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
-        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, float*, float*, float*, float*, float)
+        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, int, float*, float*, float*, float*, float)
         void estimatePose2D(int*, float*, float*, int, int, int, float, float, float, float, float*)
         void estimatePose3D(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
 
@@ -64,9 +64,11 @@ cdef class PySynthesizer:
         cdef int height = labels.shape[0]
         cdef int width = labels.shape[1]
         cdef int num_roi = rois.shape[0]
+        cdef int channel_roi = rois.shape[1]
         cdef unsigned char* depth_buff = <unsigned char*> depth.data
 
-        return self.synthesizer.solveICP(<int *>labels.data, depth_buff, height, width, fx, fy, px, py, znear, zfar, factor, num_roi, &rois[0, 0], &poses[0, 0], \
+        return self.synthesizer.solveICP(<int *>labels.data, depth_buff, height, width, fx, fy, px, py, znear, \
+                                               zfar, factor, num_roi, channel_roi, &rois[0, 0], &poses[0, 0], \
                                                &poses_new[0, 0], &poses_icp[0, 0], error)
 
 
