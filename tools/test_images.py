@@ -87,7 +87,7 @@ if __name__ == '__main__':
     root = '/home/yuxiang/Projects/Deep_Pose/data/Baxter/'
     rgb_filenames = []
     depth_filenames = []
-    num = 17
+    num = 22
     for i in xrange(num):
         filename = root + 'image{:d}.png'.format(i)
         print filename
@@ -97,7 +97,8 @@ if __name__ == '__main__':
         depth_filenames.append(filename)
 
     # construct meta data
-    K = np.array([[513.3605800901698, 0, 313.308307869799], [0, 516.1600538269478, 261.3256090654382], [0, 0, 1]])
+    # K = np.array([[513.3605800901698, 0, 313.308307869799], [0, 516.1600538269478, 261.3256090654382], [0, 0, 1]])
+    K = np.array([[572.4114, 0, 325.2611], [0, 573.5704, 242.0490], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 1000.0})
     print meta_data
 
