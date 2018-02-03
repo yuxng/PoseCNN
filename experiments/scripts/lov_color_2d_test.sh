@@ -26,10 +26,10 @@ echo Logging output to "$LOG"
 #  --pose data/LOV/poses.txt \
 #  --background data/cache/lov_train_backgrounds.pkl
 
-#if [ -f $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_2d_pose_lov_iter_80000/segmentations.pkl ]
-#then
-#  rm $PWD/output/lov/lov_val/vgg16_fcn_color_single_frame_2d_pose_lov_iter_80000/segmentations.pkl
-#fi
+if [ -f $PWD/output/lov/lov_keyframe/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_80000/segmentations.pkl ]
+then
+  rm $PWD/output/lov/lov_keyframe/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_80000/segmentations.pkl
+fi
 
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
