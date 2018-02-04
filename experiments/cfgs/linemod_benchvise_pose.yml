@@ -1,0 +1,35 @@
+EXP_DIR: linemod
+INPUT: COLOR
+TRAIN:
+  SINGLE_FRAME: True
+  LEARNING_RATE: 0.0001
+  MOMENTUM: 0.9
+  GAMMA: 0.1
+  STEPSIZE: 60000
+  SCALES_BASE: !!python/tuple [1.0]
+  IMS_PER_BATCH: 2
+  NUM_CLASSES: 2
+  NUM_UNITS: 64
+  SNAPSHOT_ITERS: 20000
+  SNAPSHOT_INFIX: linemod_benchvise
+  SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
+  USE_FLIPPED: False
+  CHROMATIC: True
+  VERTEX_REG_2D: True
+  VERTEX_REG_3D: False
+  VERTEX_W: 10.0
+  VISUALIZE: False
+  POSE_REG: True
+  SYNTHESIZE: True
+  SYNROOT: 'data/LINEMOD/data_syn/'
+  SYNNUM: 80000
+  SYN_RATIO: 5
+TEST:
+  SINGLE_FRAME: True
+  SCALES_BASE: !!python/tuple [1.0]
+  VERTEX_REG_2D: True
+  VERTEX_REG_3D: False
+  VISUALIZE: False
+  POSE_REG: True
+  SYNTHETIC: False
+  POSE_REFINE: True

@@ -16,7 +16,7 @@ export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16_convs.npy \
-  --imdb linemod_driller_train \
+  --imdb linemod_driller_train_few \
   --cfg experiments/cfgs/linemod_driller.yml \
   --iters 40000
 
@@ -24,7 +24,7 @@ time ./tools/train_net.py --gpu 0 \
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16.npy \
-  --ckpt output/linemod/linemod_driller_train/vgg16_fcn_color_single_frame_linemod_driller_iter_40000.ckpt \
-  --imdb linemod_driller_train \
+  --ckpt output/linemod/linemod_driller_train_few/vgg16_fcn_color_single_frame_linemod_driller_iter_40000.ckpt \
+  --imdb linemod_driller_train_few \
   --cfg experiments/cfgs/linemod_driller_pose.yml \
   --iters 80000
