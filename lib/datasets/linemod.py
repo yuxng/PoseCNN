@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 from fcn.config import cfg
 from utils.pose_error import *
+from utils.se3 import *
 from transforms3d.quaternions import quat2mat, mat2quat
 
 class linemod(datasets.imdb):
@@ -46,6 +47,10 @@ class linemod(datasets.imdb):
 
         self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
+
+        self._diameters = np.array([102.09865663, 247.50624233, 167.35486092, 172.49224865, 201.40358597, \
+                                    154.54551808, 124.26430816, 261.47178102, 108.99920102, 164.62758848, \
+                                    175.88933422, 145.54287471, 278.07811733, 282.60129399, 212.35825148]) / 1000.0
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
@@ -322,6 +327,11 @@ class linemod(datasets.imdb):
             ind = index[i]
             print '{} {}'.format(self._classes[ind], intersection[ind] / union[ind])
 
+        if 'few' in self._image_set:
+            threshold = 0.1 * self._diameters[self._cls_index - 1]
+        else:
+            threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+
         # evaluate pose
         if cfg.TEST.POSE_REG:
             rois = segmentation['rois']
@@ -384,8 +394,15 @@ class linemod(datasets.imdb):
                     error_translation = te(RT[:, 3], poses_gt[:, 3, j])
                     print 'translation error: {}'.format(error_translation)
 
-                    error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
-                        poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    if cls == 'eggbox' and error_rotation > 90:
+                        RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                        RT_sym = se3_mul(RT, RT_z)
+                        print 'eggbox rotation error after symmetry: {}'.format(re(RT_sym[:3, :3], poses_gt[:3, :3, j]))
+                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    else:
+                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                     print 'reprojection error: {}'.format(error_reprojection)
 
                     # compute pose error
@@ -402,8 +419,15 @@ class linemod(datasets.imdb):
                         error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
                         print 'translation error new: {}'.format(error_translation_new)
 
-                        error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_new[:3, :3], RT_new[:, 3], \
-                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        if cls == 'eggbox' and error_rotation_new > 90:
+                            RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                            RT_sym = se3_mul(RT_new, RT_z)
+                            print 'eggbox rotation error new after symmetry: {}'.format(re(RT_sym[:3, :3], poses_gt[:3, :3, j]))
+                            error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_new[:3, :3], RT_new[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         print 'reprojection error new: {}'.format(error_reprojection_new)
 
                         if cls == 'eggbox' or cls == 'glue':
@@ -418,8 +442,15 @@ class linemod(datasets.imdb):
                         error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
                         print 'translation error icp: {}'.format(error_translation_icp)
 
-                        error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_icp[:3, :3], RT_icp[:, 3], \
-                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        if cls == 'eggbox' and error_rotation_icp > 90:
+                            RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                            RT_sym = se3_mul(RT_icp, RT_z)
+                            print 'eggbox rotation error icp after symmetry: {}'.format(re(RT_sym[:3, :3], poses_gt[:3, :3, j]))
+                            error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_icp[:3, :3], RT_icp[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         print 'reprojection error icp: {}'.format(error_reprojection_icp)
 
                         if cls == 'eggbox' or cls == 'glue':
@@ -428,7 +459,7 @@ class linemod(datasets.imdb):
                             error_icp = add(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                         print 'average distance error icp: {}'.format(error_icp)
 
-                    print 'threshold: {}'.format(0.1 * np.linalg.norm(self._extents[1, :]))
+                    print 'threshold: {}'.format(threshold)
 
 
     def evaluate_segmentations(self, segmentations, output_dir):
@@ -453,7 +484,12 @@ class linemod(datasets.imdb):
         count_correct_refined = 0
         count_correct_icp = 0
         count_correct_pixel = 0
-        threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+        count_correct_pixel_refined = 0
+        count_correct_pixel_icp = 0
+        if 'few' in self._image_set:
+            threshold = 0.1 * self._diameters[self._cls_index - 1]
+        else:
+            threshold = 0.1 * np.linalg.norm(self._extents[1, :])
 
         # for each image
         for im_ind, index in enumerate(self.image_index):
@@ -466,7 +502,12 @@ class linemod(datasets.imdb):
                 gt_labels[I[0], I[1]] = 1
 
             # predicated labels
-            sg_labels = segmentations[im_ind]['labels']
+            if not segmentations[im_ind]:
+                filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+                results_mat = scipy.io.loadmat(filename)
+                sg_labels = results_mat['labels']
+            else:
+                sg_labels = segmentations[im_ind]['labels']
             hist += self.fast_hist(gt_labels.flatten(), sg_labels.flatten(), n_cl)
 
             # evaluate pose
@@ -478,10 +519,16 @@ class linemod(datasets.imdb):
                 meta_data['cls_indexes'][:] = 0
                 meta_data['cls_indexes'][ind] = 1
 
-                rois = segmentations[im_ind]['rois']
-                poses = segmentations[im_ind]['poses']
-                poses_new = segmentations[im_ind]['poses_refined']
-                poses_icp = segmentations[im_ind]['poses_icp']
+                if not segmentations[im_ind]:
+                    rois = results_mat['rois']
+                    poses = results_mat['poses']
+                    poses_new = results_mat['poses_refined']
+                    poses_icp = results_mat['poses_icp']
+                else:
+                    rois = segmentations[im_ind]['rois']
+                    poses = segmentations[im_ind]['poses']
+                    poses_new = segmentations[im_ind]['poses_refined']
+                    poses_icp = segmentations[im_ind]['poses_icp']
 
                 # save matlab result
                 results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
@@ -520,8 +567,14 @@ class linemod(datasets.imdb):
                         error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
                         error_translation = te(RT[:, 3], poses_gt[:, 3, j])
 
-                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
-                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        if cls == 'eggbox' and error_rotation > 90:
+                            RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                            RT_sym = se3_mul(RT, RT_z)
+                            error_reprojection = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
 
                         if error_reprojection < 5:
                             count_correct_pixel += 1
@@ -538,6 +591,19 @@ class linemod(datasets.imdb):
                         if cfg.TEST.POSE_REFINE:
                             error_rotation_new = re(RT_new[:3, :3], poses_gt[:3, :3, j])
                             error_translation_new = te(RT_new[:, 3], poses_gt[:, 3, j])
+
+                            if cls == 'eggbox' and error_rotation_new > 90:
+                                RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                                RT_sym = se3_mul(RT_new, RT_z)
+                                error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                    poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                            else:
+                                error_reprojection_new = reproj(meta_data['intrinsic_matrix'], RT_new[:3, :3], RT_new[:, 3], \
+                                    poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                            if error_reprojection_new < 5:
+                                count_correct_pixel_refined += 1
+
                             if cls == 'eggbox' or cls == 'glue':
                                 error_new = adi(RT_new[:3, :3], RT_new[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                             else:
@@ -548,6 +614,19 @@ class linemod(datasets.imdb):
 
                             error_rotation_icp = re(RT_icp[:3, :3], poses_gt[:3, :3, j])
                             error_translation_icp = te(RT_icp[:, 3], poses_gt[:, 3, j])
+
+                            if cls == 'eggbox' and error_rotation_icp > 90:
+                                RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                                RT_sym = se3_mul(RT_icp, RT_z)
+                                error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                    poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                            else:
+                                error_reprojection_icp = reproj(meta_data['intrinsic_matrix'], RT_icp[:3, :3], RT_icp[:, 3], \
+                                    poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                            if error_reprojection_icp < 5:
+                                count_correct_pixel_icp += 1
+
                             if cls == 'eggbox' or cls == 'glue':
                                 error_icp = adi(RT_icp[:3, :3], RT_icp[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
                             else:
@@ -608,11 +687,21 @@ class linemod(datasets.imdb):
 
         # pose accuracy
         if cfg.TEST.POSE_REG:
+
+            print 'correct poses reprojection: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel, count_all, float(count_correct_pixel) / float(count_all))
+
+            if cfg.TEST.POSE_REFINE:
+                print 'correct poses reprojection after refinement: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel_refined, count_all, float(count_correct_pixel_refined) / float(count_all))
+
+                print 'correct poses reprojection after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel_icp, count_all, float(count_correct_pixel_icp) / float(count_all))
+
+
             print 'correct poses: {}, all poses: {}, accuracy: {}'.format(count_correct, count_all, float(count_correct) / float(count_all))
+
             if cfg.TEST.POSE_REFINE:
                 print 'correct poses after refinement: {}, all poses: {}, accuracy: {}'.format(count_correct_refined, count_all, float(count_correct_refined) / float(count_all))
-                print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))
-            print 'correct poses reprojection: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel, count_all, float(count_correct_pixel) / float(count_all))
+
+                print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))            
 
 
 if __name__ == '__main__':

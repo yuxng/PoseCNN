@@ -28,8 +28,8 @@ echo Logging output to "$LOG"
 # test for pose regression
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/linemod/linemod_eggbox_train/vgg16_fcn_color_single_frame_pose_linemod_eggbox_iter_80000.ckpt \
-  --imdb linemod_eggbox_test \
+  --model output/linemod/linemod_eggbox_train_few/vgg16_fcn_color_single_frame_pose_linemod_eggbox_iter_80000.ckpt \
+  --imdb linemod_eggbox_test_few \
   --cfg experiments/cfgs/linemod_eggbox_pose.yml \
   --cad data/LINEMOD/models.txt \
   --pose data/LINEMOD/poses.txt \
