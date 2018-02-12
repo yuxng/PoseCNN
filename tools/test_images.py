@@ -84,7 +84,7 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
 
     # construct the filenames
-    root = '/home/yuxiang/Projects/Deep_Pose/data/Baxter/'
+    root = '/home/yuxiang/Projects/Deep_Pose/data/Baxter/old/'
     rgb_filenames = []
     depth_filenames = []
     num = 22
@@ -97,8 +97,8 @@ if __name__ == '__main__':
         depth_filenames.append(filename)
 
     # construct meta data
-    # K = np.array([[513.3605800901698, 0, 313.308307869799], [0, 516.1600538269478, 261.3256090654382], [0, 0, 1]])
-    K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
+    K = np.array([[513.3605800901698, 0, 313.308307869799], [0, 516.1600538269478, 261.3256090654382], [0, 0, 1]])
+    # K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 1000.0})
     print meta_data
 
