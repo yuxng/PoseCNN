@@ -81,12 +81,13 @@ if __name__ == '__main__':
     num_classes = 22
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn_lighting/'
+    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn/'
 
     synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
 
-    for i in xrange(num_images):
+    i = 0
+    while i < num_images:
 
         # render a synthetic image
         im_syn = np.zeros((height, width, 4), dtype=np.uint8)
@@ -119,17 +120,28 @@ if __name__ == '__main__':
             qt[:, :3, j] = quat2mat(poses[ind, :4])
             qt[:, 3, j] = poses[ind, 4:]
 
+        flag = 1
+        for j in xrange(num):
+            cls = class_indexes[index[j]] + 1
+            I = np.where(label == cls)
+            if len(I[0]) < 800:
+                flag = 0
+                break
+        if flag == 0:
+            continue
+
         # process the vertmap
         vertmap_syn[:, :, 0] = vertmap_syn[:, :, 0] - np.round(vertmap_syn[:, :, 0])
         vertmap_syn[np.isnan(vertmap_syn)] = 0
 
         # metadata
         metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], 'vertmap': vertmap_syn, \
-                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': 10000.0}
+                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
 
         # save image
         filename = root + '{:06d}-color.png'.format(i)
         cv2.imwrite(filename, im_syn)
+        print filename
 
         # save depth
         filename = root + '{:06d}-depth.png'.format(i)
@@ -141,5 +153,6 @@ if __name__ == '__main__':
 
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
-        print filename
         scipy.io.savemat(filename, metadata, do_compression=True)
+
+        i += 1

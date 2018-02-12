@@ -26,8 +26,8 @@ if __name__ == '__main__':
     # which_class = 1
     # classes_all = ('ape', 'can', 'cat', 'driller', 'duck', 'eggbox', 'glue', 'holepuncher')
     # root = '/home/yuxiang/mnt1/yuxiang/LINEMOD_Dataset/data_syn/' + classes_all[which_class] + '/'
-    # root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn_lighting/'
-    root = '/nas-homes/yuxiang/LINEMOD_SIXD/data_syn/'
+    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn/'
+    # root = '/nas-homes/yuxiang/LINEMOD_SIXD/data_syn/'
 
     for i in xrange(num_images):
         '''

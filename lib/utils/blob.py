@@ -79,7 +79,8 @@ def chromatic_transform(im, label=None, d_h=None, d_s=None, d_l=None):
     if d_h is None:
         d_h = (np.random.rand(1) - 0.5) * 0. * 180
     if d_l is None:
-        d_l = (np.random.rand(1) - 0.5) * 0.2 * 256
+        # d_l = (np.random.rand(1) - 0.5) * 0.2 * 256
+        d_l = np.random.rand(1) * 0.2 * 256
     if d_s is None:
         d_s = (np.random.rand(1) - 0.5) * 0.2 * 256
     # Convert the BGR to HLS

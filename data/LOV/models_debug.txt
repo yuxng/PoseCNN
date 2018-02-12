@@ -1,1 +1,1 @@
-data/LOV/models/004_sugar_box/textured.obj
+data/LOV/models/010_potted_meat_can/textured.obj

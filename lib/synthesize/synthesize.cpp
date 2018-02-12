@@ -311,7 +311,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
               float* vertex_targets, float* vertex_weights, float weight)
 {
   double threshold = 0.2; // 0.2 for YCB
-  bool is_sampling = false;
+  bool is_sampling = true;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -329,7 +329,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   if (is_sampling)
   {
     // sample object classes
-    num = irand(5, 9);
+    num = irand(8, 13);
     for (int i = 0; i < num; )
     {
       int class_id = irand(0, num_classes);
@@ -345,6 +345,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       if (flag)
       {
         class_ids.push_back(class_id);
+        i++;
       }
     }
   }
@@ -375,7 +376,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       float* pose = poses_[class_id] + seed * 7;
 
       Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
+      // Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
+      Sophus::SE3d::Point translation(pose[4] + drand(-0.1, 0.1), pose[5] + drand(-0.1, 0.1), pose[6] + drand(0, 1.0));
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
@@ -490,8 +492,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
-  // GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
-  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(2, 5), 1.};
+  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
 
   // render color image
   glColor3ub(255,255,255);
@@ -512,7 +513,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     glEnable(GL_LIGHT0);
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4); 
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.1);  // 0.4
 
     if(is_textured_[class_id])
     {
