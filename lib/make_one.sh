@@ -15,13 +15,3 @@ g++ -std=c++11 -shared -o hough_voting_gpu.so hough_voting_gpu_op.cc \
 
 cd ..
 echo 'hough_voting_gpu_layer'
-
-cd roi_pooling_layer
-
-nvcc -std=c++11 -c -o roi_pooling_op.cu.o roi_pooling_op_gpu.cu.cc \
-	-I $TF_INC -I$TF_INC/external/nsync/public -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -arch=sm_50
-
-g++ -std=c++11 -shared -o roi_pooling.so roi_pooling_op.cc \
-	roi_pooling_op.cu.o -I $TF_INC -I$TF_INC/external/nsync/public -fPIC -lcudart -L $CUDA_PATH/lib64 -L$TF_LIB -ltensorflow_framework
-cd ..
-echo 'roi_pooling_layer'

@@ -111,6 +111,8 @@ class imdb(object):
                      'class_colors' : self.roidb[i]['class_colors'],
                      'class_weights' : self.roidb[i]['class_weights'],
                      'cls_index' : self.roidb[i]['cls_index'],
+                     'boxes' : self.roidb[i]['boxes'],
+                     'gt_classes' : self.roidb[i]['gt_classes'],
                      'flipped' : True}
             self.roidb.append(entry)
         self._image_index = self._image_index * 2

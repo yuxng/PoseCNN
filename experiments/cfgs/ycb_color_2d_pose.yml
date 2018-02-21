@@ -1,4 +1,4 @@
-EXP_DIR: lov
+EXP_DIR: ycb
 INPUT: COLOR
 TRAIN:
   SINGLE_FRAME: True
@@ -11,7 +11,7 @@ TRAIN:
   NUM_CLASSES: 22
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 20000
-  SNAPSHOT_INFIX: lov
+  SNAPSHOT_INFIX: ycb
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose_add
   USE_FLIPPED: False
   CHROMATIC: True
@@ -19,7 +19,7 @@ TRAIN:
   VERTEX_REG_3D: False
   VISUALIZE: False
   POSE_REG: True
-  SYNTHESIZE: True
+  SYNTHESIZE: False
   SYNROOT: 'data/LOV/data_syn/'
   SYNNUM: 80000
   SYN_RATIO: 10

@@ -14,6 +14,7 @@ import datasets.shapenet_single
 import datasets.gmu_scene
 import datasets.rgbd_scene
 import datasets.lov
+import datasets.ycb
 import datasets.linemod
 import numpy as np
 
@@ -50,6 +51,13 @@ for split in ['train', 'val', 'keyframe', 'trainval', 'debug', 'train_few', 'val
     print name
     __sets[name] = (lambda split=split:
             datasets.lov(split))
+
+# ycb dataset
+for split in ['trainval']:
+    name = 'ycb_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.ycb(split))
 
 # linemod dataset
 for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \

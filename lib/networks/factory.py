@@ -11,6 +11,7 @@ __sets = {}
 
 import networks.vgg16
 import networks.vgg16_convs
+import networks.vgg16_det
 import networks.vgg16_gan
 import networks.dcgan
 import networks.resnet50
@@ -20,9 +21,14 @@ from fcn.config import cfg
 if cfg.TRAIN.SINGLE_FRAME:
     if cfg.NETWORK == 'VGG16':
         __sets['vgg16_convs'] = networks.vgg16_convs(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, \
-                                                     cfg.TRAIN.VERTEX_REG_2D, cfg.TRAIN.VERTEX_REG_3D, cfg.TRAIN.POSE_REG, cfg.TRAIN.MATCHING, cfg.TRAIN.TRAINABLE, cfg.IS_TRAIN)
+                                                     cfg.TRAIN.VERTEX_REG_2D, cfg.TRAIN.VERTEX_REG_3D, cfg.TRAIN.POSE_REG, \
+                                                     cfg.TRAIN.MATCHING, cfg.TRAIN.TRAINABLE, cfg.IS_TRAIN)
+    if cfg.NETWORK == 'VGG16DET':
+        __sets['vgg16_det'] = networks.vgg16_det(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.FEATURE_STRIDE, cfg.ANCHOR_SCALES, \
+                                                 cfg.ANCHOR_RATIOS, cfg.TRAIN.TRAINABLE, cfg.IS_TRAIN)
     if cfg.NETWORK == 'VGG16GAN':
-        __sets['vgg16_gan'] = networks.vgg16_gan(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, cfg.TRAIN.SCALES_BASE, cfg.TRAIN.VERTEX_REG, cfg.TRAIN.TRAINABLE)
+        __sets['vgg16_gan'] = networks.vgg16_gan(cfg.INPUT, cfg.TRAIN.NUM_CLASSES, cfg.TRAIN.NUM_UNITS, \
+                                                 cfg.TRAIN.SCALES_BASE, cfg.TRAIN.VERTEX_REG, cfg.TRAIN.TRAINABLE)
     if cfg.NETWORK == 'DCGAN':
         __sets['dcgan'] = networks.dcgan()
     if cfg.NETWORK == 'RESNET50':

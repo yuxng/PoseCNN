@@ -552,7 +552,7 @@ def test_net(sess, net, imdb, weights_filename, rig_filename, is_kfusion):
 
 
 # compute the voting label image in 2D
-def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, extents):
+def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, extents):
     width = im_label.shape[1]
     height = im_label.shape[0]
     vertex_targets = np.zeros((height, width, 3), dtype=np.float32)
@@ -561,8 +561,8 @@ def _vote_centers(im_label, cls_indexes, centers, poses, num_classes, vertmap, e
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         I = np.where(im_label == i)
-        if len(x) > 0:
-            ind = np.where(cls_indexes == i)[0]
+        ind = np.where(cls_indexes == i)[0]
+        if len(x) > 0 and len(ind) > 0:
             center[0] = centers[ind, 0]
             center[1] = centers[ind, 1]
             z = poses[2, 3, ind]
@@ -715,16 +715,17 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == i)
             if len(index[0]) > 0:
                 # extract 3D points
-                num = len(index[0])
-                x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
-
-                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                # x3d[0, :] = points[i,:,0]
-                # x3d[1, :] = points[i,:,1]
-                # x3d[2, :] = points[i,:,2]
+                if not vertmap_gt:
+                    num = len(index[0])
+                    x3d = np.ones((4, num), dtype=np.float32)
+                    x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                    x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                    x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                else:
+                    x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                    x3d[0, :] = points[i,:,0]
+                    x3d[1, :] = points[i,:,1]
+                    x3d[2, :] = points[i,:,2]
 
                 # projection
                 ind = np.where(cls_indexes == i)[0][0]
@@ -748,16 +749,17 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0 and cls > 0:
                 # extract 3D points
-                num = len(index[0])
-                x3d = np.ones((4, num), dtype=np.float32)
-                x3d[0, :] = vertmap_gt[index[0], index[1], 0]
-                x3d[1, :] = vertmap_gt[index[0], index[1], 1]
-                x3d[2, :] = vertmap_gt[index[0], index[1], 2]
-
-                # x3d = np.ones((4, points.shape[1]), dtype=np.float32)
-                # x3d[0, :] = points[cls,:,0]
-                # x3d[1, :] = points[cls,:,1]
-                # x3d[2, :] = points[cls,:,2]
+                if not vertmap_gt:
+                    num = len(index[0])
+                    x3d = np.ones((4, num), dtype=np.float32)
+                    x3d[0, :] = vertmap_gt[index[0], index[1], 0]
+                    x3d[1, :] = vertmap_gt[index[0], index[1], 1]
+                    x3d[2, :] = vertmap_gt[index[0], index[1], 2]
+                else:
+                    x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+                    x3d[0, :] = points[cls,:,0]
+                    x3d[1, :] = points[cls,:,1]
+                    x3d[2, :] = points[cls,:,2]
 
                 # projection
                 RT = np.zeros((3, 4), dtype=np.float32)
@@ -1390,11 +1392,14 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 if len(poses_gt.shape) == 2:
                     poses_gt = np.reshape(poses_gt, (3, 4, 1))
                 vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
-                vertmap_gt = meta_data['vertmap'].copy()
-                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, vertmap_gt, imdb._extents)
+                if 'vertmap' in meta_data:
+                    vertmap_gt = meta_data['vertmap'].copy()
+                else:
+                    vertmap_gt = []
+                centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
-                    meta_data['vertmap'], poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes, imdb._points_all)
+                    vertmap_gt, poses_gt, meta_data['cls_indexes'].flatten(), imdb.num_classes, imdb._points_all)
             elif cfg.TEST.VERTEX_REG_3D:
                 poses_gt = meta_data['poses']
                 if len(poses_gt.shape) == 2:
@@ -1441,8 +1446,8 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(13, num_images)
     else:
         perm = xrange(num_images)
 

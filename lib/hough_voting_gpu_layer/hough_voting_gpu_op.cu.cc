@@ -19,14 +19,33 @@
 // namespace tensorflow {
 using namespace tensorflow;
 
-__device__ inline float angle_distance(int cx, int cy, int x, int y, float u, float v)
+__device__ inline float angle_distance(int cx, int cy, int x, int y, float u, float v, 
+  int cls, const int height, const int width, const int* labelmap)
 {
   float dx = cx - x;
   float dy = cy - y;
   float n1 = sqrt(u * u + v * v);
   float n2 = sqrt(dx * dx + dy * dy);
   float dot = u * dx + v * dy;
-  return dot / (n1 * n2);
+  float distance = dot / (n1 * n2);
+
+  int num = 20;
+  int count = 0;
+  for (int i = 1; i <= num; i++)
+  {
+    float step = float(i) / float(num);
+    int px = int(x + step * dx);
+    int py = int(y + step * dy);
+    if (px >= 0 && px < width && py >= 0 && py < height)
+    {
+      if (labelmap[py * width + px] == cls)
+        count++;
+    }
+  }
+  if ((float)count / float(num) < 0.8)
+    distance = 0;
+
+  return distance;
 }
 
 __device__ inline float IoU(float* a, float* b) 
@@ -75,7 +94,7 @@ __device__ inline void project_box(int cls, const float* extents, const float* m
   }
   float width = maxX - minX + 1;
   float height = maxY - minY + 1;
-  *threshold = fmax(width, height) * 0.8;
+  *threshold = fmax(width, height) * 0.5;
 }
 
 
@@ -146,8 +165,9 @@ __global__ void compute_arrays_kernel(const int nthreads, const int* labelmap,
 }
 
 
-__global__ void compute_hough_kernel(const int nthreads, float* hough_space, float* hough_data, const float* vertmap, const float* extents, const float* meta_data,
-    int* arrays, int* array_size, int* class_indexes, const int height, const int width, const int num_classes, const int count, const float inlierThreshold) 
+__global__ void compute_hough_kernel(const int nthreads, float* hough_space, float* hough_data, const int* labelmap, 
+    const float* vertmap, const float* extents, const float* meta_data, int* arrays, int* array_size, 
+    int* class_indexes, const int height, const int width, const int num_classes, const int count, const float inlierThreshold) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -177,7 +197,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
       float d = vertmap[offset + 2];
 
       // vote
-      if (angle_distance(cx, cy, x, y, u, v) > inlierThreshold && d > 0)
+      if (angle_distance(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
       {
         project_box(cls, extents, meta_data, d, &threshold);
         float dx = fabsf(x - cx);
@@ -574,7 +594,7 @@ void HoughVotingLaucher(OpKernelContext* context,
   output_size = count * height * width;
   compute_hough_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, hough_space, hough_data, vertmap, extents, meta_data,
+      output_size, hough_space, hough_data, labelmap, vertmap, extents, meta_data,
       arrays, array_sizes, class_indexes, height, width, num_classes, count, inlierThreshold);
   cudaThreadSynchronize();
 

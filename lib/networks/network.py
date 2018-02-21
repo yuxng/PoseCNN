@@ -23,6 +23,8 @@ from gru2d_original import GRUCell
 from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
 from add2d import Add2DCell
+from rpn_layer.snippets import generate_anchors_pre
+from rpn_layer.anchor_target_layer import anchor_target_layer
 
 DEFAULT_PADDING = 'SAME'
 
@@ -642,3 +644,58 @@ class Network(object):
                 unary = unary + compatibility
 
         return unary
+
+
+    '''
+    Region Proposal Network
+    '''
+
+    @layer
+    def reshape_score(self, input, num_dim, name):
+        input_shape = tf.shape(input)
+        with tf.variable_scope(name) as scope:
+            # change the channel to the caffe format
+            to_caffe = tf.transpose(input, [0, 3, 1, 2])
+            # then force it to have channel 2
+            reshaped = tf.reshape(to_caffe,
+                                 tf.concat(axis=0, values=[[1, num_dim, -1], [input_shape[2]]]))
+            # then swap the channel back
+            to_tf = tf.transpose(reshaped, [0, 2, 3, 1])
+        return to_tf
+
+    @layer
+    def compute_anchors(self, input, feat_stride, anchor_scales, anchor_ratios, name):
+        im_info = input
+        with tf.variable_scope(name) as scope:
+            height = tf.to_int32(tf.ceil(im_info[0] / np.float32(feat_stride)))
+            width = tf.to_int32(tf.ceil(im_info[1] / np.float32(feat_stride)))
+            anchors, anchor_length = tf.py_func(generate_anchors_pre,
+                                          [height, width, feat_stride, anchor_scales, anchor_ratios],
+                                          [tf.float32, tf.int32], name="generate_anchors")
+            anchors.set_shape([None, 4])
+            anchor_length.set_shape([])
+
+        return anchors
+
+    @layer
+    def compute_anchor_targets(self, input, num_anchors, name):
+
+        rpn_cls_score = input[0]
+        gt_boxes = input[1]
+        im_info = input[2]
+        anchors = input[3]
+
+        with tf.variable_scope(name) as scope:
+            rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights, rpn_gt_max_overlaps = tf.py_func(
+                anchor_target_layer,
+               [rpn_cls_score, gt_boxes, im_info, anchors, num_anchors],
+               [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+               name="anchor_targets")
+
+            rpn_labels.set_shape([1, 1, None, None])
+            rpn_labels = tf.to_int32(rpn_labels, name="to_int32")
+            rpn_bbox_targets.set_shape([1, None, None, num_anchors * 4])
+            rpn_bbox_inside_weights.set_shape([1, None, None, num_anchors * 4])
+            rpn_bbox_outside_weights.set_shape([1, None, None, num_anchors * 4])
+
+        return rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights, rpn_gt_max_overlaps

@@ -26,12 +26,36 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, \
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob \
         = _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales, extents, is_syn)
+
+    if not cfg.TRAIN.SEGMENTATION:
+        assert len(im_scales) == 1, "Single batch only"
+        assert len(roidb) == 1, "Single batch only"
+  
+        # gt boxes: (x1, y1, x2, y2, cls)
+        gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
+        gt_boxes = np.empty((len(gt_inds), 5), dtype=np.float32)
+        boxes = roidb[0]['boxes'].copy()
+        if roidb[0]['flipped']:
+            oldx1 = boxes[:, 0].copy()
+            oldx2 = boxes[:, 2].copy()
+            width = im_blob.shape[2]
+            boxes[:, 0] = width - oldx2 - 1
+            boxes[:, 2] = width - oldx1 - 1
+        gt_boxes[:, 0:4] = boxes[gt_inds, :] * im_scales[0]
+        gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
+        im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
+    else:
+        gt_boxes = []
+        im_info = []
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
-        _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
+        if cfg.TRAIN.SEGMENTATION:
+            _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
+        else:
+            _vis_minibatch_box(im_blob, gt_boxes)
 
     # rescale the points
     point_blob = points.copy()
@@ -56,7 +80,9 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
              'data_pose': pose_blob,
              'data_extents': extents,
              'data_points': point_blob,
-             'data_symmetry': symmetry}
+             'data_symmetry': symmetry,
+             'data_gt_boxes': gt_boxes,
+             'data_im_info': im_info}
 
     return blobs
 
@@ -267,10 +293,13 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             if roidb[i]['flipped']:
                 poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
 
-            vertmap = meta_data['vertmap']
-            if roidb[i]['flipped']:
-                vertmap = vertmap[:, ::-1, :]
-            vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            if cfg.TRAIN.VERTEX_REG_3D:
+                vertmap = meta_data['vertmap']
+                if roidb[i]['flipped']:
+                    vertmap = vertmap[:, ::-1, :]
+                vertmap = cv2.resize(vertmap, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            else:
+                vertmap = []
 
             center = meta_data['center']
             if roidb[i]['flipped']:
@@ -392,9 +421,9 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         I = np.where(im_label == i)
-        if len(x) > 0:
+        ind = np.where(cls_indexes == i)[0]
+        if len(x) > 0 and len(ind) > 0:
             if cfg.TRAIN.VERTEX_REG_2D:
-                ind = np.where(cls_indexes == i)[0]
                 c[0] = center[ind, 0]
                 c[1] = center[ind, 1]
                 z = poses[2, 3, ind]
@@ -556,5 +585,33 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blo
                 ax.set_title('vertex z')
         else:
             plt.imshow(l)
+
+        plt.show()
+
+
+def _vis_minibatch_box(im_blob, gt_boxes):
+    """Visualize a mini-batch for debugging."""
+    import matplotlib.pyplot as plt
+
+    for i in xrange(im_blob.shape[0]):
+        fig = plt.figure()
+        # show image
+        im = im_blob[i, :, :, :].copy()
+        im += cfg.PIXEL_MEANS
+        im = im[:, :, (2, 1, 0)]
+        im = im.astype(np.uint8)
+        ax = fig.add_subplot(1, 2, 1)
+        plt.imshow(im)
+        ax.set_title('color') 
+
+        ax = fig.add_subplot(1, 2, 2)
+        plt.imshow(im)
+        for j in xrange(gt_boxes.shape[0]):
+            x1 = gt_boxes[j, 0]
+            y1 = gt_boxes[j, 1]
+            x2 = gt_boxes[j, 2]
+            y2 = gt_boxes[j, 3]
+            plt.gca().add_patch(
+                plt.Rectangle((x1, y1), x2-x1, y2-y1, fill=False, edgecolor='g', linewidth=3))
 
         plt.show()

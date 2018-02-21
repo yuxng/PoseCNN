@@ -135,14 +135,12 @@ ext_modules = [
                                      "'-fPIC'"]},
         include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
     ),
-    #Extension(
-    #    "pose_estimation.ransac",                                # the extension name
-    #    sources=['pose_estimation/ransac.pyx'],
-    #    language='c++',
-    #    extra_objects=["pose_estimation/build/libransac.so"],
-    #    extra_compile_args={'gcc': ["-Wno-unused-function"]},
-    #    include_dirs = ['pose_estimation/include']
-    #),
+    Extension(
+        "utils.cython_bbox",
+        ["utils/bbox.pyx"],
+        extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
+        include_dirs = [numpy_include]
+    ),
     Extension(
         "pose_refinement.refiner",                                # the extension name
         sources=['pose_refinement/refiner.pyx'],
