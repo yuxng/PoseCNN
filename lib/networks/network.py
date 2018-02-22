@@ -24,7 +24,10 @@ from gru3d import GRU3DCell
 from vanilla2d import Vanilla2DCell
 from add2d import Add2DCell
 from rpn_layer.snippets import generate_anchors_pre
+from rpn_layer.proposal_layer import proposal_layer
+from rpn_layer.proposal_top_layer import proposal_top_layer
 from rpn_layer.anchor_target_layer import anchor_target_layer
+from rpn_layer.proposal_target_layer import proposal_target_layer
 
 DEFAULT_PADDING = 'SAME'
 
@@ -686,10 +689,10 @@ class Network(object):
         anchors = input[3]
 
         with tf.variable_scope(name) as scope:
-            rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights, rpn_gt_max_overlaps = tf.py_func(
+            rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = tf.py_func(
                 anchor_target_layer,
                [rpn_cls_score, gt_boxes, im_info, anchors, num_anchors],
-               [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+               [tf.float32, tf.float32, tf.float32, tf.float32],
                name="anchor_targets")
 
             rpn_labels.set_shape([1, 1, None, None])
@@ -698,4 +701,19 @@ class Network(object):
             rpn_bbox_inside_weights.set_shape([1, None, None, num_anchors * 4])
             rpn_bbox_outside_weights.set_shape([1, None, None, num_anchors * 4])
 
-        return rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights, rpn_gt_max_overlaps
+        return rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights
+
+    @layer
+    def compute_proposals(self, input, feat_stride, num_anchors, mode, name):
+        rpn_cls_prob = input[0]
+        rpn_bbox_pred = input[1]
+        im_info = input[2]
+        anchors = input[3]
+        with tf.variable_scope(name) as scope:
+            rois, rpn_scores = tf.py_func(proposal_layer,
+                                    [rpn_cls_prob, rpn_bbox_pred, im_info, mode, feat_stride, anchors, num_anchors],
+                                    [tf.float32, tf.float32], name="proposal")
+            rois.set_shape([None, 5])
+            rpn_scores.set_shape([None, 1])
+
+        return rois, rpn_scores

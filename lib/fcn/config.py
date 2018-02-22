@@ -35,12 +35,13 @@ __C.RIG = ''
 __C.CAD = ''
 __C.POSE = ''
 __C.BACKGROUND = ''
+__C.USE_GPU_NMS = True
 
 # Anchor scales for RPN
-__C.ANCHOR_SCALES = [8,16,32]
+__C.ANCHOR_SCALES = np.array([8,16,32])
 
 # Anchor ratios for RPN
-__C.ANCHOR_RATIOS = [0.5,1,2]
+__C.ANCHOR_RATIOS = np.array([0.5,1,2])
 
 __C.FEATURE_STRIDE = 16
 
@@ -145,7 +146,7 @@ __C.TRAIN.RPN_POSITIVE_WEIGHT = -1.0
 #
 
 __C.TEST = edict()
-
+__C.TEST.SEGMENTATION = True
 __C.TEST.SINGLE_FRAME = False
 __C.TEST.VERTEX_REG_2D = False
 __C.TEST.VERTEX_REG_3D = False
@@ -161,6 +162,15 @@ __C.TEST.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 
 # voxel grid size
 __C.TEST.GRID_SIZE = 256
+
+## NMS threshold used on RPN proposals
+__C.TEST.RPN_NMS_THRESH = 0.7
+
+# Number of top scoring boxes to keep before apply NMS to RPN proposals
+__C.TEST.RPN_PRE_NMS_TOP_N = 6000
+
+# Number of top scoring boxes to keep after applying NMS to RPN proposals
+__C.TEST.RPN_POST_NMS_TOP_N = 300
 
 # Pixel mean values (BGR order) as a (1, 1, 3) array
 # These are the values originally used for training VGG16

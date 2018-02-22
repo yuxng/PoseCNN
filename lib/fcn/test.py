@@ -323,6 +323,73 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
     return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
 
 
+def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
+    """detect image
+    """
+
+    # compute image blob
+    im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
+    im_scale = im_scale_factors[0]
+    im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scale], dtype=np.float32)
+
+    # forward pass
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_blob
+        data_p_blob = im_depth_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'DEPTH':
+        data_blob = im_depth_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
+
+    # use a fake gt boxes of zeros
+    gt_boxes = np.zeros((1, 5), dtype=np.float32)
+
+    if cfg.INPUT == 'RGBD':
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+    else:
+        feed_dict = {net.data: data_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
+    
+    rois, rpn_scores = sess.run([net.get_output('rois'), net.get_output('rpn_scores')])
+
+    return rois, rpn_scores
+
+def vis_detections(im, im_depth, rois, rpn_scores, colors):
+    """Visual debugging of detections."""
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+
+    # show image
+    ax = fig.add_subplot(121)
+    im = im[:, :, (2, 1, 0)]
+    plt.imshow(im)
+    ax.set_title('input image')
+
+    # show depth
+    ax = fig.add_subplot(122)
+    plt.imshow(im)
+    ax.set_title('region proposals')
+
+    print rois.shape
+
+    # show centers
+    for i in xrange(rois.shape[0]):
+        if i < 5:
+            x1 = rois[i, 1]
+            y1 = rois[i, 2]
+            w = rois[i, 3] - rois[i, 1]
+            h = rois[i, 4] - rois[i, 2]
+            # show boxes
+            plt.gca().add_patch(
+                plt.Rectangle((x1, y1), w, h, fill=False,
+                               edgecolor='g', linewidth=3))
+
+    plt.show()
+
+
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
@@ -1420,7 +1487,133 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
 
+########################
+# test detection network
+########################
+def test_net_detection(sess, net, imdb, weights_filename):
 
+    output_dir = get_output_dir(imdb, weights_filename)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    det_file = os.path.join(output_dir, 'detections.pkl')
+    print imdb.name
+    if os.path.exists(det_file):
+        with open(det_file, 'rb') as fid:
+            detections = cPickle.load(fid)
+        imdb.evaluate_detections(detections, output_dir)
+        return
+
+    """Test a FCN on an image database."""
+    if cfg.TEST.SYNTHETIC:
+        num_images = cfg.TRAIN.SYNNUM
+    else:
+        num_images = len(imdb.image_index)
+    detections = [[] for _ in xrange(num_images)]
+
+    # timers
+    _t = {'im_detect' : Timer(), 'misc' : Timer()}
+
+    if cfg.TEST.VISUALIZE:
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
+    else:
+        perm = xrange(num_images)
+
+    if cfg.TEST.SYNTHETIC:
+        perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
+
+        cache_file = cfg.BACKGROUND
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as fid:
+                backgrounds = cPickle.load(fid)
+            print 'backgrounds loaded from {}'.format(cache_file)
+
+    for i in perm:
+
+        if cfg.TEST.SYNTHETIC:
+            # rgba
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(i)
+            rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
+            # sample a background image
+            ind = np.random.randint(len(backgrounds), size=1)[0]
+            filename_color = backgrounds[ind]
+            background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
+            try:
+                background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            except:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+
+            if len(background_color.shape) != 3:
+                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+
+            # add background
+            im = np.copy(rgba[:,:,:3])
+            alpha = rgba[:,:,3]
+            I = np.where(alpha == 0)
+            print im.shape, background_color.shape
+            im[I[0], I[1], :] = background_color[I[0], I[1], :]
+
+            # depth
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
+            im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
+            # meta data
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(i)
+            meta_data = scipy.io.loadmat(filename)
+        else:
+            # parse image name
+            image_index = imdb.image_index[i]
+
+            # read color image
+            rgba = pad_im(cv2.imread(imdb.image_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+            if rgba.shape[2] == 4:
+                im = np.copy(rgba[:,:,:3])
+                alpha = rgba[:,:,3]
+                I = np.where(alpha == 0)
+                im[I[0], I[1], :] = 0
+            else:
+                im = rgba
+
+            # read depth image
+            im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+
+            # load meta data
+            meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
+        meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
+
+        # process annotation if training for two classes
+        if imdb.num_classes == 2:
+            ind = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
+            meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
+            if len(meta_data['poses'].shape) == 3:
+                meta_data['poses'] = meta_data['poses'][:,:,ind]
+            meta_data['center'] = meta_data['center'][ind,:]
+
+        _t['im_detect'].tic()
+        rois, rpn_scores = im_detect_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        _t['im_detect'].toc()
+
+        _t['misc'].tic()
+        det = {'rois': rois, 'rpn_scores': rpn_scores}
+        detections[i] = det
+        _t['misc'].toc()
+
+        print 'im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
+              .format(i, num_images, _t['im_detect'].diff, _t['misc'].diff)
+
+        if cfg.TEST.VISUALIZE:
+            vis_detections(im, im_depth, rois, rpn_scores, imdb._class_colors)
+
+    det_file = os.path.join(output_dir, 'detections.pkl')
+    with open(det_file, 'wb') as f:
+        cPickle.dump(detections, f, cPickle.HIGHEST_PROTOCOL)
+
+    # evaluation
+    imdb.evaluate_detections(detections, output_dir)
 
 
 ###################

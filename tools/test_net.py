@@ -11,7 +11,7 @@
 
 import _init_paths
 from fcn.test import test_net
-from fcn.test import test_net_single_frame
+from fcn.test import test_net_single_frame, test_net_detection
 from fcn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
 import argparse
@@ -112,9 +112,9 @@ if __name__ == '__main__':
     print ('Loading model weights from {:s}').format(args.model)
 
     if cfg.TEST.SINGLE_FRAME:
-        if cfg.TEST.GAN:
-            test_gan(sess, network, imdb, weights_filename)
-        else:
+        if cfg.TEST.SEGMENTATION:
             test_net_single_frame(sess, network, imdb, weights_filename, args.cad_name)
+        else:
+            test_net_detection(sess, network, imdb, weights_filename)
     else:
         test_net(sess, network, imdb, weights_filename, args.rig_name, args.kfusion)

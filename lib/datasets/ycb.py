@@ -2,25 +2,22 @@ __author__ = 'yuxiang'
 
 import os
 import datasets
-import datasets.lov
+import datasets.ycb
 import datasets.imdb
 import cPickle
 import numpy as np
 import cv2
-import PIL
 from fcn.config import cfg
 from utils.pose_error import *
-from utils.cython_bbox import bbox_overlaps
 from transforms3d.quaternions import quat2mat, mat2quat
-from rpn_layer.generate_anchors import generate_anchors
 
-class lov(datasets.imdb):
-    def __init__(self, image_set, lov_path = None):
-        datasets.imdb.__init__(self, 'lov_' + image_set)
+class ycb(datasets.imdb):
+    def __init__(self, image_set, ycb_path = None):
+        datasets.imdb.__init__(self, 'ycb_' + image_set)
         self._image_set = image_set
-        self._lov_path = self._get_default_path() if lov_path is None \
-                            else lov_path
-        self._data_path = os.path.join(self._lov_path, 'data')
+        self._ycb_path = self._get_default_path() if ycb_path is None \
+                            else ycb_path
+        self._data_path = os.path.join(self._ycb_path, 'data')
 
         self._classes = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
                          '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
@@ -42,13 +39,8 @@ class lov(datasets.imdb):
         self._image_index = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
 
-        # statistics for computing recall
-        self._count = 0
-        self._num_boxes_all = np.zeros(self.num_classes, dtype=np.int)
-        self._num_boxes_covered = np.zeros(self.num_classes, dtype=np.int)
-
-        assert os.path.exists(self._lov_path), \
-                'lov path does not exist: {}'.format(self._lov_path)
+        assert os.path.exists(self._ycb_path), \
+                'ycb path does not exist: {}'.format(self._ycb_path)
         assert os.path.exists(self._data_path), \
                 'Data path does not exist: {}'.format(self._data_path)
 
@@ -64,7 +56,7 @@ class lov(datasets.imdb):
         Construct an image path from the image's "index" identifier.
         """
 
-        image_path = os.path.join(self._data_path, index + '-color' + self._image_ext)
+        image_path = os.path.join(self._data_path, index + self._image_ext)
         assert os.path.exists(image_path), \
                 'Path does not exist: {}'.format(image_path)
         return image_path
@@ -80,7 +72,7 @@ class lov(datasets.imdb):
         """
         Construct an depth path from the image's "index" identifier.
         """
-        depth_path = os.path.join(self._data_path, index + '-depth' + self._image_ext)
+        depth_path = os.path.join(self._data_path, index + '.depth' + self._image_ext)
         assert os.path.exists(depth_path), \
                 'Path does not exist: {}'.format(depth_path)
         return depth_path
@@ -121,7 +113,7 @@ class lov(datasets.imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        image_set_file = os.path.join(self._lov_path, self._image_set + '.txt')
+        image_set_file = os.path.join(self._ycb_path, self._image_set + '.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
@@ -133,7 +125,7 @@ class lov(datasets.imdb):
         """
         Return the default path where KITTI is expected to be installed.
         """
-        return os.path.join(datasets.ROOT_DIR, 'data', 'LOV')
+        return os.path.join(datasets.ROOT_DIR, 'data', 'YCB')
 
 
     def _load_object_points(self):
@@ -142,7 +134,7 @@ class lov(datasets.imdb):
         num = np.inf
 
         for i in xrange(1, len(self._classes)):
-            point_file = os.path.join(self._lov_path, 'models', self._classes[i], 'points.xyz')
+            point_file = os.path.join(self._ycb_path, 'models', self._classes[i], 'points.xyz')
             print point_file
             assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
             points[i] = np.loadtxt(point_file)
@@ -158,7 +150,7 @@ class lov(datasets.imdb):
 
     def _load_object_extents(self):
 
-        extent_file = os.path.join(self._lov_path, 'extents.txt')
+        extent_file = os.path.join(self._ycb_path, 'extents.txt')
         assert os.path.exists(extent_file), \
                 'Path does not exist: {}'.format(extent_file)
 
@@ -203,16 +195,8 @@ class lov(datasets.imdb):
 
         # self.compute_class_weights()
 
-        gt_roidb = [self._load_lov_annotation(index)
+        gt_roidb = [self._load_ycb_annotation(index)
                     for index in self.image_index]
-
-        if not cfg.TRAIN.SEGMENTATION:
-            # print out recall
-            for i in xrange(1, self.num_classes):
-                print '{}: Total number of boxes {:d}'.format(self.classes[i], self._num_boxes_all[i])
-                print '{}: Number of boxes covered {:d}'.format(self.classes[i], self._num_boxes_covered[i])
-                if self._num_boxes_all[i] > 0:
-                    print '{}: Recall {:f}'.format(self.classes[i], float(self._num_boxes_covered[i]) / float(self._num_boxes_all[i]))
 
         with open(cache_file, 'wb') as fid:
             cPickle.dump(gt_roidb, fid, cPickle.HIGHEST_PROTOCOL)
@@ -221,7 +205,7 @@ class lov(datasets.imdb):
         return gt_roidb
 
 
-    def _load_lov_annotation(self, index):
+    def _load_ycb_annotation(self, index):
         """
         Load class name and meta data
         """
@@ -236,99 +220,15 @@ class lov(datasets.imdb):
 
         # metadata path
         metadata_path = self.metadata_path_from_index(index)
-
-        # parse image name
-        pos = index.find('/')
-        video_id = index[:pos]
-
-        # read boxes
-        filename = os.path.join(self._data_path, index + '-box.txt')
-        lines = []
-        with open(filename) as f:
-            for line in f:
-                lines.append(line)
-
-        num_objs = len(lines)
-        boxes = np.zeros((num_objs, 4), dtype=np.float32)
-        gt_classes = np.zeros((num_objs), dtype=np.int32)
-
-        for ix, line in enumerate(lines):
-            words = line.split()
-            cls = self._class_to_ind[words[0]]
-            boxes[ix, :] = [float(n) for n in words[1:5]]
-            gt_classes[ix] = cls
-
-        if not cfg.TRAIN.SEGMENTATION and self._count % 10 == 0:
-            print index
-            self.compute_gt_box_overlap(index, boxes, gt_classes)
-        self._count += 1
         
         return {'image': image_path,
                 'depth': depth_path,
                 'label': label_path,
                 'meta_data': metadata_path,
-                'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
                 'cls_index': -1,
-                'boxes': boxes,
-                'gt_classes': gt_classes,
                 'flipped': False}
-
-
-    def compute_gt_box_overlap(self, index, boxes, gt_classes):
-
-        assert len(cfg.TRAIN.SCALES_BASE) == 1
-        scale = cfg.TRAIN.SCALES_BASE[0]
-        feat_stride = cfg.FEATURE_STRIDE
-
-        # faster rcnn region proposal
-        base_size = 16
-        ratios = cfg.ANCHOR_RATIOS
-        scales = cfg.ANCHOR_SCALES
-        anchors = generate_anchors(base_size, ratios, scales)
-        num_anchors = anchors.shape[0]
-
-        # image size
-        s = PIL.Image.open(self.image_path_from_index(index)).size
-        image_height = s[1]
-        image_width = s[0]
-
-        # height and width of the heatmap
-        height = np.round(image_height * scale / feat_stride)
-        width = np.round(image_width * scale  / feat_stride)
-
-        # gt boxes
-        gt_boxes = boxes * scale
-
-        # 1. Generate proposals from bbox deltas and shifted anchors
-        shift_x = np.arange(0, width) * feat_stride
-        shift_y = np.arange(0, height) * feat_stride
-        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-        shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
-                            shift_x.ravel(), shift_y.ravel())).transpose()
-        # add A anchors (1, A, 4) to
-        # cell K shifts (K, 1, 4) to get
-        # shift anchors (K, A, 4)
-        # reshape to (K*A, 4) shifted anchors
-        A = num_anchors
-        K = shifts.shape[0]
-        all_anchors = (anchors.reshape((1, A, 4)) + shifts.reshape((1, K, 4)).transpose((1, 0, 2)))
-        all_anchors = all_anchors.reshape((K * A, 4))
-
-        # compute overlap
-        overlaps_grid = bbox_overlaps(all_anchors.astype(np.float), gt_boxes.astype(np.float))
-        
-        # check how many gt boxes are covered by anchors
-        max_overlaps = overlaps_grid.max(axis = 0)
-        fg_inds = []
-        for k in xrange(1, self.num_classes):
-            fg_inds.extend(np.where((gt_classes == k) & (max_overlaps >= cfg.TRAIN.RPN_POSITIVE_OVERLAP))[0])
-
-        for i in xrange(self.num_classes):
-            self._num_boxes_all[i] += len(np.where(gt_classes == i)[0])
-            self._num_boxes_covered[i] += len(np.where(gt_classes[fg_inds] == i)[0])
-
 
     def _process_label_image(self, label_image):
         """
@@ -657,6 +557,6 @@ class lov(datasets.imdb):
 
 
 if __name__ == '__main__':
-    d = datasets.lov('train')
+    d = datasets.ycb('trainval')
     res = d.roidb
     from IPython import embed; embed()
