@@ -260,7 +260,7 @@ class SolverWrapper(object):
         coord.join([t])
 
 
-    def train_model_det(self, sess, train_op, loss, loss_rpn_cls, loss_rpn_box, learning_rate, max_iters, data_layer):
+    def train_model_det(self, sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -293,12 +293,13 @@ class SolverWrapper(object):
         for iter in range(max_iters):
 
             timer.tic()
-            loss_value, loss_rpn_cls_value, loss_rpn_box_value, lr, _ = sess.run([loss, loss_rpn_cls, loss_rpn_box, learning_rate, train_op])
+            loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, lr, _ \
+                = sess.run([loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, train_op])
             # train_writer.add_summary(summary, iter)
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, loss_rpn_cls: %.4f, loss_rpn_box: %.4f, lr: %.8f, time: %.2f' %\
-                    (iter+1, max_iters, loss_value, loss_rpn_cls_value, loss_rpn_box_value, lr, timer.diff)
+            print 'iter: %d / %d, loss: %.4f, loss_rpn_cls: %.4f, loss_rpn_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %.8f, time: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -527,8 +528,20 @@ def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretr
     loss_rpn_box = smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
                                           rpn_bbox_outside_weights, sigma=3.0, dim=[1, 2, 3])
 
+    # RCNN, class loss
+    cls_score = network.get_output("cls_score")
+    label = tf.reshape(network.get_output("labels"), [-1])
+    loss_cls = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
+
+    # RCNN, bbox loss
+    bbox_pred = network.get_output('bbox_pred')
+    bbox_targets = network.get_output('bbox_targets')
+    bbox_inside_weights = network.get_output('bbox_inside_weights')
+    bbox_outside_weights = network.get_output('bbox_outside_weights')
+    loss_box = smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
+
     # add losses
-    loss = loss_rpn_cls + loss_rpn_box
+    loss = loss_rpn_cls + loss_rpn_box + loss_cls + loss_box
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -550,5 +563,5 @@ def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretr
         data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
 
         print 'Solving...'
-        sw.train_model_det(sess, train_op, loss, loss_rpn_cls, loss_rpn_box, learning_rate, max_iters, data_layer)
+        sw.train_model_det(sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, max_iters, data_layer)
         print 'done solving'

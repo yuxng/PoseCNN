@@ -1,6 +1,8 @@
 import numpy as np
 from math import ceil
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
+from fcn.config import cfg
 import backprojecting_layer.backprojecting_op as backproject_op
 import backprojecting_layer.backprojecting_op_grad
 import projecting_layer.projecting_op as project_op
@@ -423,11 +425,11 @@ class Network(object):
         return tf.nn.tanh(input, name)
 
     @layer
-    def softmax(self, input, name):
+    def softmax(self, input, axis, name):
         # only use the first input
         if isinstance(input, tuple):
             input = input[0]
-        return tf.nn.softmax(input, name)
+        return tf.nn.softmax(input, axis, name)
 
     @layer
     def log_softmax(self, input, name):
@@ -717,3 +719,47 @@ class Network(object):
             rpn_scores.set_shape([None, 1])
 
         return rois, rpn_scores
+
+    @layer
+    def compute_proposal_targets(self, input, num_classes, name):
+        rois = input[0]
+        roi_scores = input[1]
+        gt_boxes = input[2]
+        with tf.variable_scope(name) as scope:
+            rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights = tf.py_func(
+                proposal_target_layer,
+                [rois, roi_scores, gt_boxes, num_classes],
+                [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+                name="proposal_target")
+
+            rois.set_shape([cfg.TRAIN.BATCH_SIZE, 5])
+            roi_scores.set_shape([cfg.TRAIN.BATCH_SIZE])
+            labels.set_shape([cfg.TRAIN.BATCH_SIZE, 1])
+            labels = tf.to_int32(labels, name="to_int32")
+            bbox_targets.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
+            bbox_inside_weights.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
+            bbox_outside_weights.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
+
+        return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+
+
+    @layer
+    def crop_pool(self, input, feat_stride, pool_size, name):
+        bottom = input[0]
+        rois = input[1]
+        with tf.variable_scope(name) as scope:
+            batch_ids = tf.squeeze(tf.slice(rois, [0, 0], [-1, 1], name="batch_id"), [1])
+            # Get the normalized coordinates of bounding boxes
+            bottom_shape = tf.shape(bottom)
+            height = (tf.to_float(bottom_shape[1]) - 1.) * np.float32(feat_stride)
+            width = (tf.to_float(bottom_shape[2]) - 1.) * np.float32(feat_stride)
+            x1 = tf.slice(rois, [0, 1], [-1, 1], name="x1") / width
+            y1 = tf.slice(rois, [0, 2], [-1, 1], name="y1") / height
+            x2 = tf.slice(rois, [0, 3], [-1, 1], name="x2") / width
+            y2 = tf.slice(rois, [0, 4], [-1, 1], name="y2") / height
+            # Won't be back-propagated to rois anyway, but to save time
+            bboxes = tf.stop_gradient(tf.concat([y1, x1, y2, x2], axis=1))
+            pre_pool_size = pool_size * 2
+            crops = tf.image.crop_and_resize(bottom, bboxes, tf.to_int32(batch_ids), [pre_pool_size, pre_pool_size], name="crops")
+
+        return slim.max_pool2d(crops, [2, 2], padding='SAME')

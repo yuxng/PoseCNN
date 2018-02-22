@@ -14,8 +14,9 @@ from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
-from utils.nms import *
 from utils.pose_error import *
+from utils.bbox_transform import clip_boxes, bbox_transform_inv
+from utils.nms_wrapper import nms
 import numpy as np
 import cv2
 import cPickle
@@ -321,73 +322,6 @@ def im_segment(sess, net, im, im_depth, state, weights, points, meta_data, voxel
     labels_2d = labels_pred_2d[0]
 
     return labels_2d[0,:,:].astype(np.int32), probs[0][0,:,:,:], state, weights, points
-
-
-def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
-    """detect image
-    """
-
-    # compute image blob
-    im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
-    im_scale = im_scale_factors[0]
-    im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scale], dtype=np.float32)
-
-    # forward pass
-    if cfg.INPUT == 'RGBD':
-        data_blob = im_blob
-        data_p_blob = im_depth_blob
-    elif cfg.INPUT == 'COLOR':
-        data_blob = im_blob
-    elif cfg.INPUT == 'DEPTH':
-        data_blob = im_depth_blob
-    elif cfg.INPUT == 'NORMAL':
-        data_blob = im_normal_blob
-
-    # use a fake gt boxes of zeros
-    gt_boxes = np.zeros((1, 5), dtype=np.float32)
-
-    if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
-    else:
-        feed_dict = {net.data: data_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
-
-    sess.run(net.enqueue_op, feed_dict=feed_dict)
-    
-    rois, rpn_scores = sess.run([net.get_output('rois'), net.get_output('rpn_scores')])
-
-    return rois, rpn_scores
-
-def vis_detections(im, im_depth, rois, rpn_scores, colors):
-    """Visual debugging of detections."""
-    import matplotlib.pyplot as plt
-    fig = plt.figure()
-
-    # show image
-    ax = fig.add_subplot(121)
-    im = im[:, :, (2, 1, 0)]
-    plt.imshow(im)
-    ax.set_title('input image')
-
-    # show depth
-    ax = fig.add_subplot(122)
-    plt.imshow(im)
-    ax.set_title('region proposals')
-
-    print rois.shape
-
-    # show centers
-    for i in xrange(rois.shape[0]):
-        if i < 5:
-            x1 = rois[i, 1]
-            y1 = rois[i, 2]
-            w = rois[i, 3] - rois[i, 1]
-            h = rois[i, 4] - rois[i, 2]
-            # show boxes
-            plt.gca().add_patch(
-                plt.Rectangle((x1, y1), w, h, fill=False,
-                               edgecolor='g', linewidth=3))
-
-    plt.show()
 
 
 def vis_segmentations(im, im_depth, labels, labels_gt, colors):
@@ -1594,11 +1528,29 @@ def test_net_detection(sess, net, imdb, weights_filename):
             meta_data['center'] = meta_data['center'][ind,:]
 
         _t['im_detect'].tic()
-        rois, rpn_scores = im_detect_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        boxes, scores, rois, rpn_scores = im_detect_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
         _t['im_detect'].toc()
 
         _t['misc'].tic()
-        det = {'rois': rois, 'rpn_scores': rpn_scores}
+
+        # skip j = 0, because it's the background class
+        all_dets = np.zeros((0, 6), dtype=np.float32)
+        thresh = 0.1
+        for j in range(1, imdb.num_classes):
+            inds = np.where(scores[:, j] > thresh)[0]
+            cls_scores = scores[inds, j]
+            cls_boxes = boxes[inds, j*4:(j+1)*4]
+            cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(np.float32, copy=False)
+            keep = nms(cls_dets, cfg.TEST.NMS)
+            cls_dets = cls_dets[keep, :]
+
+            num = cls_dets.shape[0]
+            if num > 0:
+                cls = j * np.ones((num, 1), dtype=np.float32)
+                cls_dets = np.hstack((cls, cls_dets))
+                all_dets = np.vstack((all_dets, cls_dets))
+
+        det = {'rois': all_dets}
         detections[i] = det
         _t['misc'].toc()
 
@@ -1606,7 +1558,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
               .format(i, num_images, _t['im_detect'].diff, _t['misc'].diff)
 
         if cfg.TEST.VISUALIZE:
-            vis_detections(im, im_depth, rois, rpn_scores, imdb._class_colors)
+            vis_detections(im, im_depth, all_dets, imdb._class_colors)
 
     det_file = os.path.join(output_dir, 'detections.pkl')
     with open(det_file, 'wb') as f:
@@ -1614,6 +1566,89 @@ def test_net_detection(sess, net, imdb, weights_filename):
 
     # evaluation
     imdb.evaluate_detections(detections, output_dir)
+
+def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
+    """detect image
+    """
+
+    # compute image blob
+    im_blob, im_rescale_blob, im_depth_blob, im_normal_blob, im_scale_factors = _get_image_blob(im, im_depth, meta_data)
+    im_scale = im_scale_factors[0]
+    im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scale], dtype=np.float32)
+
+    # forward pass
+    if cfg.INPUT == 'RGBD':
+        data_blob = im_blob
+        data_p_blob = im_depth_blob
+    elif cfg.INPUT == 'COLOR':
+        data_blob = im_blob
+    elif cfg.INPUT == 'DEPTH':
+        data_blob = im_depth_blob
+    elif cfg.INPUT == 'NORMAL':
+        data_blob = im_normal_blob
+
+    # use a fake gt boxes of zeros
+    gt_boxes = np.zeros((1, 5), dtype=np.float32)
+
+    if cfg.INPUT == 'RGBD':
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+    else:
+        feed_dict = {net.data: data_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+
+    sess.run(net.enqueue_op, feed_dict=feed_dict)
+    
+    scores, bbox_pred, rois, rpn_scores = \
+        sess.run([net.get_output('cls_prob'), net.get_output('bbox_pred'), net.get_output('rois'), net.get_output('rpn_scores')])
+
+    stds = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS), (num_classes))
+    means = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS), (num_classes))
+    bbox_pred *= stds
+    bbox_pred += means
+
+    boxes = rois[:, 1:5] / im_scale
+    scores = np.reshape(scores, [scores.shape[0], -1])
+    bbox_pred = np.reshape(bbox_pred, [bbox_pred.shape[0], -1])
+    if cfg.TEST.BBOX_REG:
+        # Apply bounding-box regression deltas
+        box_deltas = bbox_pred
+        pred_boxes = bbox_transform_inv(boxes, box_deltas)
+        pred_boxes = clip_boxes(pred_boxes, im.shape)
+    else:
+        # Simply repeat the boxes, once for each class
+        pred_boxes = np.tile(boxes, (1, scores.shape[1]))
+
+    return pred_boxes, scores, rois, rpn_scores
+
+
+def vis_detections(im, im_depth, rois, colors):
+    """Visual debugging of detections."""
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+
+    # show image
+    ax = fig.add_subplot(121)
+    im = im[:, :, (2, 1, 0)]
+    plt.imshow(im)
+    ax.set_title('input image')
+
+    # show depth
+    ax = fig.add_subplot(122)
+    plt.imshow(im)
+    ax.set_title('region proposals')
+
+    # show centers
+    for i in xrange(rois.shape[0]):
+    # for i in xrange(5):
+        x1 = rois[i, 1]
+        y1 = rois[i, 2]
+        w = rois[i, 3] - rois[i, 1]
+        h = rois[i, 4] - rois[i, 2]
+        # show boxes
+        plt.gca().add_patch(
+            plt.Rectangle((x1, y1), w, h, fill=False,
+                           edgecolor='g', linewidth=3))
+
+    plt.show()
 
 
 ###################
@@ -1640,7 +1675,7 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(13, num_images)
+        perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 

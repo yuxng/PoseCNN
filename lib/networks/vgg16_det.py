@@ -14,8 +14,10 @@ class vgg16_det(Network):
         self.num_anchors = self.num_scales * self.num_ratios
         if is_train:
             self.is_train = 1
+            self.mode = 'TRAIN'
         else:
             self.is_train = 0
+            self.mode = 'TEST'
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
@@ -112,7 +114,34 @@ class vgg16_det(Network):
 
         # compute region proposals
         (self.feed('rpn_cls_prob', 'rpn_bbox_pred', 'im_info', 'anchors')
-             .compute_proposals(self.feature_stride, self.num_anchors, 'TEST', name='proposals'))
+             .compute_proposals(self.feature_stride, self.num_anchors, self.mode, name='proposals'))
 
         self.layers['rois'] = self.get_output('proposals')[0]
         self.layers['rpn_scores'] = self.get_output('proposals')[1]
+
+        # compute proposal targets
+        (self.feed('rois', 'rpn_scores', 'gt_boxes')
+             .compute_proposal_targets(self.num_classes, name='proposal_targets'))
+
+        if self.is_train:
+            self.layers['rois_target'] = self.get_output('proposal_targets')[0]
+        else:
+            self.layers['rois_target'] = self.layers['rois']
+        self.layers['rpn_scores_target'] = self.get_output('proposal_targets')[1]
+        self.layers['labels'] = self.get_output('proposal_targets')[2]
+        self.layers['bbox_targets'] = self.get_output('proposal_targets')[3]
+        self.layers['bbox_inside_weights'] = self.get_output('proposal_targets')[4]
+        self.layers['bbox_outside_weights'] = self.get_output('proposal_targets')[5]
+
+        # classify rois
+        (self.feed('conv5_3', 'rois_target')
+             .crop_pool(self.feature_stride, pool_size=7, name='pool5')
+             .fc(4096, height=7, width=7, channel=512, name='fc6')
+             .dropout(self.keep_prob_queue, name='drop6')
+             .fc(4096, num_in=4096, name='fc7')
+             .dropout(self.keep_prob_queue, name='drop7') 
+             .fc(self.num_classes, name='cls_score')
+             .softmax(-1, name='cls_prob'))
+
+        (self.feed('drop7')
+             .fc(4 * self.num_classes, relu=False, name='bbox_pred'))

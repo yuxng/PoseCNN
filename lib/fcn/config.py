@@ -105,6 +105,23 @@ __C.TRAIN.SNAPSHOT_INFIX = ''
 
 __C.TRAIN.DISPLAY = 20
 
+# Whether to add ground truth boxes to the pool when sampling regions
+__C.TRAIN.USE_GT = False
+
+# Minibatch size (number of regions of interest [ROIs])
+__C.TRAIN.BATCH_SIZE = 128
+
+# Fraction of minibatch that is labeled foreground (i.e. class > 0)
+__C.TRAIN.FG_FRACTION = 0.25
+
+# Overlap threshold for a ROI to be considered foreground (if >= FG_THRESH)
+__C.TRAIN.FG_THRESH = 0.5
+
+# Overlap threshold for a ROI to be considered background (class = 0 if
+# overlap in [LO, HI))
+__C.TRAIN.BG_THRESH_HI = 0.5
+__C.TRAIN.BG_THRESH_LO = 0.1
+
 
 # Use RPN to detect objects
 __C.TRAIN.HAS_RPN = True
@@ -141,6 +158,20 @@ __C.TRAIN.RPN_BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # Set to -1.0 to use uniform example weighting
 __C.TRAIN.RPN_POSITIVE_WEIGHT = -1.0
 
+# Normalize the targets (subtract empirical mean, divide by empirical stddev)
+__C.TRAIN.BBOX_NORMALIZE_TARGETS = True
+
+# Deprecated (inside weights)
+__C.TRAIN.BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
+
+# Normalize the targets using "precomputed" (or made up) means and stdevs
+# (BBOX_NORMALIZE_TARGETS must also be True)
+__C.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True
+
+__C.TRAIN.BBOX_NORMALIZE_MEANS = (0.0, 0.0, 0.0, 0.0)
+
+__C.TRAIN.BBOX_NORMALIZE_STDS = (0.1, 0.1, 0.2, 0.2)
+
 #
 # Testing options
 #
@@ -171,6 +202,13 @@ __C.TEST.RPN_PRE_NMS_TOP_N = 6000
 
 # Number of top scoring boxes to keep after applying NMS to RPN proposals
 __C.TEST.RPN_POST_NMS_TOP_N = 300
+
+# Test using bounding-box regressors
+__C.TEST.BBOX_REG = True
+
+# Overlap threshold used for non-maximum suppression (suppress boxes with
+# IoU >= this threshold)
+__C.TEST.NMS = 0.3
 
 # Pixel mean values (BGR order) as a (1, 1, 3) array
 # These are the values originally used for training VGG16

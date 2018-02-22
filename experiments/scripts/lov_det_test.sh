@@ -18,7 +18,7 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_det \
-  --model output/lov/lov_debug/vgg16_fcn_detection_lov_iter_1000.ckpt \
+  --model output/lov/lov_debug/vgg16_fcn_detection_lov_iter_5000.ckpt \
   --imdb lov_debug \
   --cfg experiments/cfgs/lov_det.yml \
   --background data/cache/backgrounds.pkl
