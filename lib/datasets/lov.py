@@ -8,6 +8,8 @@ import cPickle
 import numpy as np
 import cv2
 import PIL
+import sys
+import scipy
 from fcn.config import cfg
 from utils.pose_error import *
 from utils.cython_bbox import bbox_overlaps
@@ -241,26 +243,8 @@ class lov(datasets.imdb):
         pos = index.find('/')
         video_id = index[:pos]
 
-        # read boxes
-        filename = os.path.join(self._data_path, index + '-box.txt')
-        lines = []
-        with open(filename) as f:
-            for line in f:
-                lines.append(line)
-
-        num_objs = len(lines)
-        boxes = np.zeros((num_objs, 4), dtype=np.float32)
-        gt_classes = np.zeros((num_objs), dtype=np.int32)
-
-        for ix, line in enumerate(lines):
-            words = line.split()
-            cls = self._class_to_ind[words[0]]
-            boxes[ix, :] = [float(n) for n in words[1:5]]
-            gt_classes[ix] = cls
-
         if not cfg.TRAIN.SEGMENTATION and self._count % 10 == 0:
-            print index
-            self.compute_gt_box_overlap(index, boxes, gt_classes)
+            self.compute_gt_box_overlap(index)
         self._count += 1
         
         return {'image': image_path,
@@ -271,16 +255,18 @@ class lov(datasets.imdb):
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
                 'cls_index': -1,
-                'boxes': boxes,
-                'gt_classes': gt_classes,
                 'flipped': False}
 
 
-    def compute_gt_box_overlap(self, index, boxes, gt_classes):
+    def compute_gt_box_overlap(self, index):
 
         assert len(cfg.TRAIN.SCALES_BASE) == 1
         scale = cfg.TRAIN.SCALES_BASE[0]
         feat_stride = cfg.FEATURE_STRIDE
+
+        meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+        boxes = meta_data['box']
+        gt_classes = meta_data['cls_indexes'].flatten()
 
         # faster rcnn region proposal
         base_size = 16

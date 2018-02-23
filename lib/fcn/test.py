@@ -1535,7 +1535,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
 
         # skip j = 0, because it's the background class
         all_dets = np.zeros((0, 6), dtype=np.float32)
-        thresh = 0.1
+        thresh = 0.02
         for j in range(1, imdb.num_classes):
             inds = np.where(scores[:, j] > thresh)[0]
             cls_scores = scores[inds, j]
@@ -1638,15 +1638,13 @@ def vis_detections(im, im_depth, rois, colors):
 
     # show centers
     for i in xrange(rois.shape[0]):
-    # for i in xrange(5):
+        cls = int(rois[i, 0])
         x1 = rois[i, 1]
         y1 = rois[i, 2]
         w = rois[i, 3] - rois[i, 1]
         h = rois[i, 4] - rois[i, 2]
         # show boxes
-        plt.gca().add_patch(
-            plt.Rectangle((x1, y1), w, h, fill=False,
-                           edgecolor='g', linewidth=3))
+        plt.gca().add_patch(plt.Rectangle((x1, y1), w, h, fill=False, edgecolor=np.array(colors[cls]) / 255.0, linewidth=3))
 
     plt.show()
 

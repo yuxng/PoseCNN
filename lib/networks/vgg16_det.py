@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_det(Network):
-    def __init__(self, input_format, num_classes, feature_stride, anchor_scales=(8, 16, 32), anchor_ratios=(0.5, 1, 2), trainable=True, is_train=True):
+    def __init__(self, input_format, num_classes, feature_stride, anchor_scales, anchor_ratios, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes

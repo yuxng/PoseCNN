@@ -26,28 +26,12 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn)
 
     # build the label blob
-    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob \
+    depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gt_boxes \
         = _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales, extents, is_syn)
 
     if not cfg.TRAIN.SEGMENTATION:
-        assert len(im_scales) == 1, "Single batch only"
-        assert len(roidb) == 1, "Single batch only"
-  
-        # gt boxes: (x1, y1, x2, y2, cls)
-        gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
-        gt_boxes = np.empty((len(gt_inds), 5), dtype=np.float32)
-        boxes = roidb[0]['boxes'].copy()
-        if roidb[0]['flipped']:
-            oldx1 = boxes[:, 0].copy()
-            oldx2 = boxes[:, 2].copy()
-            width = im_blob.shape[2]
-            boxes[:, 0] = width - oldx2 - 1
-            boxes[:, 2] = width - oldx1 - 1
-        gt_boxes[:, 0:4] = boxes[gt_inds, :] * im_scales[0]
-        gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
         im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
     else:
-        gt_boxes = []
         im_info = []
 
     # For debug visualizations
@@ -234,6 +218,18 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     else:
         pose_blob = []
 
+    if not cfg.TRAIN.SEGMENTATION:
+        assert len(im_scales) == 1, "Single batch only"
+        assert len(roidb) == 1, "Single batch only"
+
+    if not cfg.TRAIN.SEGMENTATION:
+        assert len(im_scales) == 1, "Single batch only"
+        assert len(roidb) == 1, "Single batch only"
+        # gt boxes: (x1, y1, x2, y2, cls)
+        gt_boxes = np.zeros((0, 5), dtype=np.float32)
+    else:
+        gt_boxes = []
+
     for i in xrange(num_images):
         im_scale = im_scales[i]
 
@@ -254,9 +250,21 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             # read label image
             im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
         meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
-
         height = im.shape[0]
         width = im.shape[1]
+
+        # bounding boxes
+        if not cfg.TRAIN.SEGMENTATION:
+            boxes = meta_data['box'].copy()
+            if roidb[i]['flipped']:
+                print 'flipped'
+                oldx1 = boxes[:, 0].copy()
+                oldx2 = boxes[:, 2].copy()
+                boxes[:, 0] = width - oldx2 - 1
+                boxes[:, 2] = width - oldx1 - 1
+            gt_box = np.concatenate((boxes * im_scales[0], meta_data['cls_indexes'][:, np.newaxis]), axis=1)
+            gt_boxes = np.concatenate((gt_boxes, gt_box), axis=0)
+
         # mask the label image according to depth
         if cfg.INPUT == 'DEPTH':
             I = np.where(im_depth == 0)
@@ -393,7 +401,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
     
-    return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob
+    return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gt_boxes
 
 
 def _flip_poses(poses, K, width):

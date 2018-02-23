@@ -38,10 +38,10 @@ __C.BACKGROUND = ''
 __C.USE_GPU_NMS = True
 
 # Anchor scales for RPN
-__C.ANCHOR_SCALES = np.array([8,16,32])
+__C.ANCHOR_SCALES = (8,16,32)
 
 # Anchor ratios for RPN
-__C.ANCHOR_RATIOS = np.array([0.5,1,2])
+__C.ANCHOR_RATIOS = (0.5,1,2)
 
 __C.FEATURE_STRIDE = 16
 
