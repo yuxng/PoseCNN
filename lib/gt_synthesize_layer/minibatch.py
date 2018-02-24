@@ -286,7 +286,6 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         if not cfg.TRAIN.SEGMENTATION:
             boxes = meta_data['box'].copy()
             if roidb[i]['flipped']:
-                print 'flipped'
                 oldx1 = boxes[:, 0].copy()
                 oldx2 = boxes[:, 2].copy()
                 boxes[:, 0] = width - oldx2 - 1
