@@ -183,7 +183,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
     float bb_width = -1;
     float bb_height = -1;
     float threshold;
-    for (int i = 0; i < size; i += 10)
+    for (int i = 0; i < size; i += 50)
     {
       int offset = cls * height * width + i;
       int location = arrays[offset];

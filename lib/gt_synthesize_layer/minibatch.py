@@ -253,18 +253,6 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         height = im.shape[0]
         width = im.shape[1]
 
-        # bounding boxes
-        if not cfg.TRAIN.SEGMENTATION:
-            boxes = meta_data['box'].copy()
-            if roidb[i]['flipped']:
-                print 'flipped'
-                oldx1 = boxes[:, 0].copy()
-                oldx2 = boxes[:, 2].copy()
-                boxes[:, 0] = width - oldx2 - 1
-                boxes[:, 2] = width - oldx1 - 1
-            gt_box = np.concatenate((boxes * im_scales[0], meta_data['cls_indexes'][:, np.newaxis]), axis=1)
-            gt_boxes = np.concatenate((gt_boxes, gt_box), axis=0)
-
         # mask the label image according to depth
         if cfg.INPUT == 'DEPTH':
             I = np.where(im_depth == 0)
@@ -289,9 +277,22 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             if len(meta_data['poses'].shape) == 3:
                 meta_data['poses'] = meta_data['poses'][:,:,ind]
             meta_data['center'] = meta_data['center'][ind,:]
+            meta_data['box'] = meta_data['box'][ind,:]
 
         im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
         processed_label.append(im_cls)
+
+        # bounding boxes
+        if not cfg.TRAIN.SEGMENTATION:
+            boxes = meta_data['box'].copy()
+            if roidb[i]['flipped']:
+                print 'flipped'
+                oldx1 = boxes[:, 0].copy()
+                oldx2 = boxes[:, 2].copy()
+                boxes[:, 0] = width - oldx2 - 1
+                boxes[:, 2] = width - oldx1 - 1
+            gt_box = np.concatenate((boxes * im_scales[0], meta_data['cls_indexes'][:, np.newaxis]), axis=1)
+            gt_boxes = np.concatenate((gt_boxes, gt_box), axis=0)
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:

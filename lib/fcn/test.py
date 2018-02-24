@@ -211,10 +211,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 labels_2d, probs, vertex_pred, rois, poses = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), net.get_output('rois'), net.get_output('poses_init')])
                 print rois
+                print rois.shape
                 # non-maximum suppression
-                keep = nms(rois, 0.5)
-                rois = rois[keep, :]
-                poses = poses[keep, :]
+                # keep = nms(rois[:, 2:], 0.5)
+                # rois = rois[keep, :]
+                # poses = poses[keep, :]
 
                 #labels_2d, probs = sess.run([net.get_output('label_2d'), net.get_output('prob_normalized')])
                 #vertex_pred = []

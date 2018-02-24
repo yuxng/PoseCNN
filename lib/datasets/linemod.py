@@ -7,10 +7,15 @@ import datasets.imdb
 import cPickle
 import numpy as np
 import cv2
+import PIL
+import sys
+import scipy
 from fcn.config import cfg
 from utils.pose_error import *
 from utils.se3 import *
+from utils.cython_bbox import bbox_overlaps
 from transforms3d.quaternions import quat2mat, mat2quat
+from rpn_layer.generate_anchors import generate_anchors
 
 class linemod(datasets.imdb):
     def __init__(self, cls, image_set, linemod_path = None):
@@ -30,6 +35,7 @@ class linemod(datasets.imdb):
         self._classes_all = ('__background__', 'ape', 'benchvise', 'bowl', 'camera', 'can', \
                          'cat', 'cup', 'driller', 'duck', 'eggbox', \
                          'glue', 'holepuncher', 'iron', 'lamp', 'phone')
+        self._num_classes_all = len(self._classes_all)
         self._class_colors_all = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), \
                                   (255, 255, 0), (255, 0, 255), (0, 255, 255), \
                                   (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
@@ -56,6 +62,10 @@ class linemod(datasets.imdb):
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
+
+        # statistics for computing recall
+        self._num_boxes_all = np.zeros(self._num_classes_all, dtype=np.int)
+        self._num_boxes_covered = np.zeros(self._num_classes_all, dtype=np.int)
 
         assert os.path.exists(self._linemod_path), \
                 'linemod path does not exist: {}'.format(self._linemod_path)
@@ -225,6 +235,14 @@ class linemod(datasets.imdb):
         gt_roidb = [self._load_linemod_annotation(index)
                     for index in self.image_index]
 
+        if not cfg.TRAIN.SEGMENTATION:
+            # print out recall
+            for i in xrange(1, self._num_classes_all):
+                if self._num_boxes_all[i] > 0:
+                    print '{}: Total number of boxes {:d}'.format(self._classes_all[i], self._num_boxes_all[i])
+                    print '{}: Number of boxes covered {:d}'.format(self._classes_all[i], self._num_boxes_covered[i])
+                    print '{}: Recall {:f}'.format(self._classes_all[i], float(self._num_boxes_covered[i]) / float(self._num_boxes_all[i]))
+
         with open(cache_file, 'wb') as fid:
             cPickle.dump(gt_roidb, fid, cPickle.HIGHEST_PROTOCOL)
         print 'wrote gt roidb to {}'.format(cache_file)
@@ -251,6 +269,9 @@ class linemod(datasets.imdb):
         # parse image name
         pos = index.find('/')
         video_id = index[:pos]
+
+        if not cfg.TRAIN.SEGMENTATION:
+            self.compute_gt_box_overlap(index)
         
         return {'image': image_path,
                 'depth': depth_path,
@@ -261,6 +282,65 @@ class linemod(datasets.imdb):
                 'class_weights': self._class_weights,
                 'cls_index': self._cls_index,
                 'flipped': False}
+
+
+    def compute_gt_box_overlap(self, index):
+
+        assert len(cfg.TRAIN.SCALES_BASE) == 1
+        scale = cfg.TRAIN.SCALES_BASE[0]
+        feat_stride = cfg.FEATURE_STRIDE
+
+        meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+        boxes = meta_data['box']
+        gt_classes = meta_data['cls_indexes'].flatten()
+
+        # faster rcnn region proposal
+        base_size = 16
+        ratios = cfg.ANCHOR_RATIOS
+        scales = cfg.ANCHOR_SCALES
+        anchors = generate_anchors(base_size, ratios, scales)
+        num_anchors = anchors.shape[0]
+
+        # image size
+        s = PIL.Image.open(self.image_path_from_index(index)).size
+        image_height = s[1]
+        image_width = s[0]
+
+        # height and width of the heatmap
+        height = np.round(image_height * scale / feat_stride)
+        width = np.round(image_width * scale  / feat_stride)
+
+        # gt boxes
+        gt_boxes = boxes * scale
+
+        # 1. Generate proposals from bbox deltas and shifted anchors
+        shift_x = np.arange(0, width) * feat_stride
+        shift_y = np.arange(0, height) * feat_stride
+        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+        shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
+                            shift_x.ravel(), shift_y.ravel())).transpose()
+        # add A anchors (1, A, 4) to
+        # cell K shifts (K, 1, 4) to get
+        # shift anchors (K, A, 4)
+        # reshape to (K*A, 4) shifted anchors
+        A = num_anchors
+        K = shifts.shape[0]
+        all_anchors = (anchors.reshape((1, A, 4)) + shifts.reshape((1, K, 4)).transpose((1, 0, 2)))
+        all_anchors = all_anchors.reshape((K * A, 4))
+
+        # compute overlap
+        overlaps_grid = bbox_overlaps(all_anchors.astype(np.float), gt_boxes.astype(np.float))
+        
+        # check how many gt boxes are covered by anchors
+        max_overlaps = overlaps_grid.max(axis = 0)
+        fg_inds = []
+        for k in xrange(1, self._num_classes_all):
+            fg_inds.extend(np.where((gt_classes == k) & (max_overlaps >= cfg.TRAIN.RPN_POSITIVE_OVERLAP))[0])
+
+        for i in xrange(1, self._num_classes_all):
+            self._num_boxes_all[i] += len(np.where(gt_classes == i)[0])
+            self._num_boxes_covered[i] += len(np.where(gt_classes[fg_inds] == i)[0])
+
 
     def _process_label_image(self, label_image):
         """
