@@ -146,7 +146,7 @@ class SolverWrapper(object):
         coord.join([t])
 
 
-    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters, data_layer):
+    def train_model_vertex(self, sess, train_op, loss, loss_cls, loss_vertex, loss_regu, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -181,12 +181,12 @@ class SolverWrapper(object):
         for iter in range(max_iters):
 
             timer.tic()
-            loss_value, loss_cls_value, loss_vertex_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, learning_rate, train_op])
+            loss_value, loss_cls_value, loss_vertex_value, loss_regu_value, lr, _ = sess.run([loss, loss_cls, loss_vertex, loss_regu, learning_rate, train_op])
             # train_writer.add_summary(summary, iter)
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, lr: %.8f, time: %.2f' %\
-                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, lr, timer.diff)
+            print 'iter: %d / %d, loss: %.4f, loss_cls: %.4f, loss_vertex: %.4f, loss_regu: %.12f, lr: %.8f, time: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_cls_value, loss_vertex_value, loss_regu_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -490,7 +490,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
             if cfg.TRAIN.POSE_REG:
                 sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters, data_layer)
             else:
-                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, learning_rate, max_iters, data_layer)
+                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_regu, learning_rate, max_iters, data_layer)
         else:
             sw.train_model(sess, train_op, loss, learning_rate, max_iters, data_layer)
         print 'done solving'
