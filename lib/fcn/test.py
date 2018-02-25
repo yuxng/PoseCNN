@@ -1522,33 +1522,50 @@ def test_net_detection(sess, net, imdb, weights_filename):
         # process annotation if training for two classes
         if imdb.num_classes == 2:
             ind = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
-            meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
-            if len(meta_data['poses'].shape) == 3:
-                meta_data['poses'] = meta_data['poses'][:,:,ind]
-            meta_data['center'] = meta_data['center'][ind,:]
+            if len(ind) > 0:
+                meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
+                if len(meta_data['poses'].shape) == 3:
+                    meta_data['poses'] = np.reshape(meta_data['poses'][:,:,ind], (3, 4, 1))
+                else:
+                    meta_data['poses'] = np.reshape(meta_data['poses'], (3, 4, 1))
+                meta_data['center'] = meta_data['center'][ind,:]
+            else:
+                meta_data['cls_indexes'] = np.ones((0,), dtype=np.float32)
+                meta_data['poses'] = np.zeros((3, 4, 0), dtype=np.float32)
+                meta_data['center'] = np.zeros((0, 2), dtype=np.float32)
 
         _t['im_detect'].tic()
-        boxes, scores, rois, rpn_scores = im_detect_single_frame(sess, net, im, im_depth, meta_data, imdb.num_classes)
+        boxes, scores, rois, rpn_scores, poses = im_detect_single_frame(sess, net, im, im_depth, meta_data, imdb._points_all, imdb._symmetry, imdb.num_classes)
         _t['im_detect'].toc()
 
         _t['misc'].tic()
 
         # skip j = 0, because it's the background class
         all_dets = np.zeros((0, 6), dtype=np.float32)
+        all_poses = np.zeros((0, 7), dtype=np.float32)
         thresh = 0.02
         for j in range(1, imdb.num_classes):
             inds = np.where(scores[:, j] > thresh)[0]
             cls_scores = scores[inds, j]
             cls_boxes = boxes[inds, j*4:(j+1)*4]
+            cls_poses = poses[inds, j*4:(j+1)*4]
             cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(np.float32, copy=False)
             keep = nms(cls_dets, cfg.TEST.NMS)
             cls_dets = cls_dets[keep, :]
+            cls_poses = cls_poses[keep, :]
 
             num = cls_dets.shape[0]
             if num > 0:
                 cls = j * np.ones((num, 1), dtype=np.float32)
                 cls_dets = np.hstack((cls, cls_dets))
                 all_dets = np.vstack((all_dets, cls_dets))
+
+                translation = np.zeros((num, 3), dtype=np.float32)
+                cls_poses = np.hstack((cls_poses, translation))
+                all_poses = np.vstack((all_poses, cls_poses))
+            print all_dets
+            print all_poses
+
 
         det = {'rois': all_dets}
         detections[i] = det
@@ -1558,7 +1575,8 @@ def test_net_detection(sess, net, imdb, weights_filename):
               .format(i, num_images, _t['im_detect'].diff, _t['misc'].diff)
 
         if cfg.TEST.VISUALIZE:
-            vis_detections(im, im_depth, all_dets, imdb._class_colors)
+            vis_detections(im, im_depth, all_dets, all_poses, meta_data['cls_indexes'], meta_data['intrinsic_matrix'], \
+                           meta_data['poses'], imdb._points_all, imdb._class_colors, imdb.num_classes)
 
     det_file = os.path.join(output_dir, 'detections.pkl')
     with open(det_file, 'wb') as f:
@@ -1567,7 +1585,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
     # evaluation
     imdb.evaluate_detections(detections, output_dir)
 
-def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
+def im_detect_single_frame(sess, net, im, im_depth, meta_data, points, symmetry, num_classes):
     """detect image
     """
 
@@ -1589,16 +1607,20 @@ def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
 
     # use a fake gt boxes of zeros
     gt_boxes = np.zeros((1, 5), dtype=np.float32)
+    pose_blob = np.zeros((1, 13), dtype=np.float32)
 
     if cfg.INPUT == 'RGBD':
-        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+        feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, \
+                     net.poses: pose_blob, net.points: points, net.symmetry: symmetry, net.keep_prob: 1.0}
     else:
-        feed_dict = {net.data: data_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, net.keep_prob: 1.0}
+        feed_dict = {net.data: data_blob, net.im_info: im_info, net.gt_boxes: gt_boxes, \
+                     net.poses: pose_blob, net.points: points, net.symmetry: symmetry, net.keep_prob: 1.0}
 
     sess.run(net.enqueue_op, feed_dict=feed_dict)
     
-    scores, bbox_pred, rois, rpn_scores = \
-        sess.run([net.get_output('cls_prob'), net.get_output('bbox_pred'), net.get_output('rois'), net.get_output('rpn_scores')])
+    scores, bbox_pred, rois, rpn_scores, poses = \
+        sess.run([net.get_output('cls_prob'), net.get_output('bbox_pred'), net.get_output('rois'), \
+                  net.get_output('rpn_scores'), net.get_output('poses_tanh')])
 
     stds = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS), (num_classes))
     means = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS), (num_classes))
@@ -1617,22 +1639,22 @@ def im_detect_single_frame(sess, net, im, im_depth, meta_data, num_classes):
         # Simply repeat the boxes, once for each class
         pred_boxes = np.tile(boxes, (1, scores.shape[1]))
 
-    return pred_boxes, scores, rois, rpn_scores
+    return pred_boxes, scores, rois, rpn_scores, poses
 
 
-def vis_detections(im, im_depth, rois, colors):
+def vis_detections(im, im_depth, rois, poses, cls_indexes, intrinsic_matrix, poses_gt, points, colors, num_classes):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
 
     # show image
-    ax = fig.add_subplot(121)
+    ax = fig.add_subplot(221)
     im = im[:, :, (2, 1, 0)]
     plt.imshow(im)
     ax.set_title('input image')
 
     # show depth
-    ax = fig.add_subplot(122)
+    ax = fig.add_subplot(222)
     plt.imshow(im)
     ax.set_title('region proposals')
 
@@ -1645,6 +1667,58 @@ def vis_detections(im, im_depth, rois, colors):
         h = rois[i, 4] - rois[i, 2]
         # show boxes
         plt.gca().add_patch(plt.Rectangle((x1, y1), w, h, fill=False, edgecolor=np.array(colors[cls]) / 255.0, linewidth=3))
+
+    # show projection of the poses
+    if cfg.TEST.POSE_REG:
+
+        ax = fig.add_subplot(2, 2, 3, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(cls_indexes):
+            cls = int(cls_indexes[i])
+            x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+            x3d[0, :] = points[cls,:,0]
+            x3d[1, :] = points[cls,:,1]
+            x3d[2, :] = points[cls,:,2]
+
+            # projection
+            RT = poses_gt[:, :, i]
+            x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+            x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+            x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+            plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+        ax.set_title('gt projection')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
+
+
+        ax = fig.add_subplot(2, 2, 4, aspect='equal')
+        plt.imshow(im)
+        ax.invert_yaxis()
+        for i in xrange(rois.shape[0]):
+            cls = int(rois[i, 0])
+            x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+            x3d[0, :] = points[cls,:,0]
+            x3d[1, :] = points[cls,:,1]
+            x3d[2, :] = points[cls,:,2]
+
+            # projection
+            RT = np.zeros((3, 4), dtype=np.float32)
+            RT[:3, :3] = quat2mat(poses[i, :4])
+            # use gt translation for now
+            # RT[:, 3] = poses[i, 4:7]
+            RT[:, 3] = poses_gt[:, 3, 0]
+            x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+            x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+            x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+            plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+
+        ax.set_title('pose')
+        ax.invert_yaxis()
+        ax.set_xlim([0, im.shape[1]])
+        ax.set_ylim([im.shape[0], 0])
 
     plt.show()
 
