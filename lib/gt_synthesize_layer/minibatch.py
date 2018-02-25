@@ -227,6 +227,7 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         assert len(roidb) == 1, "Single batch only"
         # gt boxes: (x1, y1, x2, y2, cls)
         gt_boxes = np.zeros((0, 5), dtype=np.float32)
+        pose_blob = np.zeros((0, 13), dtype=np.float32)
     else:
         gt_boxes = []
 
@@ -292,6 +293,26 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
                 boxes[:, 2] = width - oldx1 - 1
             gt_box = np.concatenate((boxes * im_scales[0], meta_data['cls_indexes'][:, np.newaxis]), axis=1)
             gt_boxes = np.concatenate((gt_boxes, gt_box), axis=0)
+
+            poses = meta_data['poses']
+            if len(poses.shape) == 2:
+                poses = np.reshape(poses, (3, 4, 1))
+            if roidb[i]['flipped']:
+                poses = _flip_poses(poses, meta_data['intrinsic_matrix'], width)
+
+            num = poses.shape[2]
+            qt = np.zeros((num, 13), dtype=np.float32)
+            for j in xrange(num):
+                R = poses[:, :3, j]
+                T = poses[:, 3, j]
+
+                qt[j, 0] = i
+                qt[j, 1] = meta_data['cls_indexes'][j]
+                qt[j, 2:6] = 0  # fill box later
+                qt[j, 6:10] = mat2quat(R)
+                qt[j, 10:] = T
+
+            pose_blob = np.concatenate((pose_blob, qt), axis=0)
 
         # vertex regression targets and weights
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:

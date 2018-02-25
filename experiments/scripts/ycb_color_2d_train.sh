@@ -13,12 +13,12 @@ echo Logging output to "$LOG"
 # train FCN for single frames
 export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 
-time ./tools/train_net.py --gpu 0 \
-  --network vgg16_convs \
-  --weights data/imagenet_models/vgg16_convs.npy \
-  --imdb ycb_trainval \
-  --cfg experiments/cfgs/ycb_color_2d.yml \
-  --iters 20000
+#time ./tools/train_net.py --gpu 0 \
+#  --network vgg16_convs \
+#  --weights data/imagenet_models/vgg16_convs.npy \
+#  --imdb ycb_trainval \
+#  --cfg experiments/cfgs/ycb_color_2d.yml \
+#  --iters 20000
 
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_convs \

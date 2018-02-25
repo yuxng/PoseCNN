@@ -728,11 +728,12 @@ class Network(object):
         rois = input[0]
         roi_scores = input[1]
         gt_boxes = input[2]
+        poses = input[3]
         with tf.variable_scope(name) as scope:
-            rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights = tf.py_func(
+            rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight = tf.py_func(
                 proposal_target_layer,
-                [rois, roi_scores, gt_boxes, num_classes],
-                [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+                [rois, roi_scores, gt_boxes, poses, num_classes],
+                [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
                 name="proposal_target")
 
             rois.set_shape([cfg.TRAIN.BATCH_SIZE, 5])
@@ -742,8 +743,10 @@ class Network(object):
             bbox_targets.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
             bbox_inside_weights.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
             bbox_outside_weights.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
+            poses_target.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
+            poses_weight.set_shape([cfg.TRAIN.BATCH_SIZE, num_classes * 4])
 
-        return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+        return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
 
 
     @layer

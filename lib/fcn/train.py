@@ -260,7 +260,7 @@ class SolverWrapper(object):
         coord.join([t])
 
 
-    def train_model_det(self, sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, max_iters, data_layer):
+    def train_model_det(self, sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, loss_pose, learning_rate, max_iters, data_layer):
         """Network training loop."""
         # add summary
         # tf.summary.scalar('loss', loss)
@@ -293,13 +293,13 @@ class SolverWrapper(object):
         for iter in range(max_iters):
 
             timer.tic()
-            loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, lr, _ \
-                = sess.run([loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, train_op])
+            loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, loss_pose_value, lr, _ \
+                = sess.run([loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, loss_pose, learning_rate, train_op])
             # train_writer.add_summary(summary, iter)
             timer.toc()
             
-            print 'iter: %d / %d, loss: %.4f, loss_rpn_cls: %.4f, loss_rpn_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %.8f, time: %.2f' %\
-                    (iter+1, max_iters, loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, lr, timer.diff)
+            print 'iter: %d / %d, loss: %.4f, loss_rpn_cls: %.4f, loss_rpn_box: %.4f, loss_cls: %.4f, loss_box: %.4f, loss_pose: %.4f, lr: %.8f, time: %.2f' %\
+                    (iter+1, max_iters, loss_value, loss_rpn_cls_value, loss_rpn_box_value, loss_cls_value, loss_box_value, loss_pose_value, lr, timer.diff)
 
             if (iter+1) % (10 * cfg.TRAIN.DISPLAY) == 0:
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
@@ -363,10 +363,12 @@ def load_and_enqueue(sess, net, data_layer, coord):
             else:
                 if cfg.INPUT == 'RGBD':
                     feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.im_info: blobs['data_im_info'], \
-                               net.gt_boxes: blobs['data_gt_boxes'], net.keep_prob: 0.5}
+                               net.gt_boxes: blobs['data_gt_boxes'], net.poses: blobs['data_pose'], \
+                               net.points: blobs['data_points'], net.symmetry: blobs['data_symmetry'], net.keep_prob: 0.5}
                 else:
                     feed_dict={net.data: data_blob, net.im_info: blobs['data_im_info'], \
-                               net.gt_boxes: blobs['data_gt_boxes'], net.keep_prob: 0.5}
+                               net.gt_boxes: blobs['data_gt_boxes'], net.poses: blobs['data_pose'], \
+                               net.points: blobs['data_points'], net.symmetry: blobs['data_symmetry'], net.keep_prob: 0.5}
         else:
             if cfg.INPUT == 'RGBD':
                 feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], \
@@ -543,8 +545,11 @@ def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretr
     bbox_outside_weights = network.get_output('bbox_outside_weights')
     loss_box = smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
 
+    # pose regression loss
+    loss_pose = network.get_output('loss_pose')[0]
+
     # add losses
-    loss = loss_rpn_cls + loss_rpn_box + loss_cls + loss_box + loss_regu
+    loss = loss_rpn_cls + loss_rpn_box + loss_cls + loss_box + loss_pose + loss_regu
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -566,5 +571,5 @@ def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretr
         data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
 
         print 'Solving...'
-        sw.train_model_det(sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, learning_rate, max_iters, data_layer)
+        sw.train_model_det(sess, train_op, loss, loss_rpn_cls, loss_rpn_box, loss_cls, loss_box, loss_pose, learning_rate, max_iters, data_layer)
         print 'done solving'

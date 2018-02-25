@@ -24,20 +24,24 @@ class vgg16_det(Network):
             self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.im_info = tf.placeholder(tf.float32, shape=[3])
         self.gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
+        self.poses = tf.placeholder(tf.float32, shape=[None, 13])
+        self.points = tf.placeholder(tf.float32, shape=[num_classes, None, 3])
+        self.symmetry = tf.placeholder(tf.float32, shape=[num_classes])
         self.keep_prob = tf.placeholder(tf.float32)
 
         # define a queue
         queue_size = 25
         if input_format == 'RGBD':
-            q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.data_p, self.im_info, self.gt_boxes, self.keep_prob])
-            data, data_p, im_info, gt_boxes, self.keep_prob_queue = q.dequeue()
-            self.layers = dict({'data': data, 'data_p': data_p, 'im_info': im_info, 'gt_boxes': gt_boxes})
+            q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+            self.enqueue_op = q.enqueue([self.data, self.data_p, self.im_info, self.gt_boxes, self.poses, self.points, self.symmetry, self.keep_prob])
+            data, data_p, im_info, gt_boxes, poses, points, symmetry, self.keep_prob_queue = q.dequeue()
+            self.layers = dict({'data': data, 'data_p': data_p, 'im_info': im_info, 'gt_boxes': gt_boxes, \
+                                'poses': poses, 'points': points, 'symmetry': symmetry})
         else:
-            q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
-            self.enqueue_op = q.enqueue([self.data, self.im_info, self.gt_boxes, self.keep_prob])
-            data, im_info, gt_boxes, self.keep_prob_queue = q.dequeue()
-            self.layers = dict({'data': data, 'im_info': im_info, 'gt_boxes': gt_boxes})
+            q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+            self.enqueue_op = q.enqueue([self.data, self.im_info, self.gt_boxes, self.poses, self.points, self.symmetry, self.keep_prob])
+            data, im_info, gt_boxes, poses, points, symmetry, self.keep_prob_queue = q.dequeue()
+            self.layers = dict({'data': data, 'im_info': im_info, 'gt_boxes': gt_boxes, 'poses': poses, 'points': points, 'symmetry': symmetry})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
         self.trainable = trainable
@@ -120,7 +124,7 @@ class vgg16_det(Network):
         self.layers['rpn_scores'] = self.get_output('proposals')[1]
 
         # compute proposal targets
-        (self.feed('rois', 'rpn_scores', 'gt_boxes')
+        (self.feed('rois', 'rpn_scores', 'gt_boxes', 'poses')
              .compute_proposal_targets(self.num_classes, name='proposal_targets'))
 
         if self.is_train:
@@ -132,6 +136,8 @@ class vgg16_det(Network):
         self.layers['bbox_targets'] = self.get_output('proposal_targets')[3]
         self.layers['bbox_inside_weights'] = self.get_output('proposal_targets')[4]
         self.layers['bbox_outside_weights'] = self.get_output('proposal_targets')[5]
+        self.layers['poses_target'] = self.get_output('proposal_targets')[6]
+        self.layers['poses_weight'] = self.get_output('proposal_targets')[7]
 
         # classify rois
         (self.feed('conv5_3', 'rois_target')
@@ -143,5 +149,18 @@ class vgg16_det(Network):
              .fc(self.num_classes, name='cls_score')
              .softmax(-1, name='cls_prob'))
 
+        # bounding box regression
         (self.feed('drop7')
              .fc(4 * self.num_classes, relu=False, name='bbox_pred'))
+
+        # pose regression
+        (self.feed('drop7')
+             .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
+             .tanh(name='poses_tanh'))
+
+        (self.feed('poses_tanh', 'poses_weight')
+             .multiply(name='poses_mul')
+             .l2_normalize(dim=1, name='poses_pred'))
+
+        (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
+             .average_distance_loss(name='loss_pose'))

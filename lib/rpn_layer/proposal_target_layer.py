@@ -14,8 +14,7 @@ from fcn.config import cfg
 from utils.bbox_transform import bbox_transform
 from utils.cython_bbox import bbox_overlaps
 
-
-def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):
+def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, poses, _num_classes):
   """
   Assign object detection proposals to ground-truth targets. Produces proposal
   classification labels and bounding-box regression targets.
@@ -41,8 +40,8 @@ def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):
 
   # Sample rois with classification labels and bounding box regression
   # targets
-  labels, rois, roi_scores, bbox_targets, bbox_inside_weights = _sample_rois(
-    all_rois, all_scores, gt_boxes, fg_rois_per_image,
+  labels, rois, roi_scores, bbox_targets, bbox_inside_weights, poses_target, poses_weight = _sample_rois(
+    all_rois, all_scores, gt_boxes, poses, fg_rois_per_image,
     rois_per_image, _num_classes)
 
   rois = rois.reshape(-1, 5)
@@ -52,7 +51,7 @@ def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):
   bbox_inside_weights = bbox_inside_weights.reshape(-1, _num_classes * 4)
   bbox_outside_weights = np.array(bbox_inside_weights > 0).astype(np.float32)
 
-  return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+  return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
 
 
 def _get_bbox_regression_labels(bbox_target_data, num_classes):
@@ -96,7 +95,25 @@ def _compute_targets(ex_rois, gt_rois, labels):
     (labels[:, np.newaxis], targets)).astype(np.float32, copy=False)
 
 
-def _sample_rois(all_rois, all_scores, gt_boxes, fg_rois_per_image, rois_per_image, num_classes):
+def _compute_pose_targets(quaternions, labels, num_classes):
+  """Compute pose regression targets for an image."""
+
+  num = quaternions.shape[0]
+  poses_target = np.zeros((num, 4 * num_classes), dtype=np.float32)
+  poses_weight = np.zeros((num, 4 * num_classes), dtype=np.float32)
+
+  for i in xrange(num):
+    cls = labels[i]
+    if cls > 0:
+      start = int(4 * cls)
+      end = start + 4
+      poses_target[i, start:end] = quaternions[i, :]
+      poses_weight[i, start:end] = 1.0
+
+  return poses_target, poses_weight
+
+
+def _sample_rois(all_rois, all_scores, gt_boxes, poses, fg_rois_per_image, rois_per_image, num_classes):
   """Generate a random sample of RoIs comprising foreground and background
   examples.
   """
@@ -107,6 +124,7 @@ def _sample_rois(all_rois, all_scores, gt_boxes, fg_rois_per_image, rois_per_ima
   gt_assignment = overlaps.argmax(axis=1)
   max_overlaps = overlaps.max(axis=1)
   labels = gt_boxes[gt_assignment, 4]
+  quaternions = poses[gt_assignment, 6:10]
 
   # Select foreground RoIs as those with >= FG_THRESH overlap
   fg_inds = np.where(max_overlaps >= cfg.TRAIN.FG_THRESH)[0]
@@ -143,10 +161,13 @@ def _sample_rois(all_rois, all_scores, gt_boxes, fg_rois_per_image, rois_per_ima
   rois = all_rois[keep_inds]
   roi_scores = all_scores[keep_inds]
 
+  # pose regression targets and weights
+  poses_target, poses_weight = _compute_pose_targets(quaternions[keep_inds], labels, num_classes)
+
   bbox_target_data = _compute_targets(
     rois[:, 1:5], gt_boxes[gt_assignment[keep_inds], :4], labels)
 
   bbox_targets, bbox_inside_weights = \
     _get_bbox_regression_labels(bbox_target_data, num_classes)
 
-  return labels, rois, roi_scores, bbox_targets, bbox_inside_weights
+  return labels, rois, roi_scores, bbox_targets, bbox_inside_weights, poses_target, poses_weight
