@@ -421,12 +421,13 @@ def loss_quaternion(pose_pred, pose_targets, pose_weights):
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
+    loss_regu = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
     if cfg.TRAIN.SINGLE_FRAME:
         # classification loss
         if cfg.NETWORK == 'FCN8VGG':
             scores = network.prob
             labels = network.gt_label_2d_queue
-            loss = loss_cross_entropy_single_frame(scores, labels)
+            loss = loss_cross_entropy_single_frame(scores, labels) + loss_regu
         else:
             if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                 scores = network.get_output('prob')
@@ -445,18 +446,18 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
                     # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
                     loss_pose = network.get_output('loss_pose')[0]
-                    loss = loss_cls + loss_vertex + loss_pose
+                    loss = loss_cls + loss_vertex + loss_pose + loss_regu
                 else:
-                    loss = loss_cls + loss_vertex
+                    loss = loss_cls + loss_vertex + loss_regu
             else:
                 scores = network.get_output('prob')
                 labels = network.get_output('gt_label_2d')
-                loss = loss_cross_entropy_single_frame(scores, labels)
+                loss = loss_cross_entropy_single_frame(scores, labels) + loss_regu
     else:
         # classification loss
         scores = network.get_output('outputs')
         labels = network.get_output('labels_gt_2d')
-        loss = loss_cross_entropy(scores, labels)
+        loss = loss_cross_entropy(scores, labels) + loss_regu
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)
@@ -512,6 +513,8 @@ def smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_we
 def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
+    loss_regu = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
+
     # RPN, class loss
     rpn_cls_score = tf.reshape(network.get_output('rpn_cls_score_reshape'), [-1, 2])
     rpn_label = tf.reshape(network.get_output('rpn_labels'), [-1])
@@ -541,7 +544,7 @@ def train_net_det(network, imdb, roidb, output_dir, pretrained_model=None, pretr
     loss_box = smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
 
     # add losses
-    loss = loss_rpn_cls + loss_rpn_box + loss_cls + loss_box
+    loss = loss_rpn_cls + loss_rpn_box + loss_cls + loss_box + loss_regu
 
     # optimizer
     global_step = tf.Variable(0, trainable=False)

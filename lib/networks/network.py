@@ -128,8 +128,8 @@ class Network(object):
         id = sum(t.startswith(prefix) for t,_ in self.layers.items())+1
         return '%s_%d'%(prefix, id)
 
-    def make_var(self, name, shape, initializer=None, trainable=True):
-        return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
+    def make_var(self, name, shape, initializer=None, regularizer=None, trainable=True):
+        return tf.get_variable(name, shape, initializer=initializer, regularizer=regularizer, trainable=trainable)
 
     def validate_padding(self, padding):
         assert padding in ('SAME', 'VALID')
@@ -164,7 +164,8 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name, reuse=reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
-            kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=cfg.TRAIN.WEIGHT_REG)
+            kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, regularizer, trainable)
 
             if group==1:
                 output = convolve(input, kernel)
@@ -176,7 +177,7 @@ class Network(object):
             # Add the biases
             if biased:
                 init_biases = tf.constant_initializer(0.0)
-                biases = self.make_var('biases', [c_o], init_biases, trainable)
+                biases = self.make_var('biases', [c_o], init_biases, regularizer, trainable)
                 output = tf.nn.bias_add(output, biases)
             if relu:
                 output = tf.nn.relu(output, name=scope.name)    
@@ -190,8 +191,9 @@ class Network(object):
         with tf.variable_scope(name, reuse=reuse) as scope:
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
-            kernel = self.make_var('weights', [k_d, k_h, k_w, c_i, c_o], init_weights, trainable)
-            biases = self.make_var('biases', [c_o], init_biases, trainable)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=cfg.TRAIN.WEIGHT_REG)
+            kernel = self.make_var('weights', [k_d, k_h, k_w, c_i, c_o], init_weights, regularizer, trainable)
+            biases = self.make_var('biases', [c_o], init_biases, regularizer, trainable)
             conv = tf.nn.conv3d(input, kernel, [1, s_d, s_h, s_w, 1], padding=padding)
             if relu:
                 bias = tf.nn.bias_add(conv, biases)
@@ -399,8 +401,9 @@ class Network(object):
 
             init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
             init_biases = tf.constant_initializer(0.0)
-            weights = self.make_var('weights', [dim, num_out], init_weights, trainable)
-            biases = self.make_var('biases', [num_out], init_biases, trainable)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=cfg.TRAIN.WEIGHT_REG)
+            weights = self.make_var('weights', [dim, num_out], init_weights, regularizer, trainable)
+            biases = self.make_var('biases', [num_out], init_biases, regularizer, trainable)
             op = tf.nn.relu_layer if relu else tf.nn.xw_plus_b
             fc = op(feed_in, weights, biases, name=scope.name)
             return fc

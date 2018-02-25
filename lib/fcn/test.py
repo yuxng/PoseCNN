@@ -194,10 +194,10 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                               net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
 
                 # non-maximum suppression
-                keep = nms(rois, 0.5)
-                rois = rois[keep, :]
-                poses_init = poses_init[keep, :]
-                poses_pred = poses_pred[keep, :]
+                # keep = nms(rois, 0.5)
+                # rois = rois[keep, :]
+                # poses_init = poses_init[keep, :]
+                # poses_pred = poses_pred[keep, :]
                 print rois
 
                 # combine poses
@@ -717,7 +717,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == i)
             if len(index[0]) > 0:
                 # extract 3D points
-                if not vertmap_gt:
+                if len(vertmap_gt.shape) == 3:
                     num = len(index[0])
                     x3d = np.ones((4, num), dtype=np.float32)
                     x3d[0, :] = vertmap_gt[index[0], index[1], 0]
@@ -751,7 +751,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
             index = np.where(labels_gt == cls)
             if len(index[0]) > 0 and cls > 0:
                 # extract 3D points
-                if not vertmap_gt:
+                if len(vertmap_gt.shape) == 3:
                     num = len(index[0])
                     x3d = np.ones((4, num), dtype=np.float32)
                     x3d[0, :] = vertmap_gt[index[0], index[1], 0]
@@ -1217,7 +1217,6 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            print im.shape, background_color.shape
             im[I[0], I[1], :] = background_color[I[0], I[1], :]
 
             # depth
@@ -1397,7 +1396,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 if 'vertmap' in meta_data:
                     vertmap_gt = meta_data['vertmap'].copy()
                 else:
-                    vertmap_gt = []
+                    vertmap_gt = np.zeros((1,), dtype=np.float32)
                 centers_map_gt = _vote_centers(labels_gt, meta_data['cls_indexes'].flatten(), meta_data['center'], poses_gt, imdb.num_classes, imdb._extents)
                 vis_segmentations_vertmaps(im, im_depth, im_label, im_label_gt, imdb._class_colors, \
                     centers_map_gt, vertmap, labels, labels_gt, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
