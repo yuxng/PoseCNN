@@ -542,6 +542,87 @@ class linemod(datasets.imdb):
                     print 'threshold: {}'.format(threshold)
 
 
+    def evaluate_result_detection(self, im_ind, detection, meta_data, output_dir):
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
+        if 'few' in self._image_set:
+            threshold = 0.1 * self._diameters[self._cls_index - 1]
+        else:
+            threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+
+        # evaluate pose
+        if cfg.TEST.POSE_REG:
+            rois = detection['rois']
+            poses = detection['poses']
+
+            # save matlab result
+            results = {'rois': rois, 'poses': poses}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, results, do_compression=True)
+
+            poses_gt = meta_data['poses']
+            if len(poses_gt.shape) == 2:
+                poses_gt = np.reshape(poses_gt, (3, 4, 1))
+            num = poses_gt.shape[2]
+
+            for j in xrange(num):
+                if meta_data['cls_indexes'][j] != 1:
+                    continue
+                cls = self._classes[1]
+                print cls
+                print 'gt pose'
+                print poses_gt[:, :, j]
+
+                for k in xrange(rois.shape[0]):
+                    if rois[k, 0] != meta_data['cls_indexes'][j]:
+                        continue
+
+                    print 'estimated pose'
+                    RT = np.zeros((3, 4), dtype=np.float32)
+                    RT[:3, :3] = quat2mat(poses[k, :4])
+                    RT[:, 3] = poses[k, 4:7]
+                    print RT
+
+                    # quaternion loss
+                    print mat2quat(poses_gt[:3, :3, j])
+                    print mat2quat(RT[:3, :3])
+                    d = mat2quat(poses_gt[:3, :3, j]).dot(mat2quat(RT[:3, :3]))
+                    loss = 1 - d * d
+                    print 'quaternion loss {}'.format(loss)
+
+                    error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                    print 'rotation error: {}'.format(error_rotation)
+
+                    error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+                    print 'translation error: {}'.format(error_translation)
+
+                    if cls == 'eggbox' and error_rotation > 90:
+                        RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                        RT_sym = se3_mul(RT, RT_z)
+                        print 'eggbox rotation error after symmetry: {}'.format(re(RT_sym[:3, :3], poses_gt[:3, :3, j]))
+                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    else:
+                        error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                            poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    print 'reprojection error: {}'.format(error_reprojection)
+
+                    # compute pose error
+                    if cls == 'eggbox' or cls == 'glue':
+                        error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    else:
+                        error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                    print 'average distance error: {}\n'.format(error)
+
+                    print 'threshold: {}'.format(threshold)
+
+
     def evaluate_segmentations(self, segmentations, output_dir):
         print 'evaluating segmentations'
         # compute histogram
@@ -781,8 +862,99 @@ class linemod(datasets.imdb):
             if cfg.TEST.POSE_REFINE:
                 print 'correct poses after refinement: {}, all poses: {}, accuracy: {}'.format(count_correct_refined, count_all, float(count_correct_refined) / float(count_all))
 
-                print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))            
+                print 'correct poses after ICP: {}, all poses: {}, accuracy: {}'.format(count_correct_icp, count_all, float(count_correct_icp) / float(count_all))
 
+
+    def evaluate_detections(self, detections, output_dir):
+        print 'evaluating detections'
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
+        count_all = 0
+        count_correct = 0
+        count_correct_pixel = 0
+        if 'few' in self._image_set:
+            threshold = 0.1 * self._diameters[self._cls_index - 1]
+        else:
+            threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+
+        # for each image
+        for im_ind, index in enumerate(self.image_index):
+
+            # evaluate pose
+            if cfg.TEST.POSE_REG:
+                # load meta data
+                meta_data = scipy.io.loadmat(self.metadata_path_from_index(index))
+                meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
+                ind = np.where(meta_data['cls_indexes'] == self._cls_index)[0]
+                meta_data['cls_indexes'][:] = 0
+                meta_data['cls_indexes'][ind] = 1
+
+                if not detections[im_ind]:
+                    rois = results_mat['rois']
+                    poses = results_mat['poses']
+                else:
+                    rois = detections[im_ind]['rois']
+                    poses = detections[im_ind]['poses']
+
+                # save matlab result
+                results = {'rois': rois, 'poses': poses}
+                filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+                print filename
+                scipy.io.savemat(filename, results, do_compression=True)
+
+                poses_gt = meta_data['poses']
+                if len(poses_gt.shape) == 2:
+                    poses_gt = np.reshape(poses_gt, (3, 4, 1))
+                num = poses_gt.shape[2]
+
+                for j in xrange(num):
+                    if meta_data['cls_indexes'][j] <= 0:
+                        continue
+                    cls = self._classes[int(meta_data['cls_indexes'][j])]
+                    count_all += 1
+
+                    for k in xrange(rois.shape[0]):
+                        if rois[k, 0] != meta_data['cls_indexes'][j]:
+                            continue
+
+                        RT = np.zeros((3, 4), dtype=np.float32)
+                        RT[:3, :3] = quat2mat(poses[k, :4])
+                        RT[:, 3] = poses[k, 4:7]
+
+                        error_rotation = re(RT[:3, :3], poses_gt[:3, :3, j])
+                        error_translation = te(RT[:, 3], poses_gt[:, 3, j])
+
+                        if cls == 'eggbox' and error_rotation > 90:
+                            RT_z = np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0]])
+                            RT_sym = se3_mul(RT, RT_z)
+                            error_reprojection = reproj(meta_data['intrinsic_matrix'], RT_sym[:3, :3], RT_sym[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error_reprojection = reproj(meta_data['intrinsic_matrix'], RT[:3, :3], RT[:, 3], \
+                                poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                        if error_reprojection < 5:
+                            count_correct_pixel += 1
+
+                        # compute pose error
+                        if cls == 'eggbox' or cls == 'glue':
+                            error = adi(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+                        else:
+                            error = add(RT[:3, :3], RT[:, 3], poses_gt[:3, :3, j], poses_gt[:, 3, j], self._points)
+
+                        if error < threshold:
+                            count_correct += 1
+
+        # pose accuracy
+        if cfg.TEST.POSE_REG:
+
+            print 'correct poses reprojection: {}, all poses: {}, accuracy: {}'.format(count_correct_pixel, count_all, float(count_correct_pixel) / float(count_all))
+            print 'correct poses: {}, all poses: {}, accuracy: {}'.format(count_correct, count_all, float(count_correct) / float(count_all))
 
 if __name__ == '__main__':
     d = datasets.linemod('ape', 'train')

@@ -13,8 +13,8 @@ echo Logging output to "$LOG"
 # test for semantic labeling
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_det \
-  --model output/linemod/linemod_ape_train/vgg16_fcn_detection_linemod_ape_iter_80000.ckpt \
-  --imdb linemod_ape_train \
+  --model output/linemod/linemod_ape_train_few/vgg16_fcn_detection_linemod_ape_iter_160000.ckpt \
+  --imdb linemod_ape_test_few \
   --cfg experiments/cfgs/linemod_ape_det.yml \
   --cad data/LINEMOD/models.txt \
   --pose data/LINEMOD/poses.txt \

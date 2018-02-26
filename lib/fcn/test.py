@@ -26,6 +26,7 @@ import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
 import scipy.io
+from scipy.optimize import minimize
 
 # from normals import gpu_normals
 # from pose_estimation import ransac
@@ -1449,8 +1450,8 @@ def test_net_detection(sess, net, imdb, weights_filename):
     _t = {'im_detect' : Timer(), 'misc' : Timer()}
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(301, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1551,6 +1552,9 @@ def test_net_detection(sess, net, imdb, weights_filename):
             cls_poses = poses[inds, j*4:(j+1)*4]
             cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(np.float32, copy=False)
             keep = nms(cls_dets, cfg.TEST.NMS)
+            # only take the first one
+            if len(keep) > 1:
+                keep = [keep[0]]
             cls_dets = cls_dets[keep, :]
             cls_poses = cls_poses[keep, :]
 
@@ -1563,16 +1567,17 @@ def test_net_detection(sess, net, imdb, weights_filename):
                 translation = np.zeros((num, 3), dtype=np.float32)
                 cls_poses = np.hstack((cls_poses, translation))
                 all_poses = np.vstack((all_poses, cls_poses))
-            print all_dets
-            print all_poses
 
+        all_poses = compute_translations(all_dets, all_poses, imdb._points_all, meta_data['intrinsic_matrix'])
 
-        det = {'rois': all_dets}
+        det = {'rois': all_dets, 'poses': all_poses}
         detections[i] = det
         _t['misc'].toc()
 
         print 'im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i, num_images, _t['im_detect'].diff, _t['misc'].diff)
+
+        imdb.evaluate_result_detection(i, det, meta_data, output_dir)
 
         if cfg.TEST.VISUALIZE:
             vis_detections(im, im_depth, all_dets, all_poses, meta_data['cls_indexes'], meta_data['intrinsic_matrix'], \
@@ -1584,6 +1589,62 @@ def test_net_detection(sess, net, imdb, weights_filename):
 
     # evaluation
     imdb.evaluate_detections(detections, output_dir)
+
+# dets (cls, x1, y1, x2, y2, score)
+def compute_translations(dets, poses, points, intrinsic_matrix):
+
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    cx = intrinsic_matrix[0, 2]
+    cy = intrinsic_matrix[1, 2]
+    num = dets.shape[0]
+    # for each object
+    for i in xrange(num):
+        cls = int(dets[i, 0])
+        # object center
+        x = (dets[i, 1] + dets[i, 3]) / 2
+        y = (dets[i, 2] + dets[i, 4]) / 2
+        width = dets[i, 3] - dets[i, 1]
+        height = dets[i, 4] - dets[i, 2]
+        # backprojection
+        rx = (x - cx) / fx;
+        ry = (y - cy) / fy;
+        x0 = 0.5
+        d = minimize(distance_objective, x0, method='nelder-mead', args=(rx, ry, poses[i,:4], cls, points, intrinsic_matrix, width, height))
+        poses[i, 4] = rx * d.x
+        poses[i, 5] = ry * d.x
+        poses[i, 6] = d.x
+
+    return poses
+
+
+def distance_objective(x, rx, ry, quaternion, cls, points, intrinsic_matrix, width, height):
+
+    x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+    x3d[0, :] = points[cls,:,0]
+    x3d[1, :] = points[cls,:,1]
+    x3d[2, :] = points[cls,:,2]
+
+    # projection
+    RT = np.zeros((3, 4), dtype=np.float32)
+    RT[:3, :3] = quat2mat(quaternion)
+    RT[0, 3] = rx * x
+    RT[1, 3] = ry * x
+    RT[2, 3] = x
+    x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+    x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+    x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+
+    # bounding box
+    x1 = np.min(x2d[0, :])
+    x2 = np.max(x2d[0, :])
+    y1 = np.min(x2d[1, :])
+    y2 = np.max(x2d[1, :])
+    w = x2 - x1
+    h = y2 - y1
+
+    return (w - width) * (w - width) + (h - height) * (h - height)
+
 
 def im_detect_single_frame(sess, net, im, im_depth, meta_data, points, symmetry, num_classes):
     """detect image
@@ -1707,9 +1768,7 @@ def vis_detections(im, im_depth, rois, poses, cls_indexes, intrinsic_matrix, pos
             # projection
             RT = np.zeros((3, 4), dtype=np.float32)
             RT[:3, :3] = quat2mat(poses[i, :4])
-            # use gt translation for now
-            # RT[:, 3] = poses[i, 4:7]
-            RT[:, 3] = poses_gt[:, 3, 0]
+            RT[:, 3] = poses[i, 4:7]
             x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
             x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
             x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
