@@ -15,6 +15,6 @@ export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 time ./tools/train_net.py --gpu 0 \
   --network vgg16_det \
   --weights data/imagenet_models/vgg16.npy \
-  --imdb linemod_benchvise_train \
+  --imdb linemod_benchvise_train_few \
   --cfg experiments/cfgs/linemod_benchvise_det.yml \
-  --iters 80000
+  --iters 160000
