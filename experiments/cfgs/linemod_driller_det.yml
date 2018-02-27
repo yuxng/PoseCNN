@@ -14,7 +14,7 @@ TRAIN:
   IMS_PER_BATCH: 1
   NUM_CLASSES: 2
   SNAPSHOT_ITERS: 40000
-  SNAPSHOT_INFIX: linemod_cat
+  SNAPSHOT_INFIX: linemod_driller
   SNAPSHOT_PREFIX: vgg16_fcn_detection
   USE_FLIPPED: True
   CHROMATIC: True

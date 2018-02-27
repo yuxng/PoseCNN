@@ -6,15 +6,15 @@ set -e
 export PYTHONUNBUFFERED="True"
 export CUDA_VISIBLE_DEVICES=$1
 
-#time ./tools/test_images.py --gpu 0 \
-#  --network vgg16_convs \
-#  --model output/ycb/ycb_trainval/vgg16_fcn_color_single_frame_2d_ycb_iter_20000.ckpt \
-#  --imdb ycb_trainval \
-#  --cfg experiments/cfgs/ycb_color_2d.yml \
+time ./tools/test_images.py --gpu 0 \
+  --network vgg16_convs \
+  --model output/ycb/ycb_trainval/vgg16_fcn_color_single_frame_2d_ycb_iter_20000.ckpt \
+  --imdb ycb_trainval \
+  --cfg experiments/cfgs/ycb_color_2d.yml \
 
 time ./tools/test_images.py --gpu 0 \
   --network vgg16_convs \
-  --model output/ycb/ycb_trainval/vgg16_fcn_color_single_frame_2d_pose_add_ycb_iter_20000.ckpt \
+  --model output/ycb/ycb_trainval/vgg16_fcn_color_single_frame_2d_pose_add_ycb_iter_40000.ckpt \
   --imdb ycb_trainval \
   --cfg experiments/cfgs/ycb_color_2d_pose.yml \
   --rig data/ycb/camera.json \

@@ -465,7 +465,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     global_step = tf.Variable(0, trainable=False)
     starter_learning_rate = cfg.TRAIN.LEARNING_RATE
     learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
     momentum = cfg.TRAIN.MOMENTUM
     train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
