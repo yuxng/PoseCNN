@@ -1450,8 +1450,8 @@ def test_net_detection(sess, net, imdb, weights_filename):
     _t = {'im_detect' : Timer(), 'misc' : Timer()}
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(876, num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(876, num_images)
     else:
         perm = xrange(num_images)
 
