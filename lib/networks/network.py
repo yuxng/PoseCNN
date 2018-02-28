@@ -250,8 +250,8 @@ class Network(object):
         return hough_voting_op.hough_voting(input[0], input[1], input[2], input[3], input[4], is_train, name=name)
 
     @layer
-    def hough_voting_gpu(self, input, is_train, threshold, name):
-        return hough_voting_gpu_op.hough_voting_gpu(input[0], input[1], input[2], input[3], input[4], is_train, threshold, name=name)
+    def hough_voting_gpu(self, input, is_train, threshold, skip_pixels, name):
+        return hough_voting_gpu_op.hough_voting_gpu(input[0], input[1], input[2], input[3], input[4], is_train, threshold, skip_pixels, name=name)
 
     @layer
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):
@@ -763,6 +763,28 @@ class Network(object):
             y1 = tf.slice(rois, [0, 2], [-1, 1], name="y1") / height
             x2 = tf.slice(rois, [0, 3], [-1, 1], name="x2") / width
             y2 = tf.slice(rois, [0, 4], [-1, 1], name="y2") / height
+            # Won't be back-propagated to rois anyway, but to save time
+            bboxes = tf.stop_gradient(tf.concat([y1, x1, y2, x2], axis=1))
+            pre_pool_size = pool_size * 2
+            crops = tf.image.crop_and_resize(bottom, bboxes, tf.to_int32(batch_ids), [pre_pool_size, pre_pool_size], name="crops")
+
+        return slim.max_pool2d(crops, [2, 2], padding='SAME')
+
+
+    @layer
+    def crop_pool_new(self, input, feat_stride, pool_size, name):
+        bottom = input[0]
+        rois = input[1]
+        with tf.variable_scope(name) as scope:
+            batch_ids = tf.squeeze(tf.slice(rois, [0, 0], [-1, 1], name="batch_id"), [1])
+            # Get the normalized coordinates of bounding boxes
+            bottom_shape = tf.shape(bottom)
+            height = (tf.to_float(bottom_shape[1]) - 1.) * np.float32(feat_stride)
+            width = (tf.to_float(bottom_shape[2]) - 1.) * np.float32(feat_stride)
+            x1 = tf.slice(rois, [0, 2], [-1, 1], name="x1") / width
+            y1 = tf.slice(rois, [0, 3], [-1, 1], name="y1") / height
+            x2 = tf.slice(rois, [0, 4], [-1, 1], name="x2") / width
+            y2 = tf.slice(rois, [0, 5], [-1, 1], name="y2") / height
             # Won't be back-propagated to rois anyway, but to save time
             bboxes = tf.stop_gradient(tf.concat([y1, x1, y2, x2], axis=1))
             pre_pool_size = pool_size * 2

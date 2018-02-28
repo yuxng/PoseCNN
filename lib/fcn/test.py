@@ -1451,7 +1451,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
 
     if cfg.TEST.VISUALIZE:
         # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(301, num_images)
+        perm = xrange(876, num_images)
     else:
         perm = xrange(num_images)
 
@@ -1517,6 +1517,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
             im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
 
             # load meta data
+            print imdb.metadata_path_at(i)
             meta_data = scipy.io.loadmat(imdb.metadata_path_at(i))
         meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 

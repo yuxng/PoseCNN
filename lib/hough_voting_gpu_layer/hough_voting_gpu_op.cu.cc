@@ -19,7 +19,28 @@
 // namespace tensorflow {
 using namespace tensorflow;
 
-__device__ inline float angle_distance(int cx, int cy, int x, int y, float u, float v, 
+__device__ inline float point2line(int cx, int cy, int x, int y, float u, float v)
+{
+  float n1 = -v;
+  float n2 = u;
+
+  return fabs(n1 * (cx - x) + n2 * (cy - y)) / sqrt(n1 * n1 + n2 * n2);
+}
+
+
+__device__ inline float angle_distance(int cx, int cy, int x, int y, float u, float v)
+{
+  float dx = cx - x;
+  float dy = cy - y;
+  float n1 = sqrt(u * u + v * v);
+  float n2 = sqrt(dx * dx + dy * dy);
+  float dot = u * dx + v * dy;
+  float distance = dot / (n1 * n2);
+
+  return distance;
+}
+
+__device__ inline float angle_distance_label(int cx, int cy, int x, int y, float u, float v, 
   int cls, const int height, const int width, const int* labelmap)
 {
   float dx = cx - x;
@@ -167,7 +188,7 @@ __global__ void compute_arrays_kernel(const int nthreads, const int* labelmap,
 
 __global__ void compute_hough_kernel(const int nthreads, float* hough_space, float* hough_data, const int* labelmap, 
     const float* vertmap, const float* extents, const float* meta_data, int* arrays, int* array_size, 
-    int* class_indexes, const int height, const int width, const int num_classes, const int count, const float inlierThreshold) 
+    int* class_indexes, const int height, const int width, const int num_classes, const int count, const float inlierThreshold, const int skip_pixels) 
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -183,7 +204,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
     float bb_width = -1;
     float bb_height = -1;
     float threshold;
-    for (int i = 0; i < size; i += 50)
+    for (int i = 0; i < size; i += skip_pixels)
     {
       int offset = cls * height * width + i;
       int location = arrays[offset];
@@ -197,7 +218,8 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
       float d = vertmap[offset + 2];
 
       // vote
-      if (angle_distance(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
+      // if (angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
+      if (point2line(cx, cy, x, y, u, v) < inlierThreshold && angle_distance(cx, cy, x, y, u, v) > 0 && d > 0)
       {
         project_box(cls, extents, meta_data, d, &threshold);
         float dx = fabsf(x - cx);
@@ -274,7 +296,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
-    float scale = 0.05;
+    float scale = 0.1;
     int max_index = max_indexes[index];
     int ind = max_index / (height * width);
     int cls = class_indexes[ind];
@@ -501,7 +523,7 @@ void set_gradients(float* top_label, float* top_vertex, int batch_size, int heig
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, 
+    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, const int skip_pixels, 
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
@@ -595,7 +617,7 @@ void HoughVotingLaucher(OpKernelContext* context,
   compute_hough_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, hough_space, hough_data, labelmap, vertmap, extents, meta_data,
-      arrays, array_sizes, class_indexes, height, width, num_classes, count, inlierThreshold);
+      arrays, array_sizes, class_indexes, height, width, num_classes, count, inlierThreshold, skip_pixels);
   cudaThreadSynchronize();
 
   err = cudaGetLastError();
