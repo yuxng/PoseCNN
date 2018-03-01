@@ -301,7 +301,7 @@ class ImageListener:
         posecnn_msg = self.cv_bridge.cv2_to_imgmsg(im_label)
         posecnn_msg.header.stamp = rospy.Time.now()
         posecnn_msg.header.frame_id = rgb.header.frame_id
-        posecnn_msg.encoding = 'bgr8'
+        posecnn_msg.encoding = 'rgb8'
         self.posecnn_pub.publish(posecnn_msg)
 
 if __name__ == '__main__':

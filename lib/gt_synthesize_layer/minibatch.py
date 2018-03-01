@@ -424,6 +424,12 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
             vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
+
+    # filter bad boxes
+    gt_widths = gt_boxes[:, 2] - gt_boxes[:, 0] + 1.0
+    gt_heights = gt_boxes[:, 3] - gt_boxes[:, 1] + 1.0
+    ind = np.where((gt_widths > 0) & (gt_heights > 0))[0]
+    gt_boxes = gt_boxes[ind, :]
     
     return depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gt_boxes
 
