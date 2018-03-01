@@ -88,6 +88,7 @@ __C.TRAIN.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
 
 # parameters for data augmentation
 __C.TRAIN.CHROMATIC = True
+__C.TRAIN.ADD_NOISE = False
 
 # Images to use per minibatch
 __C.TRAIN.IMS_PER_BATCH = 2

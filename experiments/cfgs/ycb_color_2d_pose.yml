@@ -17,6 +17,7 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose_add
   USE_FLIPPED: False
   CHROMATIC: True
+  ADD_NOISE: True
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VISUALIZE: False

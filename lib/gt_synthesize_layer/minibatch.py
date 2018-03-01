@@ -12,7 +12,7 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from fcn.config import cfg
-from utils.blob import im_list_to_blob, pad_im, chromatic_transform
+from utils.blob import im_list_to_blob, pad_im, chromatic_transform, add_noise
 from utils.se3 import *
 import scipy.io
 # from normals import gpu_normals
@@ -128,6 +128,9 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
         # chromatic transform
         if cfg.TRAIN.CHROMATIC:
             im = chromatic_transform(im)
+
+        if cfg.TRAIN.ADD_NOISE:
+            im = add_noise(im)
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]

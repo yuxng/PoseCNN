@@ -97,3 +97,17 @@ def chromatic_transform(im, label=None, d_h=None, d_s=None, d_l=None):
         I = np.where(label > 0)
         new_im[I[0], I[1], :] = im[I[0], I[1], :]
     return new_im
+
+
+def add_noise(image):
+    row,col,ch= image.shape
+    mean = 0
+    var = 0.3 * 256
+    sigma = var**0.5
+    gauss = np.random.normal(mean,sigma,(row,col,ch))
+    gauss = gauss.reshape(row,col,ch)
+    noisy = image + gauss
+    noisy = np.clip(noisy, 0, 255)
+    return noisy
+
+
