@@ -2,6 +2,8 @@ EXP_DIR: lov
 INPUT: COLOR
 TRAIN:
   SINGLE_FRAME: True
+  TRAINABLE: True
+  WEIGHT_REG: 0.0001
   LEARNING_RATE: 0.001
   MOMENTUM: 0.9
   GAMMA: 0.1
@@ -15,6 +17,7 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d
   USE_FLIPPED: True
   CHROMATIC: True
+  ADD_NOISE: True
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VISUALIZE: False

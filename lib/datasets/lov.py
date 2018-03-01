@@ -175,16 +175,25 @@ class lov(datasets.imdb):
         print 'computing class weights'
         num_classes = self.num_classes
         count = np.zeros((num_classes,), dtype=np.int64)
-        for index in self.image_index:
+        k = 0
+        while k < len(self.image_index):
+            index = self.image_index[k]
             # label path
             label_path = self.label_path_from_index(index)
             im = cv2.imread(label_path, cv2.IMREAD_UNCHANGED)
             for i in xrange(num_classes):
                 I = np.where(im == i)
                 count[i] += len(I[0])
+            k += 100
+
+        count[0] = 0
+        max_count = np.amax(count)
 
         for i in xrange(num_classes):
-            self._class_weights[i] = min(float(count[0]) / float(count[i]), 10.0)
+            if i == 0:
+                self._class_weights[i] = 1
+            else:
+                self._class_weights[i] = min(2 * float(max_count) / float(count[i]), 10.0)
             print self._classes[i], self._class_weights[i]
 
 
@@ -203,7 +212,7 @@ class lov(datasets.imdb):
             print 'class weights: ', roidb[0]['class_weights']
             return roidb
 
-        # self.compute_class_weights()
+        self.compute_class_weights()
 
         gt_roidb = [self._load_lov_annotation(index)
                     for index in self.image_index]
