@@ -96,6 +96,7 @@ class GtSynthesizeLayer(object):
             return
 
         backgrounds = []
+        # SUN 2012
         root = os.path.join(self._cache_path, '../SUN2012/data/Images')
         subdirs = os.listdir(root)
 
@@ -119,6 +120,13 @@ class GtSynthesizeLayer(object):
                 else:
                     filename = os.path.join(root, subdir, name)
                     backgrounds.append(filename)
+
+        # ObjectNet3D
+        objectnet3d = os.path.join(self._cache_path, '../ObjectNet3D/data')
+        files = os.listdir(objectnet3d)
+        for i in range(len(files)):
+            filename = os.path.join(objectnet3d, files[i])
+            backgrounds.append(filename)
 
         for i in xrange(len(backgrounds)):
             if not os.path.isfile(backgrounds[i]):
