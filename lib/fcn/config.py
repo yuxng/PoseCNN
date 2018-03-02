@@ -36,6 +36,7 @@ __C.CAD = ''
 __C.POSE = ''
 __C.BACKGROUND = ''
 __C.USE_GPU_NMS = True
+__C.NUM_GPUS = 1
 
 # Anchor scales for RPN
 __C.ANCHOR_SCALES = (8,16,32)

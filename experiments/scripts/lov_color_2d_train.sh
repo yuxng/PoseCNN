@@ -14,6 +14,7 @@ echo Logging output to "$LOG"
 export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
 
 time ./tools/train_net.py --gpu 0 \
+  --num_gpus 2 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16_convs.npy \
   --imdb lov_trainval \

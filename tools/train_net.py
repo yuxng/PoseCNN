@@ -28,6 +28,9 @@ def parse_args():
     parser.add_argument('--gpu', dest='gpu_id',
                         help='GPU device id to use [0]',
                         default=0, type=int)
+    parser.add_argument('--num_gpus', dest='num_gpus',
+                        help='number of GPUs to use [1]',
+                        default=1, type=int)
     parser.add_argument('--iters', dest='max_iters',
                         help='number of iterations to train',
                         default=40000, type=int)
@@ -93,6 +96,7 @@ if __name__ == '__main__':
 
     device_name = '/gpu:{:d}'.format(args.gpu_id)
     cfg.GPU_ID = args.gpu_id
+    cfg.NUM_GPUS = args.num_gpus
     print device_name
 
     if cfg.NETWORK == 'FCN8VGG':
