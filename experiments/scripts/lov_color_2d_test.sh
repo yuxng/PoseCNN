@@ -16,15 +16,15 @@ echo Logging output to "$LOG"
 #fi
 
 # test FCN for single frames
-#time ./tools/test_net.py --gpu 0 \
-#  --network vgg16_convs \
-#  --model output/lov/lov_trainval/vgg16_fcn_color_single_frame_2d_lov_iter_20000.ckpt \
-#  --imdb lov_keyframe \
-#  --cfg experiments/cfgs/lov_color_2d.yml \
-#  --rig data/LOV/camera.json \
-#  --cad data/LOV/models.txt \
-#  --pose data/LOV/poses.txt \
-#  --background data/cache/backgrounds.pkl
+time ./tools/test_net.py --gpu 0 \
+  --network vgg16_convs \
+  --model output/lov/lov_trainval/vgg16_fcn_color_single_frame_2d_lov_iter_20000.ckpt \
+  --imdb lov_keyframe \
+  --cfg experiments/cfgs/lov_color_2d.yml \
+  --rig data/LOV/camera.json \
+  --cad data/LOV/models.txt \
+  --pose data/LOV/poses.txt \
+  --background data/cache/backgrounds.pkl
 
 if [ -f $PWD/output/lov/lov_keyframe/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_80000/segmentations.pkl ]
 then

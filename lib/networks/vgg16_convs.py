@@ -13,6 +13,7 @@ class vgg16_convs(Network):
         self.vertex_reg = vertex_reg_2d or vertex_reg_3d
         self.pose_reg = pose_reg
         self.matching = matching
+        self.trainable = trainable
         if is_train:
             self.is_train = 1
             self.skip_pixels = 50
@@ -65,7 +66,6 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
-        self.trainable = trainable
         self.setup()
 
     def setup(self):
