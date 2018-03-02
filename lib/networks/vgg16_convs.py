@@ -75,7 +75,8 @@ class vgg16_convs(Network):
                     with tf.name_scope('vgg16_convs_%d' % (i)) as scope:
                         if input_format == 'RGBD':
                             if self.vertex_reg:
-                                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
+                                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, \
+                                    poses, extents, meta_data, points, symmetry = q.dequeue()
                                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
                                     'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
                                     'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
@@ -84,8 +85,10 @@ class vgg16_convs(Network):
                                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
                         else:
                             if self.vertex_reg:
-                                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
-                                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
+                                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, \
+                                    poses, extents, meta_data, points, symmetry = q.dequeue()
+                                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, \
+                                    'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
                                     'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
                             else:
                                 data, gt_label_2d, self.keep_prob_queue = q.dequeue()
@@ -241,7 +244,7 @@ class vgg16_convs(Network):
                 # pose_pred = self.get_output('poses_pred')
                 # pose_targets = self.get_output('poses_target')
                 # pose_weights = self.get_output('poses_weight')
-                # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
+                # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights))
                 # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
                 self.loss_pose = self.get_output('loss_pose')[0]
                 self.loss = self.loss_cls + self.loss_vertex + self.loss_pose + self.loss_regu
