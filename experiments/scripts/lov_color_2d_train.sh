@@ -22,6 +22,7 @@ time ./tools/train_net.py --gpu 0 \
   --iters 20000
 
 time ./tools/train_net.py --gpu 0 \
+  --num_gpus 2 \
   --network vgg16_convs \
   --weights data/imagenet_models/vgg16.npy \
   --ckpt output/lov/lov_trainval/vgg16_fcn_color_single_frame_2d_lov_iter_20000.ckpt \
