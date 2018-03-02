@@ -31,7 +31,7 @@ endif()
 
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
-#find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(nanoflann nanoflann REQUIRED)
@@ -46,7 +46,7 @@ set(SUITESPARSE_LIBRARIES "cholmod;metis")
 
 include_directories(${PROJECT_SOURCE_DIR}/include
                     ${Pangolin_INCLUDE_DIRS}
-#                    ${EIGEN3_INCLUDE_DIR}
+                    ${EIGEN3_INCLUDE_DIR}
                     ${SUITESPARSE_INCLUDE_DIRS}
                     ${nanoflann_INCLUDE_DIRS})
 
