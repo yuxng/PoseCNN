@@ -18,6 +18,7 @@ import pprint
 import numpy as np
 import sys
 import os.path as osp
+import tensorflow as tf
 
 def parse_args():
     """
@@ -106,17 +107,18 @@ if __name__ == '__main__':
     cfg.POSE = args.pose_name
     cfg.IS_TRAIN = True
 
-    from networks.factory import get_network
-    network = get_network(args.network_name)
-    print 'Use network `{:s}` in training'.format(args.network_name)
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
+        from networks.factory import get_network
+        network = get_network(args.network_name)
+        print 'Use network `{:s}` in training'.format(args.network_name)
 
-    if cfg.TRAIN.SEGMENTATION:
-        train_net(network, imdb, roidb, output_dir,
-                  pretrained_model=pretrained_model,
-                  pretrained_ckpt=args.pretrained_ckpt,
-                  max_iters=args.max_iters)
-    else:
-        train_net_det(network, imdb, roidb, output_dir,
-                  pretrained_model=pretrained_model,
-                  pretrained_ckpt=args.pretrained_ckpt,
+        if cfg.TRAIN.SEGMENTATION:
+            train_net(network, imdb, roidb, output_dir,
+                      pretrained_model=pretrained_model,
+                      pretrained_ckpt=args.pretrained_ckpt,
+                      max_iters=args.max_iters)
+        else:
+            train_net_det(network, imdb, roidb, output_dir,
+                      pretrained_model=pretrained_model,
+                      pretrained_ckpt=args.pretrained_ckpt,
                   max_iters=args.max_iters)

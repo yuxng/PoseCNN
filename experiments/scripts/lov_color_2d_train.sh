@@ -4,7 +4,7 @@ set -x
 set -e
 
 export PYTHONUNBUFFERED="True"
-export CUDA_VISIBLE_DEVICES=$1
+#export CUDA_VISIBLE_DEVICES=$1
 
 LOG="experiments/logs/lov_color_2d.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")

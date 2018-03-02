@@ -1,72 +1,112 @@
 import tensorflow as tf
 from networks.network import Network
+from fcn.config import cfg
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, matching=False, trainable=True, is_train=True):
-        self.inputs = []
-        self.input_format = input_format
-        self.num_classes = num_classes
-        self.num_units = num_units
-        self.scale = 1.0
-        self.vertex_reg_2d = vertex_reg_2d
-        self.vertex_reg_3d = vertex_reg_3d
-        self.vertex_reg = vertex_reg_2d or vertex_reg_3d
-        self.pose_reg = pose_reg
-        self.matching = matching
-        self.trainable = trainable
-        if is_train:
-            self.is_train = 1
-            self.skip_pixels = 50
-        else:
-            self.is_train = 0
-            self.skip_pixels = 10
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, matching=False, trainable=True, is_train=True, num_gpus=2):
 
-        self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        if input_format == 'RGBD':
-            self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
-        self.keep_prob = tf.placeholder(tf.float32)
-        if self.vertex_reg:
-            self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
-            self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
-            self.poses = tf.placeholder(tf.float32, shape=[None, 13])
-            self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
-            self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
-            self.points = tf.placeholder(tf.float32, shape=[num_classes, None, 3])
-            self.symmetry = tf.placeholder(tf.float32, shape=[num_classes])
+            self.inputs = []
+            self.input_format = input_format
+            self.num_classes = num_classes
+            self.num_units = num_units
+            self.scale = 1.0
+            self.vertex_reg_2d = vertex_reg_2d
+            self.vertex_reg_3d = vertex_reg_3d
+            self.vertex_reg = vertex_reg_2d or vertex_reg_3d
+            self.pose_reg = pose_reg
+            self.matching = matching
+            self.trainable = trainable
+            if is_train:
+                self.is_train = 1
+                self.skip_pixels = 50
+            else:
+                self.is_train = 0
+                self.skip_pixels = 10
 
-        # define a queue
-        queue_size = 25
-        if input_format == 'RGBD':
+            self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+            if input_format == 'RGBD':
+                self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+            self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
+            self.keep_prob = tf.placeholder(tf.float32)
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
+                self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
+                self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
+                self.poses = tf.placeholder(tf.float32, shape=[None, 13])
+                self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
+                self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
+                self.points = tf.placeholder(tf.float32, shape=[num_classes, None, 3])
+                self.symmetry = tf.placeholder(tf.float32, shape=[num_classes])
+
+            # define a queue
+            queue_size = 25
+            if input_format == 'RGBD':
+                if self.vertex_reg:
+                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                    self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
                                              self.vertex_targets, self.vertex_weights, self.poses, \
                                              self.extents, self.meta_data, self.points, self.symmetry])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
-                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
-                                    'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
-                                    'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
+                else:
+                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
+                    self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
+                    data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
+                    self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
             else:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
-                data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
-                self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
-        else:
-            if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
-                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
-            else:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
-                data, gt_label_2d, self.keep_prob_queue = q.dequeue()
-                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
-        self.close_queue_op = q.close(cancel_pending_enqueues=True)
+                if self.vertex_reg:
+                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                    self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
+                else:
+                    q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
+                    self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
+            self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
-        self.setup()
+            # optimizer
+            global_step = tf.Variable(0, trainable=False)
+            starter_learning_rate = cfg.TRAIN.LEARNING_RATE
+            self.learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+            momentum = cfg.TRAIN.MOMENTUM
+            opt = tf.train.MomentumOptimizer(self.learning_rate, momentum)
+
+            # build towers for multigpus
+            tower_grads = []
+            with tf.variable_scope(tf.get_variable_scope()):
+                for i in xrange(num_gpus):
+                    with tf.device('/gpu:%d' % i):
+                        with tf.name_scope('vgg16_convs_%d' % (i)) as scope:
+                            if input_format == 'RGBD':
+                                if self.vertex_reg:
+                                    data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
+                                    self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
+                                        'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
+                                        'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
+                                else:
+                                    data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
+                                    self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
+                            else:
+                                if self.vertex_reg:
+                                    data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
+                                    self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, \
+                                        'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
+                                else:
+                                    data, gt_label_2d, self.keep_prob_queue = q.dequeue()
+                                    self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
+                            self.setup()
+
+                            # Reuse variables for the next tower.
+                            tf.get_variable_scope().reuse_variables()
+
+                            # Calculate the gradients for the batch of data
+                            grads = opt.compute_gradients(self.loss)
+
+                            # Keep track of the gradients across all towers.
+                            tower_grads.append(grads)
+
+            # We must calculate the mean of each gradient. Note that this is the
+            # synchronization point across all towers.
+            grads = self.average_gradients(tower_grads)
+
+            # Apply the gradients to adjust the shared variables.
+            self.train_op = opt.apply_gradients(grads, global_step=global_step)
 
     def setup(self):
         (self.feed('data')
@@ -184,3 +224,30 @@ class vgg16_convs(Network):
 
                     (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
                          .average_distance_loss(name='loss_pose'))
+
+        #  define losses
+        if self.vertex_reg:
+            self.loss_regu = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
+            scores = self.get_output('prob')
+            labels = self.get_output('gt_label_2d')
+            self.loss_cls = self.loss_cross_entropy_single_frame(scores, labels)
+
+            vertex_pred = self.get_output('vertex_pred')
+            vertex_targets = self.get_output('vertex_targets')
+            vertex_weights = self.get_output('vertex_weights')
+            self.loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
+
+            if cfg.TRAIN.POSE_REG:
+                # pose_pred = self.get_output('poses_pred')
+                # pose_targets = self.get_output('poses_target')
+                # pose_weights = self.get_output('poses_weight')
+                # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
+                # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
+                self.loss_pose = self.get_output('loss_pose')[0]
+                self.loss = self.loss_cls + self.loss_vertex + self.loss_pose + self.loss_regu
+            else:
+                self.loss = self.loss_cls + self.loss_vertex + self.loss_regu
+        else:
+            scores = self.get_output('prob')
+            labels = self.get_output('gt_label_2d')
+            self.loss = self.loss_cross_entropy_single_frame(scores, labels) + self.loss_regu

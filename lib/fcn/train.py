@@ -35,7 +35,8 @@ class SolverWrapper(object):
         self.pretrained_ckpt = pretrained_ckpt
 
         # For checkpoint
-        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        #self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        self.saver = tf.train.Saver(tf.global_variables())
 
 
     def snapshot(self, sess, iter):
@@ -397,18 +398,6 @@ def loss_cross_entropy(scores, labels):
         loss /= cfg.TRAIN.NUM_STEPS
     return loss
 
-def loss_cross_entropy_single_frame(scores, labels):
-    """
-    scores: a tensor [batch_size, height, width, num_classes]
-    labels: a tensor [batch_size, height, width, num_classes]
-    """
-
-    with tf.name_scope('loss'):
-        cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
-        loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels))
-
-    return loss
-
 
 def loss_quaternion(pose_pred, pose_targets, pose_weights):
 
@@ -423,51 +412,7 @@ def loss_quaternion(pose_pred, pose_targets, pose_weights):
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretrained_ckpt=None, max_iters=40000):
     """Train a Fast R-CNN network."""
 
-    loss_regu = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
-    if cfg.TRAIN.SINGLE_FRAME:
-        # classification loss
-        if cfg.NETWORK == 'FCN8VGG':
-            scores = network.prob
-            labels = network.gt_label_2d_queue
-            loss = loss_cross_entropy_single_frame(scores, labels) + loss_regu
-        else:
-            if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
-                scores = network.get_output('prob')
-                labels = network.get_output('gt_label_2d')
-                loss_cls = loss_cross_entropy_single_frame(scores, labels)
-
-                vertex_pred = network.get_output('vertex_pred')
-                vertex_targets = network.get_output('vertex_targets')
-                vertex_weights = network.get_output('vertex_weights')
-                loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
-
-                if cfg.TRAIN.POSE_REG:
-                    # pose_pred = network.get_output('poses_pred')
-                    # pose_targets = network.get_output('poses_target')
-                    # pose_weights = network.get_output('poses_weight')
-                    # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
-                    # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
-                    loss_pose = network.get_output('loss_pose')[0]
-                    loss = loss_cls + loss_vertex + loss_pose + loss_regu
-                else:
-                    loss = loss_cls + loss_vertex + loss_regu
-            else:
-                scores = network.get_output('prob')
-                labels = network.get_output('gt_label_2d')
-                loss = loss_cross_entropy_single_frame(scores, labels) + loss_regu
-    else:
-        # classification loss
-        scores = network.get_output('outputs')
-        labels = network.get_output('labels_gt_2d')
-        loss = loss_cross_entropy(scores, labels) + loss_regu
-
-    # optimizer
-    global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = cfg.TRAIN.LEARNING_RATE
-    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
-    momentum = cfg.TRAIN.MOMENTUM
-    train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
+    train_op = network.train_op
     
     #config = tf.ConfigProto()
     #config.gpu_options.per_process_gpu_memory_fraction = 0.85
@@ -488,11 +433,11 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             if cfg.TRAIN.POSE_REG:
-                sw.train_model_vertex_pose(sess, train_op, loss, loss_cls, loss_vertex, loss_pose, learning_rate, max_iters, data_layer)
+                sw.train_model_vertex_pose(sess, train_op, network.loss, network.loss_cls, network.loss_vertex, network.loss_pose, network.learning_rate, max_iters, data_layer)
             else:
-                sw.train_model_vertex(sess, train_op, loss, loss_cls, loss_vertex, loss_regu, learning_rate, max_iters, data_layer)
+                sw.train_model_vertex(sess, train_op, network.loss, network.loss_cls, network.loss_vertex, network.loss_regu, network.learning_rate, max_iters, data_layer)
         else:
-            sw.train_model(sess, train_op, loss, learning_rate, max_iters, data_layer)
+            sw.train_model(sess, train_op, network.loss, network.learning_rate, max_iters, data_layer)
         print 'done solving'
 
 
