@@ -218,7 +218,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
       float d = vertmap[offset + 2];
 
       // vote
-      if (angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
+      if (angle_distance(cx, cy, x, y, u, v) > inlierThreshold && d > 0)
       // if (point2line(cx, cy, x, y, u, v) < 1 && angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > 0 && d > 0)
       {
         project_box(cls, extents, meta_data, d, &threshold);
