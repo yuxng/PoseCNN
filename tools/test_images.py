@@ -84,6 +84,7 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
 
     # construct the filenames
+    '''
     root = '/home/yuxiang/Projects/Deep_Pose/data/Baxter/01/'
     num = 20
     rgb_filenames = []
@@ -93,6 +94,19 @@ if __name__ == '__main__':
         print filename
         rgb_filenames.append(filename)
         filename = root + 'image{:d}_1.png'.format(i)
+        print filename
+        depth_filenames.append(filename)
+    '''
+
+    root = '/home/yuxiang/Projects/Deep_Pose/images/'
+    num = 10
+    rgb_filenames = []
+    depth_filenames = []
+    for i in xrange(num):
+        filename = root + '{:06d}-color.png'.format(i)
+        print filename
+        rgb_filenames.append(filename)
+        filename = root + '{:06d}-depth.png'.format(i)
         print filename
         depth_filenames.append(filename)
 

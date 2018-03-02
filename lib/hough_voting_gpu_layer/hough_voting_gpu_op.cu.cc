@@ -115,7 +115,7 @@ __device__ inline void project_box(int cls, const float* extents, const float* m
   }
   float width = maxX - minX + 1;
   float height = maxY - minY + 1;
-  *threshold = fmax(width, height) * 0.5;
+  *threshold = fmax(width, height) * 0.8;
 }
 
 
@@ -218,8 +218,8 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
       float d = vertmap[offset + 2];
 
       // vote
-      // if (angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
-      if (point2line(cx, cy, x, y, u, v) < inlierThreshold && angle_distance(cx, cy, x, y, u, v) > 0 && d > 0)
+      if (angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > inlierThreshold && d > 0)
+      // if (point2line(cx, cy, x, y, u, v) < 1 && angle_distance_label(cx, cy, x, y, u, v, cls, height, width, labelmap) > 0 && d > 0)
       {
         project_box(cls, extents, meta_data, d, &threshold);
         float dx = fabsf(x - cx);
@@ -296,7 +296,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
-    float scale = 0.1;
+    float scale = 0.05;
     int max_index = max_indexes[index];
     int ind = max_index / (height * width);
     int cls = class_indexes[ind];

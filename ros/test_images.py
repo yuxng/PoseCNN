@@ -285,11 +285,15 @@ class ImageListener:
                     depth.encoding))
             return
 
+        # write images
         im = self.cv_bridge.imgmsg_to_cv2(rgb, 'bgr8')
-        filename = 'images/%04d.png' % self.count
+        filename = 'images/%06d-color.png' % self.count
+        cv2.imwrite(filename, im)
+
+        filename = 'images/%06d-depth.png' % self.count
+        cv2.imwrite(filename, depth_cv)
         print filename
         self.count += 1
-        cv2.imwrite(filename, im)
 
         # run network
         labels, probs, vertex_pred, rois, poses = im_segment_single_frame(self.sess, self.net, im, depth_cv, self.meta_data, \
@@ -320,6 +324,7 @@ if __name__ == '__main__':
 
     # construct meta data
     K = np.array([[320, 0, 320], [0, 320, 240], [0, 0, 1]])
+    # K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 1000.0})
     print meta_data
 
