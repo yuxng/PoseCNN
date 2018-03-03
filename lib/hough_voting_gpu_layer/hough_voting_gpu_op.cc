@@ -660,7 +660,7 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
         int offset = VERTEX_CHANNELS * channel + VERTEX_CHANNELS * num_classes * (y * width + x);
         float u = vertmap[offset];
         float v = vertmap[offset + 1];
-        float distance = vertmap[offset + 2];
+        float distance = exp(vertmap[offset + 2]);
         float norm = sqrt(u * u + v * v);
         u /= norm;
         v /= norm;
