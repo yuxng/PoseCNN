@@ -594,7 +594,7 @@ def _extract_vertmap(im_label, vertex_pred, extents, num_classes):
             start = 3 * i
             end = 3 * i + 3
             vertmap[I[0], I[1], :] = vertex_pred[I[0], I[1], start:end]
-
+    vertmap[:, :, 2] = np.exp(vertmap[:, :, 2])
     return vertmap
 
 # compute the voting label image in 2D
@@ -877,6 +877,7 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
                 RT = np.zeros((3, 4), dtype=np.float32)
                 RT[:3, :3] = quat2mat(poses[i, :4])
                 RT[:, 3] = poses[i, 4:7]
+                print cls
                 print RT
                 print '\n'
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
