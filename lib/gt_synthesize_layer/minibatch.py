@@ -11,6 +11,7 @@ import sys
 import numpy as np
 import numpy.random as npr
 import cv2
+import math
 from fcn.config import cfg
 from utils.blob import im_list_to_blob, pad_im, chromatic_transform, add_noise
 from utils.se3 import *
@@ -474,7 +475,7 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
                 # assignment
                 vertex_targets[y, x, 3*i+0] = R[0,:]
                 vertex_targets[y, x, 3*i+1] = R[1,:]
-                vertex_targets[y, x, 3*i+2] = z
+                vertex_targets[y, x, 3*i+2] = math.log(z)
             if cfg.TRAIN.VERTEX_REG_3D:
                 vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
 
