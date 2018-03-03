@@ -439,7 +439,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                 vertex_pred = network.get_output('vertex_pred')
                 vertex_targets = network.get_output('vertex_targets')
                 vertex_weights = network.get_output('vertex_weights')
-                loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
+                # loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
+                loss_vertex = smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights)
 
                 if cfg.TRAIN.POSE_REG:
                     # pose_pred = network.get_output('poses_pred')
@@ -494,6 +495,17 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         else:
             sw.train_model(sess, train_op, loss, learning_rate, max_iters, data_layer)
         print 'done solving'
+
+def smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights, sigma=1.0):
+    sigma_2 = sigma ** 2
+    vertex_diff = vertex_pred - vertex_targets
+    diff = tf.multiply(vertex_weights, vertex_diff)
+    abs_diff = tf.abs(diff)
+    smoothL1_sign = tf.stop_gradient(tf.to_float(tf.less(abs_diff, 1. / sigma_2)))
+    in_loss = tf.pow(diff, 2) * (sigma_2 / 2.) * smoothL1_sign \
+            + (abs_diff - (0.5 / sigma_2)) * (1. - smoothL1_sign)
+    loss = tf.div( tf.reduce_sum(in_loss), tf.reduce_sum(vertex_weights) + 1e-10 )
+    return loss
 
 
 def smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights, sigma=1.0, dim=[1]):
