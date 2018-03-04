@@ -323,8 +323,8 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
 
     # construct meta data
-    K = np.array([[320, 0, 320], [0, 320, 240], [0, 0, 1]])
-    # K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
+    # K = np.array([[320, 0, 320], [0, 320, 240], [0, 0, 1]])
+    K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 1000.0})
     print meta_data
 
