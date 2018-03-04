@@ -448,7 +448,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     # pose_weights = network.get_output('poses_weight')
                     # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
                     # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
-                    loss_pose = network.get_output('loss_pose')[0]
+                    loss_pose = 2 * network.get_output('loss_pose')[0]
                     loss = loss_cls + loss_vertex + loss_pose + loss_regu
                 else:
                     loss = loss_cls + loss_vertex + loss_regu
