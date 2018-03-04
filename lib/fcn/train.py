@@ -35,7 +35,7 @@ class SolverWrapper(object):
         self.pretrained_ckpt = pretrained_ckpt
 
         # For checkpoint
-        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES), max_to_keep=12)
 
 
     def snapshot(self, sess, iter):
