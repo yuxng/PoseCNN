@@ -25,7 +25,7 @@ TRAIN:
   SYNTHESIZE: True
   SYNROOT: 'data/LOV/data_syn/'
   SYNNUM: 160000
-  SYN_RATIO: 5
+  SYN_RATIO: 10
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
