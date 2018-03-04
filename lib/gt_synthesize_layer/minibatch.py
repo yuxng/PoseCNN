@@ -50,7 +50,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
         if weight < 10:
             weight = 10
         if symmetry[i] > 0:
-            point_blob[i, :, :] = 8 * weight * point_blob[i, :, :]
+            point_blob[i, :, :] = 4 * weight * point_blob[i, :, :]
         else:
             point_blob[i, :, :] = weight * point_blob[i, :, :]
 
