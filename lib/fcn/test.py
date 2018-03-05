@@ -10,7 +10,7 @@
 from fcn.config import cfg, get_output_dir
 import argparse
 from utils.timer import Timer
-from utils.blob import im_list_to_blob, pad_im, unpad_im
+from utils.blob import im_list_to_blob, pad_im, unpad_im, add_noise
 from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
 from utils.pose_error import *
@@ -820,6 +820,7 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
     # show image
     ax = fig.add_subplot(3, 3, 1)
     im = im[:, :, (2, 1, 0)]
+    im = im.astype(np.uint8)
     plt.imshow(im)
     ax.set_title('input image')
 
