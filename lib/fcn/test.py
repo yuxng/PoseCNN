@@ -9,7 +9,6 @@
 
 from fcn.config import cfg, get_output_dir
 import argparse
-from synthesize import synthesizer
 from utils.timer import Timer
 from utils.blob import im_list_to_blob, pad_im, unpad_im
 from utils.voxelizer import Voxelizer, set_axes_equal
@@ -25,6 +24,7 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
+from synthesize import synthesizer
 import scipy.io
 from scipy.optimize import minimize
 
