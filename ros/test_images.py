@@ -265,7 +265,7 @@ class ImageListener:
         rospy.init_node("image_listener")
         self.posecnn_pub = rospy.Publisher('posecnn_result', Image, queue_size=1)
         rgb_sub = message_filters.Subscriber('/camera/rgb/image_color', Image, queue_size=2)
-        depth_sub = message_filters.Subscriber('/camera/depth/image_raw', Image, queue_size=2)
+        depth_sub = message_filters.Subscriber('/camera/depth_registered/image', Image, queue_size=2)
 
         queue_size = 1
         slop_seconds = 0.025
