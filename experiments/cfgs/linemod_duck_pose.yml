@@ -20,6 +20,7 @@ TRAIN:
   ADD_NOISE: True
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
+  VERTEX_W: 2.0
   VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True

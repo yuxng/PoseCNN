@@ -440,7 +440,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                 vertex_targets = network.get_output('vertex_targets')
                 vertex_weights = network.get_output('vertex_weights')
                 # loss_vertex = tf.div( tf.reduce_sum(tf.multiply(vertex_weights, tf.abs(tf.subtract(vertex_pred, vertex_targets)))), tf.reduce_sum(vertex_weights) + 1e-10 )
-                loss_vertex = 5 * smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights)
+                loss_vertex = cfg.TRAIN.VERTEX_W * smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights)
 
                 if cfg.TRAIN.POSE_REG:
                     # pose_pred = network.get_output('poses_pred')
