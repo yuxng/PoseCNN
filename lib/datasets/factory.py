@@ -15,6 +15,7 @@ import datasets.gmu_scene
 import datasets.rgbd_scene
 import datasets.lov
 import datasets.ycb
+import datasets.yumi
 import datasets.linemod
 import numpy as np
 
@@ -58,6 +59,13 @@ for split in ['trainval']:
     print name
     __sets[name] = (lambda split=split:
             datasets.ycb(split))
+
+# yumi dataset
+for split in ['train']:
+    name = 'yumi_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.yumi(split))
 
 # linemod dataset
 for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \

@@ -12,6 +12,7 @@ from .gmu_scene import gmu_scene
 from .rgbd_scene import rgbd_scene
 from .lov import lov
 from .ycb import ycb
+from .yumi import yumi
 from .linemod import linemod
 from . import factory
 

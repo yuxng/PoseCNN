@@ -17,7 +17,7 @@ TRAIN:
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_pose
   USE_FLIPPED: False
   CHROMATIC: True
-  ADD_NOISE: True
+  ADD_NOISE: False
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VERTEX_W: 2.0
@@ -33,7 +33,7 @@ TEST:
   SCALES_BASE: !!python/tuple [1.0]
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
-  VISUALIZE: False
+  VISUALIZE: True
   POSE_REG: True
   SYNTHETIC: False
-  POSE_REFINE: True
+  POSE_REFINE: False

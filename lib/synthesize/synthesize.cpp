@@ -295,10 +295,16 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
     {
       // vertex colors
       std::vector<float3> colors3(assimpMesh->mNumVertices);
+
       for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++) 
       {
-          aiColor4D & color = assimpMesh->mColors[0][i];
-          colors3[i] = make_float3(color.r, color.g, color.b);
+          if (assimpMesh->mColors[0])
+          {
+            aiColor4D & color = assimpMesh->mColors[0][i];
+            colors3[i] = make_float3(color.r, color.g, color.b);
+          }
+          else
+            colors3[i] = make_float3(255, 0, 0);
       }
       colors.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
       colors.Upload(colors3.data(), assimpMesh->mNumVertices*sizeof(float)*3);
@@ -311,7 +317,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
               float* vertex_targets, float* vertex_weights, float weight)
 {
   double threshold = 0.2; // 0.2 for YCB
-  bool is_sampling = true;
+  bool is_sampling = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -376,8 +382,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       float* pose = poses_[class_id] + seed * 7;
 
       Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-      // Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
-      Sophus::SE3d::Point translation(pose[4] + drand(-0.1, 0.1), pose[5] + drand(-0.1, 0.1), pose[6] + drand(0, 1.0));
+      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 1.0));
+      // Sophus::SE3d::Point translation(pose[4] + drand(-0.1, 0.1), pose[5] + drand(-0.1, 0.1), pose[6] + drand(0, 1.0));
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
