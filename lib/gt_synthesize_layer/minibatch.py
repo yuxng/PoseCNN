@@ -250,7 +250,6 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             im = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
         else:
             meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
-            print roidb[i]['meta_data']
             im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
 
             # read label image
