@@ -21,6 +21,7 @@ TRAIN:
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
   VERTEX_W: 2.0
+  POSE_W: 1.0
   VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True
