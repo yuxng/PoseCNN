@@ -34,4 +34,4 @@ TEST:
   VISUALIZE: True
   POSE_REG: True
   POSE_REFINE: False
-  SYNTHETIC: False
+  SYNTHETIC: True

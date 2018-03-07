@@ -1,0 +1,15 @@
+uint32 height
+uint32 width
+uint32 roi_num
+uint32 roi_channel
+float32 fx
+float32 fy
+float32 px
+float32 py
+float32 znear
+float32 zfar
+float32 factor
+sensor_msgs/Image label
+sensor_msgs/Image depth
+float32[] rois
+float32[] poses

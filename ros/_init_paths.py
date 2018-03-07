@@ -19,3 +19,7 @@ this_dir = osp.dirname(__file__)
 # Add lib to PYTHONPATH
 lib_path = osp.join(this_dir, '..', 'lib')
 add_path(lib_path)
+
+lib_path = osp.join(this_dir, 'devel/lib/python2.7/dist-packages')
+add_path(lib_path)
+

@@ -16,7 +16,7 @@ cdef extern from "synthesizer.hpp":
         void setup(int, int )
         void render(int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*, float*, float*, float)
         void render_one(int, int, int, float, float, float, float, float, float, unsigned char*, float*, float*, float*, float*, float*)
-        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, int, float*, float*, float*, float*, float)
+        void solveICP(int*, unsigned char*, int, int, float, float, float, float, float, float, float, int, int, const float*, const float*, float*, float*, float)
         void estimatePose2D(int*, float*, float*, int, int, int, float, float, float, float, float*)
         void estimatePose3D(int*, unsigned char*, float*, float*, int, int, int, float, float, float, float, float, float*)
 

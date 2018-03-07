@@ -1887,7 +1887,8 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
 
 // ICP
 void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
-  float znear, float zfar, float factor, int num_roi, int channel_roi, float* rois, float* poses, float* outputs, float* outputs_icp, float maxError)
+  float znear, float zfar, float factor, int num_roi, int channel_roi, const float* rois, const float* poses, 
+  float* outputs, float* outputs_icp, float maxError)
 {
   int iterations;
   if (setup_ == 0)
@@ -1930,7 +1931,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
       continue;
 
     // pose
-    float* pose = poses + i * 7;
+    const float* pose = poses + i * 7;
     std::cout << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
     Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
@@ -2231,7 +2232,7 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 }
 
 
-void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, float* rois, float* outputs, int num_roi, int channel_roi)
+void Synthesizer::visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, const float* rois, float* outputs, int num_roi, int channel_roi)
 {
   if (setup_ == 0)
     setup(width, height);

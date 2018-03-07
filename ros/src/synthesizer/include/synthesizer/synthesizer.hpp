@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -21,7 +23,6 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/Importer.hpp>
-#include <OpenEXR/half.h>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -46,13 +47,6 @@
 #include <df/util/tensor.h>
 #include <df/optimization/icp.h>
 
-#include "types.h"
-#include "ransac.h"
-#include "Hypothesis.h"
-#include "detection.h"
-#include "thread_rand.h"
-#include "iou.h"
-
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
 typedef pcl::PointNormal PointNormalT;
@@ -71,11 +65,6 @@ inline void operator >>(std::istream & stream, Eigen::MatrixBase<Derived> & M)
 
 }
 
-unsigned char class_colors[22][3] = {{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 0}, {255, 0, 255}, {0, 255, 255},
-                              {128, 0, 0}, {0, 128, 0}, {0, 0, 128}, {128, 128, 0}, {128, 0, 128}, {0, 128, 128},
-                              {64, 0, 0}, {0, 64, 0}, {0, 0, 64}, {64, 64, 0}, {64, 0, 64}, {0, 64, 64}, 
-                              {192, 0, 0}, {0, 192, 0}, {0, 0, 192}};
-
 struct DataForOpt
 {
   int width, height, objID;
@@ -92,9 +81,6 @@ struct DataForOpt
   df::ManagedHostTensor2<Vec3>* vertex_map;
   df::ManagedHostTensor2<Eigen::UnalignedVec4<float> >* predicted_verts;
   df::ManagedDeviceTensor2<Eigen::UnalignedVec4<float> >* predicted_verts_device;
-
-  TransHyp* hyp;
-  cv::Mat* camMat;
 };
 
 class Synthesizer
@@ -107,19 +93,12 @@ class Synthesizer
   void setup(int width, int height);
   void create_window(int width, int height);
   void destroy_window();
-  void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
-              float* vertex_targets, float* vertex_weights, float weight);
-  void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
   void loadModels(std::string filename);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
     pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors, pangolin::GlBuffer & normals,
     pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
-
-  jp::jp_trans_t quat2our(const Sophus::SE3d T_co);
 
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
@@ -128,36 +107,6 @@ class Synthesizer
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
   void refinePose(int width, int height, int objID, float znear, float zfar,
                   const int* labelmap, DataForOpt data, df::Poly3CameraModel<float> model, Sophus::SE3f & T_co, int iterations, float maxError, int is_icp);
-
-  // pose estimation with color
-  void estimatePose2D(const int* labelmap, const float* vertmap, const float* extents,
-        int width, int height, int num_classes, float fx, float fy, float px, float py, float* output);
-  inline void filterInliers2D(TransHyp& hyp, int maxInliers);
-  inline void updateHyp2D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
-  inline void countInliers2D(TransHyp& hyp, const cv::Mat& camMat, const std::vector<std::vector<int>>& labels, const float* vertmap,
-      const float* extents, float inlierThreshold, int width, int num_classes, int pixelBatch);
-  inline float point2line(cv::Point2d x, cv::Point2f n, cv::Point2f p);
-  std::vector<TransHyp*> getWorkingQueue(std::map<jp::id_t, std::vector<TransHyp>>& hypMap, int maxIt);
-  inline bool samplePoint2D(jp::id_t objID, int width, int num_classes, std::vector<cv::Point2f>& pts2D, 
-    std::vector<cv::Point3f>& pts3D, const cv::Point2f& pt2D, const float* vertmap, const float* extents, float minDist2D, float minDist3D);
-  void getBb3Ds(const float* extents, std::vector<std::vector<cv::Point3f>>& bb3Ds, int num_classes);
-  void getLabels(const int* label_map, std::vector<std::vector<int>>& labels, std::vector<int>& object_ids, int width, int height, int num_classes, int minArea);
-
-  // pose estimation with depth
-  void estimatePose3D(const int* labelmap, unsigned char* rawdepth, const float* vertmap, const float* extents,
-        int width, int height, int num_classes, float fx, float fy, float px, float py, float depth_factor, float* output);
-  inline void updateHyp3D(TransHyp& hyp, const cv::Mat& camMat, int imgWidth, int imgHeight, const std::vector<cv::Point3f>& bb3D, int maxPixels);
-  inline void filterInliers3D(TransHyp& hyp, int maxInliers);
-  inline void countInliers3D(TransHyp& hyp, const std::vector<std::vector<int>>& labels, const float* vertmap, const float* extents, const jp::img_coord_t& eyeData,float inlierThreshold, int width, int num_classes, int pixelBatch);
-  inline bool samplePoint3D(jp::id_t objID, int width, int num_classes, std::vector<cv::Point3f>& eyePts, std::vector<cv::Point3f>& objPts, const cv::Point2f& pt2D,
-      const float* vertmap, const float* extents, const jp::img_coord_t& eyeData, float minDist3D);
-  inline cv::Point3f getMode3D(jp::id_t objID, const cv::Point2f& pt, const float* vertmap, const float* extents, int width, int num_classes);
-  template<class T> inline double getMinDist(const std::vector<T>& pointSet, const T& point);
-  void getEye(unsigned char* rawdepth, jp::img_coord_t& img, jp::img_depth_t& img_depth, int width, int height, float fx, float fy, float px, float py, float depth_factor);
-  jp::coord3_t pxToEye(int x, int y, jp::depth_t depth, float fx, float fy, float px, float py, float depth_factor);
-
-  double refineWithOpt(TransHyp& hyp, cv::Mat& camMat, int iterations, int is_3D);
-  inline double pointLineDistance(const cv::Point3f& pt1, const cv::Point3f& pt2, const cv::Point3f& pt3);
 
  private:
   int counter_;
@@ -188,9 +137,6 @@ class Synthesizer
 
   // rois
   std::vector<std::vector<cv::Vec<float, 12> > > rois_;
-
-  // 3D bounding boxes
-  std::vector<std::vector<cv::Point3f>> bb3Ds_;
 
   // 3D models
   std::vector<aiMesh*> assimpMeshes_;
