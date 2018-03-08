@@ -25,7 +25,7 @@ class yumi(datasets.imdb):
         self._data_path = os.path.join(self._yumi_path, 'data')
 
         self._classes = ('__background__', 'xmas_cup')
-        self._class_colors = [(255, 255, 255), (255, 0, 0)]
+        self._class_colors = [(255, 255, 255), (0, 255, 0)]
         self._cls_index = 1
 
         self._class_weights = [1, 100]
@@ -257,7 +257,7 @@ class yumi(datasets.imdb):
                 'video_id': video_id,
                 'class_colors': self._class_colors,
                 'class_weights': self._class_weights,
-                'cls_index': -1,
+                'cls_index': self._cls_index,
                 'flipped': False}
 
 

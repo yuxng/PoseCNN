@@ -32,6 +32,7 @@ class GtSynthesizeLayer(object):
         self._shuffle_roidb_inds()
         self._shuffle_syn_inds()
         self._build_background_images()
+        self._build_background_depth_images()
         self._read_camera_parameters()
 
     def _shuffle_roidb_inds(self):
@@ -64,17 +65,24 @@ class GtSynthesizeLayer(object):
         """Return the blobs to be used for the next minibatch."""
 
         if cfg.TRAIN.SYNTHESIZE:
-            r = np.random.randint(cfg.TRAIN.SYN_RATIO+1, size=1)[0]
-            if r == 0:
-                is_syn = 0
-            else:
+            if cfg.TRAIN.SYN_RATIO == 0:
                 is_syn = 1
+            else:
+                r = np.random.randint(cfg.TRAIN.SYN_RATIO+1, size=1)[0]
+                if r == 0:
+                    is_syn = 0
+                else:
+                    is_syn = 1
         else:
             is_syn = 0
 
         db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
         minibatch_db = [self._roidb[i] for i in db_inds]
-        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, self._backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn)
+        if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+            backgrounds = self._backgrounds_depth
+        else:
+            backgrounds = self._backgrounds
+        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn)
             
     def forward(self, iter):
         """Get blobs and copy them into this layer's top blob vector."""
@@ -85,6 +93,7 @@ class GtSynthesizeLayer(object):
     def _read_camera_parameters(self):
         meta_data = scipy.io.loadmat(self._roidb[0]['meta_data'])
         self._intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+
 
     def _build_background_images(self):
 
@@ -195,6 +204,51 @@ class GtSynthesizeLayer(object):
 
         self._backgrounds = backgrounds
         print "build background images finished"
+
+        with open(cache_file, 'wb') as fid:
+            cPickle.dump(backgrounds, fid, cPickle.HIGHEST_PROTOCOL)
+        print 'wrote backgrounds to {}'.format(cache_file)
+
+
+    def _build_background_depth_images(self):
+
+        cache_file = os.path.join(self._cache_path, 'backgrounds_depth.pkl')
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as fid:
+                self._backgrounds_depth = cPickle.load(fid)
+            print '{} backgrounds depth loaded from {}'.format(self._name, cache_file)
+            return
+
+        backgrounds = []
+        # RGBD scenes
+        root = os.path.join(self._cache_path, '../RGBDScene')
+
+        # load image index
+        image_set_file = os.path.join(root, 'train.txt')
+        assert os.path.exists(image_set_file), \
+            'Path does not exist: {}'.format(image_set_file)
+        with open(image_set_file) as f:
+            image_index_train = [x.rstrip('\n') for x in f.readlines()]
+
+        image_set_file = os.path.join(root, 'val.txt')
+        assert os.path.exists(image_set_file), \
+            'Path does not exist: {}'.format(image_set_file)
+        with open(image_set_file) as f:
+            image_index_val = [x.rstrip('\n') for x in f.readlines()]
+
+        image_index = image_index_train + image_index_val
+        print len(image_index)
+
+        for i in range(len(image_index)):
+            filename = os.path.join(root, 'data', image_index[i] + '-depth.png')
+            backgrounds.append(filename)
+
+        for i in xrange(len(backgrounds)):
+            if not os.path.isfile(backgrounds[i]):
+                print 'file not exist {}'.format(backgrounds[i])
+
+        self._backgrounds_depth = backgrounds
+        print "build background depth images finished"
 
         with open(cache_file, 'wb') as fid:
             cPickle.dump(backgrounds, fid, cPickle.HIGHEST_PROTOCOL)

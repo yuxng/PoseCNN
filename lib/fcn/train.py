@@ -210,6 +210,13 @@ class SolverWrapper(object):
         # merged = tf.summary.merge_all()
         # train_writer = tf.summary.FileWriter(self.output_dir, sess.graph)
 
+        coord = tf.train.Coordinator()
+        if cfg.TRAIN.VISUALIZE:
+            load_and_enqueue(sess, self.net, data_layer, coord)
+        else:
+            t = threading.Thread(target=load_and_enqueue, args=(sess, self.net, data_layer, coord))
+            t.start()
+
         # intialize variables
         sess.run(tf.global_variables_initializer())
         if self.pretrained_model is not None:
@@ -223,13 +230,6 @@ class SolverWrapper(object):
             self.restore(sess, self.pretrained_ckpt)
 
         tf.get_default_graph().finalize()
-
-        coord = tf.train.Coordinator()
-        if cfg.TRAIN.VISUALIZE:
-            load_and_enqueue(sess, self.net, data_layer, coord)
-        else:
-            t = threading.Thread(target=load_and_enqueue, args=(sess, self.net, data_layer, coord))
-            t.start()
 
         # tf.train.write_graph(sess.graph_def, self.output_dir, 'model.pbtxt')
 

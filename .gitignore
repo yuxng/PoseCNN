@@ -4,5 +4,9 @@
 *.tgz
 *.so
 *.o
-output/*
+output*
 lib/icp/icp_main.cpp
+ros/build/*
+ros/data/*
+ros/devel/*
+images/*

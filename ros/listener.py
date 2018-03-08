@@ -2,7 +2,9 @@ import rospy
 import message_filters
 import cv2
 import numpy as np
+from fcn.config import cfg
 from utils.blob import im_list_to_blob, pad_im, unpad_im, add_noise
+from normals import gpu_normals
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
@@ -120,7 +122,8 @@ class ImageListener:
 
         # depth
         im_orig = im_depth.astype(np.float32, copy=True)
-        im_orig = im_orig / im_orig.max() * 255
+        # im_orig = im_orig / im_orig.max() * 255
+        im_orig = np.clip(im_orig / 2000.0, 0, 1) * 255
         im_orig = np.tile(im_orig[:,:,np.newaxis], (1,1,3))
         im_orig -= self.cfg.PIXEL_MEANS
 
@@ -128,13 +131,36 @@ class ImageListener:
         im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
         processed_ims_depth.append(im)
 
+        if cfg.INPUT == 'NORMAL':
+            # meta data
+            K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+            fx = K[0, 0]
+            fy = K[1, 1]
+            cx = K[0, 2]
+            cy = K[1, 2]
+
+            # normals
+            depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+            nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+            im_normal = 127.5 * nmap + 127.5
+            im_normal = im_normal.astype(np.uint8)
+            im_normal = im_normal[:, :, (2, 1, 0)]
+            im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
+
+            processed_ims_normal = []
+            im_orig = im_normal.astype(np.float32, copy=True)
+            im_orig -= cfg.PIXEL_MEANS
+            im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            processed_ims_normal.append(im_normal)
+            blob_normal = im_list_to_blob(processed_ims_normal, 3)
+        else:
+            blob_normal = []
+
         # Create a blob to hold the input images
         blob = im_list_to_blob(processed_ims, 3)
         blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
         blob_depth = im_list_to_blob(processed_ims_depth, 3)
-        # blob_normal = im_list_to_blob(processed_ims_normal, 3)
-        blob_normal = []
-
+        
         return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
 

@@ -382,7 +382,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       float* pose = poses_[class_id] + seed * 7;
 
       Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.1, 1.0));
+      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.3, 0.3));
       // Sophus::SE3d::Point translation(pose[4] + drand(-0.1, 0.1), pose[5] + drand(-0.1, 0.1), pose[6] + drand(0, 1.0));
       const Sophus::SE3d T_co(quaternion, translation);
 

@@ -27,8 +27,8 @@ from transforms3d.quaternions import quat2mat, mat2quat
 from synthesize import synthesizer
 import scipy.io
 from scipy.optimize import minimize
+from normals import gpu_normals
 
-# from normals import gpu_normals
 # from pose_estimation import ransac
 # from kinect_fusion import kfusion
 # from pose_refinement import refiner
@@ -68,7 +68,8 @@ def _get_image_blob(im, im_depth, meta_data):
 
     # depth
     im_orig = im_depth.astype(np.float32, copy=True)
-    im_orig = im_orig / im_orig.max() * 255
+    # im_orig = im_orig / im_orig.max() * 255
+    im_orig = np.clip(im_orig / 2000.0, 0, 1) * 255
     im_orig = np.tile(im_orig[:,:,np.newaxis], (1,1,3))
     im_orig -= cfg.PIXEL_MEANS
 
@@ -76,36 +77,35 @@ def _get_image_blob(im, im_depth, meta_data):
     im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
     processed_ims_depth.append(im)
 
-    # meta data
-    K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-    fx = K[0, 0]
-    fy = K[1, 1]
-    cx = K[0, 2]
-    cy = K[1, 2]
+    if cfg.INPUT == 'NORMAL':
+        # meta data
+        K = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+        fx = K[0, 0]
+        fy = K[1, 1]
+        cx = K[0, 2]
+        cy = K[1, 2]
 
-    # normals
-    '''
-    depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
-    nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
-    im_normal = 127.5 * nmap + 127.5
-    im_normal = im_normal.astype(np.uint8)
-    im_normal = im_normal[:, :, (2, 1, 0)]
-    im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
+        # normals
+        depth = im_depth.astype(np.float32, copy=True) / float(meta_data['factor_depth'])
+        nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+        im_normal = 127.5 * nmap + 127.5
+        im_normal = im_normal.astype(np.uint8)
+        im_normal = im_normal[:, :, (2, 1, 0)]
+        im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
+        im_orig = im_normal.astype(np.float32, copy=True)
+        im_orig -= cfg.PIXEL_MEANS
 
-    im_orig = im_normal.astype(np.float32, copy=True)
-    im_orig -= cfg.PIXEL_MEANS
-
-    processed_ims_normal = []
-    im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-    processed_ims_normal.append(im)
-    '''
+        processed_ims_normal = []
+        im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+        processed_ims_normal.append(im)
+        blob_normal = im_list_to_blob(processed_ims_normal, 3)
+    else:
+        blob_normal = []
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_rescale = im_list_to_blob(processed_ims_rescale, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
-    # blob_normal = im_list_to_blob(processed_ims_normal, 3)
-    blob_normal = []
 
     return blob, blob_rescale, blob_depth, blob_normal, np.array(im_scale_factors)
 
@@ -1210,29 +1210,35 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(i)
             rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
+            # depth
+            filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
+            im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+
             # sample a background image
             ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename_color = backgrounds[ind]
-            background_color = cv2.imread(filename_color, cv2.IMREAD_UNCHANGED)
+            filename = backgrounds[ind]
+            background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
             try:
-                background_color = cv2.resize(background_color, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+                background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
             except:
-                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+                    background = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
+                else:
+                    background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
                 print 'bad background image'
 
-            if len(background_color.shape) != 3:
-                background_color = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+            if cfg.INPUT != 'DEPTH' and cfg.INPUT != 'NORMAL' and len(background.shape) != 3:
+                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
                 print 'bad background image'
 
             # add background
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
             I = np.where(alpha == 0)
-            im[I[0], I[1], :] = background_color[I[0], I[1], :]
-
-            # depth
-            filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
-            im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+            if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+                im_depth[I[0], I[1]] = background[I[0], I[1]] / 10
+            else:
+                im[I[0], I[1], :] = background[I[0], I[1], :3]
 
             # label
             filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(i)
