@@ -38,7 +38,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:
         if cfg.TRAIN.SEGMENTATION:
-            _vis_minibatch(im_blob, im_depth_blob, im_normal_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
+            _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents)
         else:
             _vis_minibatch_box(im_blob, gt_boxes)
 
@@ -150,8 +150,7 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
         processed_ims.append(im)
 
         # depth
-        im_depth = np.clip(im_depth_raw.astype(np.float32, copy=True) / 2000.0, 0, 1) * 255
-        # im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
+        im_depth = im_depth_raw.astype(np.float32, copy=True) / float(im_depth_raw.max()) * 255
         im_depth = np.tile(im_depth[:,:,np.newaxis], (1,1,3))
 
         if cfg.TRAIN.ADD_NOISE:
@@ -166,28 +165,31 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
         processed_ims_depth.append(im_depth)
 
         # normals
-        depth = im_depth_raw.astype(np.float32, copy=True) / 1000.0
-        fx = intrinsic_matrix[0, 0] * im_scale
-        fy = intrinsic_matrix[1, 1] * im_scale
-        cx = intrinsic_matrix[0, 2] * im_scale
-        cy = intrinsic_matrix[1, 2] * im_scale
-        nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
-        im_normal = 127.5 * nmap + 127.5
-        im_normal = im_normal.astype(np.uint8)
-        im_normal = im_normal[:, :, (2, 1, 0)]
-        im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
-        if roidb[i]['flipped']:
-            im_normal = im_normal[:, ::-1, :]
+        if cfg.INPUT == 'NORMAL':
+            depth = im_depth_raw.astype(np.float32, copy=True) / 1000.0
+            fx = intrinsic_matrix[0, 0] * im_scale
+            fy = intrinsic_matrix[1, 1] * im_scale
+            cx = intrinsic_matrix[0, 2] * im_scale
+            cy = intrinsic_matrix[1, 2] * im_scale
+            nmap = gpu_normals.gpu_normals(depth, fx, fy, cx, cy, 20.0, cfg.GPU_ID)
+            im_normal = 127.5 * nmap + 127.5
+            im_normal = im_normal.astype(np.uint8)
+            im_normal = im_normal[:, :, (2, 1, 0)]
+            im_normal = cv2.bilateralFilter(im_normal, 9, 75, 75)
+            if roidb[i]['flipped']:
+                im_normal = im_normal[:, ::-1, :]
 
-        im_orig = im_normal.astype(np.float32, copy=True)
-        im_orig -= cfg.PIXEL_MEANS
-        im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-        processed_ims_normal.append(im_normal)
+            im_orig = im_normal.astype(np.float32, copy=True)
+            im_orig -= cfg.PIXEL_MEANS
+            im_normal = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
+            processed_ims_normal.append(im_normal)
+            blob_normal = im_list_to_blob(processed_ims_normal, 3)
+        else:
+            blob_normal = []
 
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
-    blob_normal = im_list_to_blob(processed_ims_normal, 3)
 
     return blob, blob_depth, blob_normal, im_scales
 
@@ -543,7 +545,7 @@ def _get_bb3D(extent):
     return bb
 
 
-def _vis_minibatch(im_blob, im_depth_blob, im_normal_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents):
+def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blob, vertex_target_blob, pose_blob, extents):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
 
@@ -554,7 +556,7 @@ def _vis_minibatch(im_blob, im_depth_blob, im_normal_blob, depth_blob, label_blo
         im += cfg.PIXEL_MEANS
         im = im[:, :, (2, 1, 0)]
         im = im.astype(np.uint8)
-        ax = fig.add_subplot(3, 3, 1)
+        ax = fig.add_subplot(2, 3, 1)
         plt.imshow(im)
         ax.set_title('color') 
 
@@ -596,18 +598,9 @@ def _vis_minibatch(im_blob, im_depth_blob, im_normal_blob, depth_blob, label_blo
         im_depth += cfg.PIXEL_MEANS
         im_depth = im_depth[:, :, (2, 1, 0)]
         im_depth = im_depth.astype(np.uint8)
-        ax = fig.add_subplot(3, 3, 2)
+        ax = fig.add_subplot(2, 3, 2)
         plt.imshow(im_depth)
         ax.set_title('depth') 
-
-        # show normal image
-        im_normal = im_normal_blob[i, :, :, :].copy()
-        im_normal += cfg.PIXEL_MEANS
-        im_normal = im_normal[:, :, (2, 1, 0)]
-        im_normal = im_normal.astype(np.uint8)
-        ax = fig.add_subplot(3, 3, 3)
-        plt.imshow(im_normal)
-        ax.set_title('normal') 
 
         # show label
         label = label_blob[i, :, :, :]
@@ -623,23 +616,23 @@ def _vis_minibatch(im_blob, im_depth_blob, im_normal_blob, depth_blob, label_blo
             l[index] = k
             if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D and len(index[0]) > 0 and k > 0:
                 center[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
-        ax = fig.add_subplot(3, 3, 7)
+        ax = fig.add_subplot(2, 3, 3)
         ax.set_title('label') 
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             plt.imshow(l)
-            ax = fig.add_subplot(3, 3, 4)
+            ax = fig.add_subplot(2, 3, 4)
             plt.imshow(center[:,:,0])
             if cfg.TRAIN.VERTEX_REG_2D:
                 ax.set_title('center x') 
             else:
                 ax.set_title('vertex x') 
-            ax = fig.add_subplot(3, 3, 5)
+            ax = fig.add_subplot(2, 3, 5)
             plt.imshow(center[:,:,1])
             if cfg.TRAIN.VERTEX_REG_2D:
                 ax.set_title('center y')
             else:
                 ax.set_title('vertex y')
-            ax = fig.add_subplot(3, 3, 6)
+            ax = fig.add_subplot(2, 3, 6)
             plt.imshow(center[:,:,2])
             if cfg.TRAIN.VERTEX_REG_2D:
                 ax.set_title('z')

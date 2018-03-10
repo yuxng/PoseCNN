@@ -658,7 +658,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int num_classes = pose_nums_.size();
   // sample the number of objects in the scene
   int num;
-  if (irand(0, 2) == 0)
+  if (irand(0, 5) == 0)
     num = 2;
   else
     num = 1;
@@ -687,8 +687,9 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int seed = irand(0, pose_nums_[class_id]);
   float* pose = poses_[class_id] + seed * 7;
 
-  Eigen::Quaterniond quaternion_first(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-  Sophus::SE3d::Point translation_first(pose[4] + drand(-0.2, 0.2), pose[5]  + drand(-0.2, 0.2), pose[6] + drand(-0.1, 0.1));
+  // Eigen::Quaterniond quaternion_first(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+  Eigen::Quaterniond quaternion_first(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
+  Sophus::SE3d::Point translation_first(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
   const Sophus::SE3d T_co_first(quaternion_first, translation_first);
 
   poses[0] = T_co_first;
@@ -709,7 +710,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     class_id = class_ids[1];
     seed = irand(0, pose_nums_[class_id]);
     pose = poses_[class_id] + seed * 7;
-    Eigen::Quaterniond quaternion_second(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+    Eigen::Quaterniond quaternion_second(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
     Sophus::SE3d::Point translation_second;
     float extent = (extents[3 * (class_id + 1)] + extents[3 * (class_id + 1) + 1] + extents[3 * (class_id + 1) + 2]) / 3;
 
@@ -792,27 +793,49 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     glEnable(GL_LIGHT0);
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.6); 
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.1);  // 0.4
 
-    glEnable(GL_COLOR_MATERIAL);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    texturedVertices_[class_id].Bind();
-    glVertexPointer(3,GL_FLOAT,0,0);
-    glEnableClientState(GL_COLOR_ARRAY);
-    vertexColors_[class_id].Bind();
-    glColorPointer(3,GL_FLOAT,0,0);
-    texturedIndices_[class_id].Bind();
-    glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-    texturedIndices_[class_id].Unbind();
-    texturedVertices_[class_id].Unbind();
-    vertexColors_[class_id].Unbind();
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisable(GL_COLOR_MATERIAL);
+    if(is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnable(GL_COLOR_MATERIAL);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+      glDisable(GL_COLOR_MATERIAL);
+    }
 
     glDisable(GL_LIGHT0);
     glDisable(GL_LIGHTING);
-
   }
 
   // read color image

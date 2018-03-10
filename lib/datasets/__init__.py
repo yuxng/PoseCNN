@@ -11,6 +11,7 @@ from .shapenet_single import shapenet_single
 from .gmu_scene import gmu_scene
 from .rgbd_scene import rgbd_scene
 from .lov import lov
+from .lov_single import lov_single
 from .ycb import ycb
 from .yumi import yumi
 from .linemod import linemod

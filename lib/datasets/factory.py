@@ -14,6 +14,7 @@ import datasets.shapenet_single
 import datasets.gmu_scene
 import datasets.rgbd_scene
 import datasets.lov
+import datasets.lov_single
 import datasets.ycb
 import datasets.yumi
 import datasets.linemod
@@ -52,6 +53,16 @@ for split in ['train', 'val', 'keyframe', 'trainval', 'debug', 'train_few', 'val
     print name
     __sets[name] = (lambda split=split:
             datasets.lov(split))
+
+for cls in ['002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
+                         '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
+                         '021_bleach_cleanser', '024_bowl', '025_mug', '035_power_drill', '036_wood_block', '037_scissors', '040_large_marker', \
+                         '051_large_clamp', '052_extra_large_clamp', '061_foam_brick']:
+    for split in ['train']:
+        name = 'lov_single_{}_{}'.format(cls, split)
+        print name
+        __sets[name] = (lambda cls=cls, split=split:
+                datasets.lov_single(cls, split))
 
 # ycb dataset
 for split in ['trainval']:
