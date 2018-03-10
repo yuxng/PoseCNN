@@ -47,6 +47,9 @@
 #include <df/util/tensor.h>
 #include <df/optimization/icp.h>
 
+#include <ros/ros.h>
+#include <geometry_msgs/Point32.h>
+
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
 typedef pcl::PointNormal PointNormalT;
@@ -101,6 +104,9 @@ class Synthesizer
     pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
 
   // pose refinement with ICP
+  void refineDistance(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
+                float factor, int num_roi, int channel_roi, const float* rois, const float* poses, float* outputs, float* outputs_icp,                 
+                std::vector<std::vector<geometry_msgs::Point32> >& output_points, float maxError);
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, int channel_roi, const float* rois, const float* poses, float* outputs, float* outputs_icp, float maxError);
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, const float* rois, float* outputs, int num_roi, int channel_roi);

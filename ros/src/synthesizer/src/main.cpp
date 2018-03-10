@@ -3,7 +3,9 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Point32.h>
 #include "synthesizer/PoseCNNMsg.h"
 #include "synthesizer/synthesizer.hpp"
 
@@ -15,7 +17,8 @@ const std::string class_names[NUM_CLASSES] = {"002_master_chef_can", "003_cracke
   "036_wood_block", "037_scissors", "040_large_marker", "051_large_clamp", "052_extra_large_clamp", "061_foam_brick"};
 
 Synthesizer* SYN;
-std::vector<ros::Publisher> PUBs(NUM_CLASSES);
+std::vector<ros::Publisher> PUBs_poses(NUM_CLASSES);
+std::vector<ros::Publisher> PUBs_points(NUM_CLASSES);
 
 void callback(const synthesizer::PoseCNNMsg::ConstPtr& msg)
 {
@@ -46,11 +49,14 @@ void callback(const synthesizer::PoseCNNMsg::ConstPtr& msg)
   // allocate outputs
   std::vector<float> outputs(roi_num * 7);
   std::vector<float> outputs_icp(roi_num * 7);
+  
+  // allocate point cloud
+  std::vector<std::vector<geometry_msgs::Point32> > output_points(NUM_CLASSES);
 
   // ICP
   float maxError = 0.01;
-  SYN->solveICP((int*)label.data, cv_depth_ptr->image.data, height, width, fx, fy, px, py, 
-    znear, zfar, factor, roi_num, roi_channel, rois, poses, outputs.data(), outputs_icp.data(), maxError);
+  SYN->refineDistance((int*)label.data, cv_depth_ptr->image.data, height, width, fx, fy, px, py, 
+    znear, zfar, factor, roi_num, roi_channel, rois, poses, outputs.data(), outputs_icp.data(), output_points, maxError);
 
   // publish the poses
   for (int i = 0; i < roi_num; i++)
@@ -66,7 +72,12 @@ void callback(const synthesizer::PoseCNNMsg::ConstPtr& msg)
       pmsg.pose.position.x = outputs[i * 7 + 4];
       pmsg.pose.position.y = outputs[i * 7 + 5];
       pmsg.pose.position.z = outputs[i * 7 + 6];  
-      PUBs[cls-1].publish(pmsg);
+      PUBs_poses[cls-1].publish(pmsg);
+
+      sensor_msgs::PointCloud cmsg;
+      cmsg.header.frame_id = "camera_link";
+      cmsg.points = output_points[cls-1];
+      PUBs_points[cls-1].publish(cmsg);
     }
   }
 }
@@ -82,8 +93,11 @@ int main(int argc, char **argv)
   // initialize publishers
   for (int i = 0; i < NUM_CLASSES; i++)
   {
-    std::string name = "posecnn_" + class_names[i];
-    PUBs[i] = n.advertise<geometry_msgs::PoseStamped>(name, 1000);
+    std::string name_pose = "posecnn_pose_" + class_names[i];
+    PUBs_poses[i] = n.advertise<geometry_msgs::PoseStamped>(name_pose, 1000);
+
+    std::string name_point = "posecnn_points_" + class_names[i];
+    PUBs_points[i] = n.advertise<sensor_msgs::PointCloud>(name_point, 1000);
   }
 
   // posecnn listener

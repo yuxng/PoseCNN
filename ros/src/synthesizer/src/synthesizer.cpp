@@ -348,6 +348,140 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
 
 
 // ICP
+void Synthesizer::refineDistance(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
+  float znear, float zfar, float factor, int num_roi, int channel_roi, const float* rois, const float* poses, 
+  float* outputs, float* outputs_icp, std::vector<std::vector<geometry_msgs::Point32> >& output_points, float maxError)
+{
+  int iterations;
+  if (setup_ == 0)
+    setup(width, height);
+
+  // build the camera paramters
+  Eigen::Matrix<float,7,1,Eigen::DontAlign> params;
+  params[0] = fx;
+  params[1] = fy;
+  params[2] = px;
+  params[3] = py;
+  params[4] = 0;
+  params[5] = 0;
+  params[6] = 0;
+  df::Poly3CameraModel<float> model(params);
+
+  // convert depth values
+  float* p = depth_map_->data();
+  ushort* q = reinterpret_cast<ushort *>(depth);
+  for (int i = 0; i < width * height; i++)
+    p[i] = q[i] / depth_factor_;
+
+  // backprojection
+  depth_map_device_->copyFrom(*depth_map_);
+  backproject<float, Poly3CameraModel>(*depth_map_device_, *vertex_map_device_, model);
+  vertex_map_->copyFrom(*vertex_map_device_);
+
+  // set the depth factor
+  depth_factor_ = factor;
+
+  // for each object
+  for(int i = 0; i < num_roi; i++)
+  {
+    int objID = int(rois[i * channel_roi + 1]);
+    if (objID <= 0)
+      continue;
+
+    // pose
+    const float* pose = poses + i * 7;
+    std::cout << "quaternion " << pose[0] << " " << pose[1] << " " << pose[2] << " " << pose[3] << std::endl;
+    Eigen::Quaternionf quaternion(pose[0], pose[1], pose[2], pose[3]);
+    Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
+    Sophus::SE3f T_co(quaternion, translation);
+
+    // set labels
+    label_indexes_.clear();
+    for (int j = 0; j < width * height; j++)
+    {
+      if (labelmap[j] == objID)
+      {
+        label_indexes_.push_back(j);
+
+        int x = j % width;
+        int y = j / width;
+        if ((*depth_map_)(x, y) > 0)
+        {
+          Vec3 dpoint = (*vertex_map_)(x, y);
+          geometry_msgs::Point32 point;
+          point.x = dpoint(0);
+          point.y = dpoint(1);
+          point.z = dpoint(2);
+          output_points[objID - 1].push_back(point);
+        }
+      }
+    }
+
+    if (label_indexes_.size() < 400)
+    {
+      std::cout << "class id: " << objID << ", pixels: " << label_indexes_.size() << std::endl;
+      continue;
+    }
+
+    // compute object center using depth and vertmap
+    float Tz = 0;
+    int c = 0;
+    std::vector<float> ds;
+    for (int j = 0; j < label_indexes_.size(); j++)
+    {
+      int x = label_indexes_[j] % width;
+      int y = label_indexes_[j] / width;
+
+      if ((*depth_map_)(x, y) > 0)
+      {
+        ds.push_back((*depth_map_)(x, y));
+        Tz += (*depth_map_)(x, y);
+        c++;
+      }
+    }
+
+    float rx = 0;
+    float ry = 0;
+    if (pose[6])
+    {
+      rx = pose[4] / pose[6];
+      ry = pose[5] / pose[6];
+    }
+    if (c > 0)
+    {
+      if (0)
+      {
+        size_t n = ds.size() / 2;
+        std::nth_element(ds.begin(), ds.begin()+n, ds.end());
+        Tz = ds[n];
+      }
+      else
+        Tz /= c;
+
+      // modify translation
+      T_co.translation()(0) = rx * Tz;
+      T_co.translation()(1) = ry * Tz;
+      T_co.translation()(2) = Tz;
+      std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+    }
+    else
+      Tz = T_co.translation()(2);
+
+    // copy results
+    outputs[i * 7 + 0] = T_co.unit_quaternion().w();
+    outputs[i * 7 + 1] = T_co.unit_quaternion().x();
+    outputs[i * 7 + 2] = T_co.unit_quaternion().y();
+    outputs[i * 7 + 3] = T_co.unit_quaternion().z();
+    outputs[i * 7 + 4] = T_co.translation()(0);
+    outputs[i * 7 + 5] = T_co.translation()(1);
+    outputs[i * 7 + 6] = T_co.translation()(2);
+  }
+
+  visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs, num_roi, channel_roi);
+}
+
+
+
 void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 
   float znear, float zfar, float factor, int num_roi, int channel_roi, const float* rois, const float* poses, 
   float* outputs, float* outputs_icp, float maxError)
@@ -464,9 +598,12 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     vertex_map_->copyFrom(*vertex_map_device_);
 
     // compute object center using depth and vertmap
+    float Tx = 0;
+    float Ty = 0;
     float Tz = 0;
     int c = 0;
-    std::vector<float> ds;
+    std::vector<PointT> depth_points;
+    std::vector<Vec3> model_points;
     for (int j = 0; j < label_indexes_.size(); j++)
     {
       int x = label_indexes_[j] % width;
@@ -474,8 +611,36 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
 
       if ((*depth_map_)(x, y) > 0)
       {
-        ds.push_back((*depth_map_)(x, y));
-        c++;
+        float vx = vertmap[y * width + x].x - std::round(vertmap[y * width + x].x);
+        float vy = vertmap[y * width + x].y;
+        float vz = vertmap[y * width + x].z;
+
+        if (std::isnan(vx) == 0 && std::isnan(vy) == 0 && std::isnan(vz) == 0)
+        {
+          Eigen::UnalignedVec4<float> normal = (*predicted_normals_)(x, y);
+          Eigen::UnalignedVec4<float> vertex = (*predicted_verts_)(x, y);
+          Vec3 dpoint = (*vertex_map_)(x, y);
+          float error = normal.head<3>().dot(dpoint - vertex.head<3>());
+          if (fabs(error) < maxError)
+          {
+            Tx += (dpoint(0) - vx);
+            Ty += (dpoint(1) - vy);
+            Tz += (dpoint(2) - vz);
+            c++;
+          }
+
+          Vec3 mt;
+          mt(0) = vx;
+          mt(1) = vy;
+          mt(2) = vz;
+          model_points.push_back(mt);
+
+          PointT pt;
+          pt.x = dpoint(0);
+          pt.y = dpoint(1);
+          pt.z = dpoint(2);
+          depth_points.push_back(pt);
+        }
       }
     }
 
@@ -488,15 +653,25 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     }
     if (c > 0)
     {
-      size_t n = ds.size() / 2;
-      std::nth_element(ds.begin(), ds.begin()+n, ds.end());
-      Tz = ds[n];
+      Tx /= c;
+      Ty /= c;
+      Tz /= c;
 
       // modify translation
       T_co.translation()(0) = rx * Tz;
       T_co.translation()(1) = ry * Tz;
       T_co.translation()(2) = Tz;
       std::cout << "Translation " << T_co.translation()(0) << " " << T_co.translation()(1) << " " << T_co.translation()(2) << std::endl;
+
+      iterations = 50;
+      refinePose(width, height, objID, znear, zfar, labelmap, data, model, T_co, iterations, maxError, 0);
+      Tx = T_co.translation()(0);
+      Ty = T_co.translation()(1);
+      Tz = T_co.translation()(2);
+      rx = Tx / Tz;
+      ry = Ty / Tz;
+
+      std::cout << "Translation after " << Tx << " " << Ty << " " << Tz << std::endl;
     }
     else
       Tz = T_co.translation()(2);
@@ -509,6 +684,109 @@ void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height
     outputs[i * 7 + 4] = T_co.translation()(0);
     outputs[i * 7 + 5] = T_co.translation()(1);
     outputs[i * 7 + 6] = T_co.translation()(2);
+
+    // pose hypotheses
+    std::vector<Sophus::SE3f> hyps;
+
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz - 0.02;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz - 0.01;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.01;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.02;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.03;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.04;
+    hyps.push_back(T_co);
+
+    T_co.translation()(2) = Tz + 0.05;
+    hyps.push_back(T_co);
+    
+    iterations = 8;
+    for (int j = 0; j < hyps.size(); j++)
+    {
+      refinePose(width, height, objID, znear, zfar, labelmap, data, model, hyps[j], iterations, maxError, 1);
+      std::cout << "pose " << j << std::endl << hyps[j].matrix() << std::endl;
+    }
+
+    if (depth_points.size() > 0)
+    {
+      // build a kd-tree of the depth points
+      PointCloud::Ptr cloud(new PointCloud);
+      cloud->width = depth_points.size();
+      cloud->height = 1;
+      cloud->points.resize(cloud->width * cloud->height);
+      for (size_t j = 0; j < cloud->points.size(); j++)
+      {
+        cloud->points[j].x = depth_points[j].x;
+        cloud->points[j].y = depth_points[j].y;
+        cloud->points[j].z = depth_points[j].z;
+      }
+      pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+      kdtree.setInputCloud(cloud);
+
+      // use the metric in SegICP
+      float max_score = -FLT_MAX;
+      int choose = -1;
+      for (int j = 0; j < hyps.size(); j++)
+      {
+        float score = 0;
+        std::vector<int> flags(depth_points.size(), 0);
+        #pragma omp parallel for
+        for (int k = 0; k < model_points.size(); k++)
+        {
+          Vec3 pt = hyps[j] * model_points[k];
+          PointT searchPoint;
+          searchPoint.x = pt(0);
+          searchPoint.y = pt(1);
+          searchPoint.z = pt(2);
+
+          std::vector<int> pointIdxRadiusSearch;
+          std::vector<float> pointRadiusSquaredDistance;
+          float radius = 0.01;
+          if (kdtree.radiusSearch (searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+          {
+            if (flags[pointIdxRadiusSearch[0]] == 0)
+            {
+              flags[pointIdxRadiusSearch[0]] = 1;
+              score++;
+            }
+          }
+        }
+        score /= model_points.size();
+        if (score > max_score)
+        {
+          max_score = score;
+          choose = j;
+        }
+        printf("hypothesis %d, score %f\n", j, score);
+      }
+      printf("select hypothesis %d\n", choose);
+      T_co = hyps[choose];
+    }
+    else
+      T_co = hyps[0];
+
+    // set output
+    Eigen::Quaternionf quaternion_new = T_co.unit_quaternion();
+    Sophus::SE3f::Point translation_new = T_co.translation();
+
+    outputs_icp[i * 7 + 0] = quaternion_new.w();
+    outputs_icp[i * 7 + 1] = quaternion_new.x();
+    outputs_icp[i * 7 + 2] = quaternion_new.y();
+    outputs_icp[i * 7 + 3] = quaternion_new.z();
+    outputs_icp[i * 7 + 4] = translation_new(0);
+    outputs_icp[i * 7 + 5] = translation_new(1);
+    outputs_icp[i * 7 + 6] = translation_new(2);
   }
 
   visualizePose(height, width, fx, fy, px, py, znear, zfar, rois, outputs, num_roi, channel_roi);

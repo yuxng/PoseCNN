@@ -1855,7 +1855,7 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
   renderer_vn_->texture(0).RenderToViewportFlipY();
-  pangolin::FinishFrame();
+  // pangolin::FinishFrame();
 
   switch (algorithm)
   {
