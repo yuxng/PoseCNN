@@ -1186,8 +1186,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
