@@ -1,35 +1,35 @@
-# DA-RNN: Semantic Mapping with Data Associated Recurrent Neural Networks
+# PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes
 
-Created by Yu Xiang and Tanner Schmidt at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
+Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
 
 ### Introduction
 
-We introduce Data Associated Recurrent Neural Networks (DA-RNNs), a novel framework for joint 3D scene mapping and semantic labeling. DA-RNNs use a new recurrent neural network architecture for semantic labeling on RGB-D videos. The output of the network is integrated with mapping techniques such as KinectFusion in order to inject semantic information into the reconstructed 3D scene. [arXiv](https://arxiv.org/abs/1703.03098), [Video](https://youtu.be/5vnw7ZrZlB8)
+we introduce PoseCNN, a new Convolutional Neural Network for 6D object pose estimation. PoseCNN estimates the 3D translation of an object by localizing its center in the image and predicting its distance from the camera. The 3D rotation of the object is estimated by regressing to a quaternion representation. [arXiv](https://arxiv.org/abs/1711.00199), [Project](https://rse-lab.cs.washington.edu/projects/posecnn/)
 
-[![DA-RNN](http://yuxng.github.io/DA-RNN.png)](https://youtu.be/5vnw7ZrZlB8)
+[![PoseCNN](http://yuxng.github.io/PoseCNN.png)](https://youtu.be/ih0cCTxO96Y)
 
 ### License
 
-DA-RNN is released under the MIT License (refer to the LICENSE file for details).
+PoseCNN is released under the MIT License (refer to the LICENSE file for details).
 
 ### Citation
 
-If you find DA-RNN useful in your research, please consider citing:
+If you find PoseCNN useful in your research, please consider citing:
 
-    @inproceedings{xiang2017darnn,
-        Author = {Yu Xiang and Dieter Fox},
-        Title = {DA-RNN: Semantic Mapping with Data Associated Recurrent Neural Networks},
-        Booktitle = {Robotics: Science and Systems (RSS)},
+    @inproceedings{xiang2017posecnn,
+        Author = {Xiang, Yu and Schmidt, Tanner and Narayanan, Venkatraman and Fox, Dieter},
+        Title = {PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes},
+        Journal   = {arXiv preprint arXiv:1711.00199},
         Year = {2017}
     }
 
 ### Installation
 
-DA-RNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
+PoseCNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
 
 1. Install [TensorFlow](https://www.tensorflow.org/get_started/os_setup). I suggest to use the Virtualenv installation.
 
-2. Compile the new layers under $ROOT/lib we introduce in DA-RNN.
+2. Compile the new layers under $ROOT/lib we introduce in PoseCNN.
     ```Shell
     cd $ROOT/lib
     sh make.sh
