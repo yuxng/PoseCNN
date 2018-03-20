@@ -1594,7 +1594,7 @@ def test_net_detection(sess, net, imdb, weights_filename):
         print 'im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i, num_images, _t['im_detect'].diff, _t['misc'].diff)
 
-        # imdb.evaluate_result_detection(i, det, meta_data, output_dir)
+        imdb.evaluate_result_detection(i, det, meta_data, output_dir)
 
         if cfg.TEST.VISUALIZE:
             vis_detections(im, im_depth, all_dets, all_poses, meta_data['cls_indexes'], meta_data['intrinsic_matrix'], \
