@@ -123,19 +123,6 @@ ext_modules = [
         include_dirs = [numpy_include, CUDA['include'], '/usr/local/include/eigen3']
     ),
     Extension(
-        "kinect_fusion.kfusion",                                # the extension name
-        sources=['kinect_fusion/kfusion.pyx'],
-        language='c++',
-        extra_objects=["kinect_fusion/build/libkfusion.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function"],
-                            'nvcc': ['-arch=sm_35',
-                                     '--ptxas-options=-v',
-                                     '-c',
-                                     '--compiler-options',
-                                     "'-fPIC'"]},
-        include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
-    ),
-    Extension(
         "utils.cython_bbox",
         ["utils/bbox.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
@@ -165,13 +152,6 @@ ext_modules = [
         include_dirs = [numpy_include, CUDA['include']]
     ),
     Extension(
-        "pose_refinement.refiner",                                # the extension name
-        sources=['pose_refinement/refiner.pyx'],
-        language='c++',
-        extra_objects=["pose_refinement/build/librefiner.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function"]}
-    ),
-    Extension(
         "synthesize.synthesizer",                                # the extension name
         sources=['synthesize/synthesizer.pyx'],
         language='c++',
@@ -183,6 +163,19 @@ ext_modules = [
                                      '--compiler-options',
                                      "'-fPIC'"]}
     )
+    #Extension(
+    #    "kinect_fusion.kfusion",                                # the extension name
+    #    sources=['kinect_fusion/kfusion.pyx'],
+    #    language='c++',
+    #    extra_objects=["kinect_fusion/build/libkfusion.so"],
+    #    extra_compile_args={'gcc': ["-Wno-unused-function"],
+    #                        'nvcc': ['-arch=sm_35',
+    #                                 '--ptxas-options=-v',
+    #                                 '-c',
+    #                                 '--compiler-options',
+    #                                 "'-fPIC'"]},
+    #    include_dirs = ['/usr/local/include/eigen3', '/usr/local/cuda/include', 'kinect_fusion/include']
+    #)
 ]
 
 setup(

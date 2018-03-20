@@ -64,19 +64,19 @@ If you find PoseCNN useful in your research, please consider citing:
 
 ### Tested environment
 - Ubuntu 16.04
-- Tensorflow 1.2.0
-- CUDA 8.0
+- Tensorflow >= 1.2.0
+- CUDA >= 8.0
 
 ### Running on the YCB-Video dataset
 1. Download the YCB-Video dataset from [here](https://rse-lab.cs.washington.edu/projects/posecnn/).
 
-2. Create a symlink for the YCB-Video dataset
+2. Create a symlink for the YCB-Video dataset (the name LOV is due to legacy, Learning Objects from Videos)
     ```Shell
     cd $ROOT/data/LOV
     ln -s $ycb_data data
     ```
 
-3. Training and testing on the RGB-D Scene dataset
+3. Training and testing on the YCB-Video dataset
     ```Shell
     cd $ROOT
 
@@ -85,14 +85,5 @@ If you find PoseCNN useful in your research, please consider citing:
 
     # testing
     ./experiments/scripts/lov_color_2d_test.sh $GPU_ID
-
-    ```
-
-### Using Our Trained Models
-1. You can download all our trained tensorflow models on the RGB-D Scene dataset and the ShapeNet Scene dataset from [here](https://drive.google.com/file/d/0B4WdmTHU8V7VQWFnRmFIVTA1LXc/view?usp=sharing) (3.1G).
-
-    ```Shell
-    # an exmaple to test the trained model
-    ./experiments/scripts/rgbd_scene_multi_rgbd_test.sh $GPU_ID
 
     ```
