@@ -68,45 +68,24 @@ If you find PoseCNN useful in your research, please consider citing:
 - Tensorflow 1.2.0
 - CUDA 8.0
 
-### Running on the RGB-D Scene dataset
-1. Download the RGB-D Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VaHIxckxwbVpabFU) (5.5G).
+### Running on the YCB-Video dataset
+1. Download the YCB-Video dataset from [here](https://rse-lab.cs.washington.edu/projects/posecnn/).
 
-2. Create a symlink for the RGB-D Scene dataset
+2. Create a symlink for the YCB-Video dataset
     ```Shell
-    cd $ROOT/data/RGBDScene
-    ln -s $RGB-D_scene_data data
+    cd $ROOT/data/LOV
+    ln -s $ycb_data data
     ```
 
 3. Training and testing on the RGB-D Scene dataset
     ```Shell
     cd $ROOT
 
-    # train and test RNN with different input (color, depth, normal and rgbd)
-    ./experiments/scripts/rgbd_scene_multi_*.sh $GPU_ID
+    # training
+    ./experiments/scripts/lov_color_2d_train.sh $GPU_ID
 
-    # train and test FCN with different input (color, depth, normal and rgbd)
-    ./experiments/scripts/rgbd_scene_single_*.sh $GPU_ID
-
-    ```
-
-### Running on the ShapeNet Scene dataset
-1. Download the ShapeNet Scene dataset from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VTzRfZTFPd0JKYTg) (2.3G).
-
-2. Create a symlink for the ShapeNet Scene dataset
-    ```Shell
-    cd $ROOT/data/ShapeNetScene
-    ln -s $ShapeNet_scene_data data
-    ```
-
-3. Training and testing on the RGB-D Scene dataset
-    ```Shell
-    cd $ROOT
-
-    # train and test RNN with different input (color, depth, normal and rgbd)
-    ./experiments/scripts/shapenet_scene_multi_*.sh $GPU_ID
-
-    # train and test FCN with different input (color, depth, normal and rgbd)
-    ./experiments/scripts/shapenet_scene_single_*.sh $GPU_ID
+    # testing
+    ./experiments/scripts/lov_color_2d_test.sh $GPU_ID
 
     ```
 
