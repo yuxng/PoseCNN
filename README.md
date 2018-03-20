@@ -4,7 +4,7 @@ Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at Universit
 
 ### Introduction
 
-we introduce PoseCNN, a new Convolutional Neural Network for 6D object pose estimation. PoseCNN estimates the 3D translation of an object by localizing its center in the image and predicting its distance from the camera. The 3D rotation of the object is estimated by regressing to a quaternion representation. [arXiv](https://arxiv.org/abs/1711.00199), [Project](https://rse-lab.cs.washington.edu/projects/posecnn/)
+We introduce PoseCNN, a new Convolutional Neural Network for 6D object pose estimation. PoseCNN estimates the 3D translation of an object by localizing its center in the image and predicting its distance from the camera. The 3D rotation of the object is estimated by regressing to a quaternion representation. [arXiv](https://arxiv.org/abs/1711.00199), [Project](https://rse-lab.cs.washington.edu/projects/posecnn/)
 
 [![PoseCNN](http://yuxng.github.io/PoseCNN.png)](https://youtu.be/ih0cCTxO96Y)
 
@@ -25,9 +25,7 @@ If you find PoseCNN useful in your research, please consider citing:
 
 ### Installation
 
-PoseCNN consists a reccurent neural network for semantic labeling on RGB-D videos and the KinectFusion module for 3D reconstruction. The RNN and KinectFusion communicate via a Python interface.
-
-1. Install [TensorFlow](https://www.tensorflow.org/get_started/os_setup). I suggest to use the Virtualenv installation.
+1. Install [TensorFlow](https://www.tensorflow.org/get_started/os_setup). I usually compile the source code of tensorflow locally.
 
 2. Compile the new layers under $ROOT/lib we introduce in PoseCNN.
     ```Shell
@@ -35,34 +33,32 @@ PoseCNN consists a reccurent neural network for semantic labeling on RGB-D video
     sh make.sh
     ```
 
-3. Compile KinectFusion with cmake. Unfortunately, this step requires some effort.
+3. Compile lib/synthesize with cmake (optional). This package contains a few useful tools such as generating synthetic image and ICP.
 
-   Install dependencies of KinectFusion:
+   Install dependencies:
    - [Pangolin](https://github.com/stevenlovegrove/Pangolin)
    - [Eigen](https://eigen.tuxfamily.org)
-   - [Sophus](https://github.com/strasdat/Sophus/tree/v0.9.5)
+   - [Sophus](https://github.com/strasdat/Sophus)
    - [nanoflann](https://github.com/jlblancoc/nanoflann)
    - libsuitesparse-dev
 
     ```Shell
-    cd $ROOT/lib/kinect_fusion
+    cd $ROOT/lib/synthesize
     mkdir build
     cd build
     cmake ..
     make
     ```
 
-    **Note:** If you see errors in calling Eigen like "calling a host function from a device function", please download and use our modified Eigen from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VTDFIdU5IWGxkMGM).
-
-4. Compile the Cython interface for RNN and KinectFusion
+4. Compile the Cython interface for lib/synthesize
     ```Shell
     cd $ROOT/lib
     python setup.py build_ext --inplace
     ```
 
-5. Add the KinectFusion libary path
+5. Add the libary path
     ```Shell
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/kinect_fusion/build
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/synthesize/build
     ```
 
 6. Download the VGG16 weights from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VMTducllWZzA0REU) (57M). Put the weight file vgg16_convs.npy to $ROOT/data/imagenet_models.
