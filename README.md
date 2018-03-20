@@ -1,6 +1,6 @@
 # PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes
 
-Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
+Created by Yu Xiang at University of Washington and NVIDIA Research.
 
 ### Introduction
 
@@ -32,8 +32,9 @@ If you find PoseCNN useful in your research, please consider citing:
     cd $ROOT/lib
     sh make.sh
     ```
+3. Download the VGG16 weights from [here](https://drive.google.com/open?id=1UdmOKrr9t4IetMubX-y-Pcn7AVaWJ2bL) (528M). Put the weight file vgg16.npy to $ROOT/data/imagenet_models.
 
-3. Compile lib/synthesize with cmake (optional). This package contains a few useful tools such as generating synthetic image and ICP.
+4. Compile lib/synthesize with cmake (optional). This package contains a few useful tools such as generating synthetic image and ICP.
 
    Install dependencies:
    - [Pangolin](https://github.com/stevenlovegrove/Pangolin)
@@ -50,18 +51,16 @@ If you find PoseCNN useful in your research, please consider citing:
     make
     ```
 
-4. Compile the Cython interface for lib/synthesize
+    Compile the Cython interface for lib/synthesize
     ```Shell
     cd $ROOT/lib
     python setup.py build_ext --inplace
     ```
 
-5. Add the libary path
+    Add the libary path
     ```Shell
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/synthesize/build
     ```
-
-6. Download the VGG16 weights from [here](https://drive.google.com/open?id=0B4WdmTHU8V7VMTducllWZzA0REU) (57M). Put the weight file vgg16_convs.npy to $ROOT/data/imagenet_models.
 
 ### Tested environment
 - Ubuntu 16.04
