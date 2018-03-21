@@ -115,7 +115,7 @@ __device__ inline void project_box(int cls, const float* extents, const float* m
   }
   float width = maxX - minX + 1;
   float height = maxY - minY + 1;
-  *threshold = fmax(width, height) * 0.8;
+  *threshold = fmax(width, height) * 0.6;
 }
 
 

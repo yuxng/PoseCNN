@@ -35,7 +35,7 @@ class lov(datasets.imdb):
                               (192, 0, 0), (0, 192, 0), (0, 0, 192)]
 
         self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        self._symmetry = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1])
+        self._symmetry = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
         self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
 
@@ -212,7 +212,7 @@ class lov(datasets.imdb):
             print 'class weights: ', roidb[0]['class_weights']
             return roidb
 
-        self.compute_class_weights()
+        # self.compute_class_weights()
 
         gt_roidb = [self._load_lov_annotation(index)
                     for index in self.image_index]

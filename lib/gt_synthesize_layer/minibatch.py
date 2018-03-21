@@ -423,6 +423,8 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
     height = processed_depth[0].shape[0]
     width = processed_depth[0].shape[1]
     depth_blob = np.zeros((num_images, height, width, 1), dtype=np.float32)
+    height = processed_label[0].shape[0]
+    width = processed_label[0].shape[1]
     label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
     meta_data_blob = np.zeros((num_images, 1, 1, 48), dtype=np.float32)
     if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
