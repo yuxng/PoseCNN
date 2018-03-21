@@ -812,7 +812,7 @@ def vis_segmentations_vertmaps(im, im_depth, im_labels, im_labels_gt, colors, ce
 
 
 def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center_map, 
-  labels, rois, poses, poses_new, intrinsic_matrix, num_classes, points):
+  labels, rois, poses, poses_new, intrinsic_matrix, num_classes, classes, points):
     """Visual debugging of detections."""
     import matplotlib.pyplot as plt
     fig = plt.figure()
@@ -862,7 +862,7 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
     
     ax = fig.add_subplot(3, 3, 6)
     plt.imshow(center_map[:,:,2])
-    ax.set_title('centers z: {:6f}'.format(poses[0, 6]))
+    ax.set_title('centers z')
 
     # show projection of the poses
     if cfg.TEST.POSE_REG:
@@ -883,16 +883,16 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
                 RT = np.zeros((3, 4), dtype=np.float32)
                 RT[:3, :3] = quat2mat(poses[i, :4])
                 RT[:, 3] = poses[i, 4:7]
-                print cls
+                print classes[cls]
                 print RT
                 print '\n'
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
                 x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
-                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.05)
+                plt.plot(x2d[0, :], x2d[1, :], '.', color=np.divide(colors[cls], 255.0), alpha=0.5)
                 # plt.scatter(x2d[0, :], x2d[1, :], marker='o', color=np.divide(colors[cls], 255.0), s=10)
 
-        ax.set_title('projection')
+        ax.set_title('projection of model points')
         ax.invert_yaxis()
         ax.set_xlim([0, im.shape[1]])
         ax.set_ylim([im.shape[0], 0])
@@ -1894,7 +1894,7 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         if cfg.TEST.VISUALIZE:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
             vis_segmentations_vertmaps_detection(im, im_depth, im_label, imdb._class_colors, vertmap, 
-                labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], imdb.num_classes, imdb._points_all)
+                labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], imdb.num_classes, imdb._classes, imdb._points_all)
 
 
 def _render_synthetic_image(SYN, num_classes, backgrounds, intrinsic_matrix):
