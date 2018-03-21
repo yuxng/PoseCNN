@@ -1,6 +1,6 @@
 # PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes
 
-Created by Yu Xiang at University of Washington and NVIDIA Research.
+Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
 
 ### Introduction
 
