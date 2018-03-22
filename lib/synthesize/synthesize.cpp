@@ -659,9 +659,9 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   // sample the number of objects in the scene
   int num;
   if (irand(0, 5) == 0)
-    num = 2;
-  else
     num = 1;
+  else
+    num = 2;
 
   // sample object classes
   std::vector<int> class_ids(num);
@@ -793,7 +793,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     glEnable(GL_LIGHT0);
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.1);  // 0.4
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4);  // 0.4
 
     if(is_textured_[class_id])
     {

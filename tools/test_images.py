@@ -84,22 +84,21 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
 
     # construct the filenames
-    root = 'data/demo_images/'
-    num = 10
+    root = 'images/'
+    num = 500
     rgb_filenames = []
     depth_filenames = []
     for i in xrange(num):
         filename = root + '{:06d}-color.png'.format(i+1)
-        print filename
         rgb_filenames.append(filename)
         filename = root + '{:06d}-depth.png'.format(i+1)
-        print filename
         depth_filenames.append(filename)
 
     # construct meta data
     # K = np.array([[575.8157348632812, 0.0, 314.5], [0.0, 575.8157348632812, 235.5], [0.0, 0.0, 1.0]])
     # K = np.array([[533.4884, 0.0, 341.9589], [0.0, 498.7812, 287.9247], [0.0, 0.0, 1.0]])
     K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
+    # K = np.array([[474.4195, 0, 320], [0, 474.4195, 180], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 10000.0})
     print meta_data
 

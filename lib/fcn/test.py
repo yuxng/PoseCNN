@@ -1822,8 +1822,8 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
