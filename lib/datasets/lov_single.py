@@ -27,7 +27,7 @@ class lov_single(datasets.imdb):
 
         self._classes = ('__background__', cls)
         self._class_colors = [(255, 255, 255), (255, 0, 0)]
-        self._class_weights = [1, 100]
+        self._class_weights = [1, 1]
         self._symmetry = [0, 0]
 
         self._classes_all = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
