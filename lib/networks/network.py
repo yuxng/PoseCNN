@@ -20,6 +20,8 @@ import hough_voting_gpu_layer.hough_voting_gpu_op as hough_voting_gpu_op
 import hough_voting_gpu_layer.hough_voting_gpu_op_grad
 import roi_pooling_layer.roi_pooling_op as roi_pool_op
 import roi_pooling_layer.roi_pooling_op_grad
+import gradient_reversal_layer.gradient_reversal_op as gradient_reversal_op
+import gradient_reversal_layer.gradient_reversal_op_grad
 from gru2d import GRU2DCell
 from gru2d_original import GRUCell
 from gru3d import GRU3DCell
@@ -327,6 +329,10 @@ class Network(object):
                               name=name)
 
     @layer
+    def gradient_reversal(self, input, lambda_, name):
+        return gradient_reversal_op.gradient_reversal(input, lambda_, name=name)
+
+    @layer
     def lrn(self, input, radius, alpha, beta, name, bias=1.0):
         return tf.nn.local_response_normalization(input,
                                                   depth_radius=radius,
@@ -419,6 +425,10 @@ class Network(object):
     @layer
     def argmax_2d(self, input, name):
         return tf.to_int32(tf.argmax(input, 3, name))
+
+    @layer
+    def argmax(self, input, axis, name):
+        return tf.to_int32(tf.argmax(input, axis, name))
 
     @layer
     def tanh(self, input, name):

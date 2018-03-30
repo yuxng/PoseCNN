@@ -1804,6 +1804,10 @@ def vis_detections(im, im_depth, rois, poses, cls_indexes, intrinsic_matrix, pos
 ###################
 def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_filenames, meta_data):
 
+    output_dir = os.path.abspath(os.path.join(cfg.ROOT_DIR, 'output', 'images', weights_filename))
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     num_images = len(rgb_filenames)
     segmentations = [[] for _ in xrange(num_images)]
 
@@ -1890,6 +1894,8 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
 
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i, num_images, _t['im_segment'].diff, _t['misc'].diff)
+
+        imdb.save_result(i, seg, output_dir)
 
         if cfg.TEST.VISUALIZE:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)

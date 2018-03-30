@@ -46,7 +46,8 @@ REGISTER_OP("Houghvotinggpu")
     .Output("top_box: T")
     .Output("top_pose: T")
     .Output("top_target: T")
-    .Output("top_weight: T");
+    .Output("top_weight: T")
+    .Output("top_domain: int32");
 
 REGISTER_OP("HoughvotinggpuGrad")
     .Attr("T: {float, double}")
@@ -83,9 +84,9 @@ void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
     const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, const int skip_pixels,
-    float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d);
+    float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, const Eigen::GpuDevice& d);
 
-void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_rois_tensor, int num_classes)
+void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_domain_tensor, Tensor* top_rois_tensor, int num_classes)
 {
   int num = 1024;
   int dims[2];
@@ -107,17 +108,21 @@ void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* 
   OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT, output_shape_2, top_target_tensor));
   OP_REQUIRES_OK(context, context->allocate_temp(DT_FLOAT, output_shape_2, top_weight_tensor));
 
-  int len = 1;
   TensorShape output_shape_3;
-  TensorShapeUtils::MakeShape(&len, 1, &output_shape_3);
-  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_3, top_rois_tensor));
+  TensorShapeUtils::MakeShape(&num, 1, &output_shape_3);
+  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_3, top_domain_tensor));
+
+  int len = 1;
+  TensorShape output_shape_4;
+  TensorShapeUtils::MakeShape(&len, 1, &output_shape_4);
+  OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_4, top_rois_tensor));
 }
 
-void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, int num_classes);
+void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, int num_classes);
 void copy_num_rois(int* num_rois, int* num_rois_device);
 
-void copy_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight,
-  float* top_box_final, float* top_pose_final, float* top_target_final, float* top_weight_final, int num_classes, int num_rois);
+void copy_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain,
+  float* top_box_final, float* top_pose_final, float* top_target_final, float* top_weight_final, int* top_domain_final, int num_classes, int num_rois);
 
 void set_gradients(float* top_label, float* top_vertex, int batch_size, int height, int width, int num_classes);
 
@@ -248,6 +253,15 @@ class HoughvotinggpuOp : public OpKernel {
     OP_REQUIRES_OK(context, context->allocate_output(3, output_shape_target, &top_weight_tensor));
     float* top_weight = top_weight_tensor->template flat<float>().data();
     memset(top_weight, 0, outputs.size() * 4 * num_classes *sizeof(T));
+
+    // top domain
+    int num = outputs.size();
+    TensorShape output_shape_domain;
+    TensorShapeUtils::MakeShape(&num, 1, &output_shape_domain);
+    Tensor* top_domain_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(4, output_shape_domain, &top_domain_tensor));
+    int* top_domain = top_domain_tensor->template flat<int>().data();
+    memset(top_domain, 0, outputs.size() * sizeof(int));
     
     for(int n = 0; n < outputs.size(); n++)
     {
@@ -258,6 +272,11 @@ class HoughvotinggpuOp : public OpKernel {
 
       for (int i = 0; i < 7; i++)
         top_pose[n * 7 + i] = roi(7 + i);
+
+      if (num_gt == 0)
+        top_domain[n] = 1;
+      else
+        top_domain[n] = 0;
     }
 
     if (is_train_)
@@ -328,14 +347,16 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
 
     float inlierThreshold = 0.9;
     int labelThreshold = 500;
-    Tensor top_box_tensor_tmp, top_pose_tensor_tmp, top_target_tensor_tmp, top_weight_tensor_tmp, num_rois_tensor_tmp;
-    allocate_outputs(context, &top_box_tensor_tmp, &top_pose_tensor_tmp, &top_target_tensor_tmp, &top_weight_tensor_tmp, &num_rois_tensor_tmp, num_classes);
+    Tensor top_box_tensor_tmp, top_pose_tensor_tmp, top_target_tensor_tmp, top_weight_tensor_tmp, top_domain_tensor_tmp, num_rois_tensor_tmp;
+    allocate_outputs(context, &top_box_tensor_tmp, &top_pose_tensor_tmp, &top_target_tensor_tmp, &top_weight_tensor_tmp, 
+      &top_domain_tensor_tmp, &num_rois_tensor_tmp, num_classes);
     float* top_box = top_box_tensor_tmp.flat<float>().data();
     float* top_pose = top_pose_tensor_tmp.flat<float>().data();
     float* top_target = top_target_tensor_tmp.flat<float>().data();
     float* top_weight = top_weight_tensor_tmp.flat<float>().data();
+    int* top_domain = top_domain_tensor_tmp.flat<int>().data();
     int* num_rois_device = num_rois_tensor_tmp.flat<int>().data();
-    reset_outputs(top_box, top_pose, top_target, top_weight, num_rois_device, num_classes);
+    reset_outputs(top_box, top_pose, top_target, top_weight, top_domain, num_rois_device, num_classes);
 
     for (int n = 0; n < batch_size; n++)
     {
@@ -344,7 +365,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
       const float* meta_data = bottom_meta_data.flat<float>().data() + n * num_meta_data;
       HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, height, width, num_classes, num_gt,
         is_train_, inlierThreshold, labelThreshold, threshold_vote_, skip_pixels_,
-        top_box, top_pose, top_target, top_weight, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
+        top_box, top_pose, top_target, top_weight, top_domain, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
     }
 
     int num_rois;
@@ -388,7 +409,15 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
     OP_REQUIRES_OK(context, context->allocate_output(3, output_shape_target, &top_weight_tensor));
     float* top_weight_final = top_weight_tensor->flat<float>().data();
 
-    copy_outputs(top_box, top_pose, top_target, top_weight, top_box_final, top_pose_final, top_target_final, top_weight_final, num_classes, num_rois);
+    // top domain
+    TensorShape output_shape_domain;
+    TensorShapeUtils::MakeShape(&num_rois, 1, &output_shape_domain);
+    Tensor* top_domain_tensor = NULL;
+    OP_REQUIRES_OK(context, context->allocate_output(4, output_shape_domain, &top_domain_tensor));
+    int* top_domain_final = top_domain_tensor->template flat<int>().data();
+
+    copy_outputs(top_box, top_pose, top_target, top_weight, top_domain, top_box_final, 
+      top_pose_final, top_target_final, top_weight_final, top_domain_final, num_classes, num_rois);
   }
  private:
   int is_train_;

@@ -56,7 +56,6 @@ __C.TRAIN.WEIGHT_REG = 0.0001
 __C.TRAIN.SEGMENTATION = True
 
 __C.TRAIN.SINGLE_FRAME = False
-__C.TRAIN.SYNTHESIZE = False
 __C.TRAIN.TRAINABLE = True
 __C.TRAIN.VERTEX_REG_2D = False
 __C.TRAIN.VERTEX_REG_3D = False
@@ -67,12 +66,21 @@ __C.TRAIN.GAN = False
 __C.TRAIN.POSE_REG = False
 __C.TRAIN.MATCHING = False
 
+# synthetic training
+__C.TRAIN.SYNTHESIZE = False
 __C.TRAIN.SYNROOT = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
 if not os.path.exists(__C.TRAIN.SYNROOT):
     __C.TRAIN.SYNROOT = '/home/yuxiang/Projects/Deep_Pose/data/LOV/data_syn/'
 __C.TRAIN.SYNITER = 0
 __C.TRAIN.SYNNUM = 80000
 __C.TRAIN.SYN_RATIO = 1
+
+# domain adaptation
+__C.TRAIN.ADAPT = False
+__C.TRAIN.ADAPT_ROOT = ''
+__C.TRAIN.ADAPT_NUM = 400
+__C.TRAIN.ADAPT_RATIO = 1
+__C.TRAIN.ADAPT_WEIGHT = 0.1
 
 # learning rate
 __C.TRAIN.OPTIMIZER = 'MOMENTUM'

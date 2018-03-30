@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, matching=False, trainable=True, is_train=True):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
@@ -12,7 +12,7 @@ class vgg16_convs(Network):
         self.vertex_reg_3d = vertex_reg_3d
         self.vertex_reg = vertex_reg_2d or vertex_reg_3d
         self.pose_reg = pose_reg
-        self.matching = matching
+        self.adaptation = adaptation
         self.trainable = trainable
         if is_train:
             self.is_train = 1
@@ -158,7 +158,7 @@ class vgg16_convs(Network):
                 self.layers['poses_init'] = self.get_output('hough')[1]
                 self.layers['poses_target'] = self.get_output('hough')[2]
                 self.layers['poses_weight'] = self.get_output('hough')[3]
-
+                
                 if self.pose_reg:
                     # roi pooling without masking
                     (self.feed('conv5_3', 'rois')
@@ -184,3 +184,15 @@ class vgg16_convs(Network):
 
                     (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
                          .average_distance_loss(name='loss_pose'))
+
+                    # domain adaptation
+                    if self.adaptation:
+                        self.layers['label_domain'] = self.get_output('hough')[4]
+
+                        (self.feed('pool_score')
+                             .gradient_reversal(0.05, name='greversal')
+                             .fc(256, height=7, width=7, channel=512, name='fc8')
+                             .dropout(self.keep_prob_queue, name='drop8') 
+                             .fc(2, name='domain_score')
+                             .softmax(-1, name='domain_prob')
+                             .argmax(-1, name='domain_label'))

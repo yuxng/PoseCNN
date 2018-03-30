@@ -365,6 +365,35 @@ class lov(datasets.imdb):
         return image.astype(np.uint8)
 
 
+    def save_result(self, im_ind, segmentation, output_dir):
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
+        sg_labels = segmentation['labels']
+        # evaluate pose
+        if cfg.TEST.POSE_REG:
+            rois = segmentation['rois']
+            poses = segmentation['poses']
+            poses_new = segmentation['poses_refined']
+            poses_icp = segmentation['poses_icp']
+            if cfg.TEST.VERTEX_REG_3D:
+                rois_rgb = segmentation['rois_rgb']
+                poses_rgb = segmentation['poses_rgb']
+
+            # save matlab result
+            if cfg.TEST.VERTEX_REG_2D:
+                results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            else:
+                results = {'labels': sg_labels, 'rois_rgb': rois_rgb, 'poses_rgb': poses_rgb, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, results, do_compression=True)
+
+
     def evaluate_result(self, im_ind, segmentation, gt_labels, meta_data, output_dir):
 
         # make matlab result dir

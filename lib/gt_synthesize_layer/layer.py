@@ -31,6 +31,7 @@ class GtSynthesizeLayer(object):
         self._name = name
         self._shuffle_roidb_inds()
         self._shuffle_syn_inds()
+        self._shuffle_adapt_inds()
         self._build_background_images()
         self._build_background_depth_images()
         self._read_camera_parameters()
@@ -44,11 +45,15 @@ class GtSynthesizeLayer(object):
         self._perm_syn = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
         self._cur_syn = 0
 
-    def _get_next_minibatch_inds(self, is_syn):
+    def _shuffle_adapt_inds(self):
+        self._perm_adapt = np.random.permutation(np.arange(cfg.TRAIN.ADAPT_NUM))
+        self._cur_adapt = 0
+
+    def _get_next_minibatch_inds(self, is_syn, is_adapt):
         """Return the roidb indices for the next minibatch."""
 
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
-        if is_syn == 0:
+        if is_syn == 0 and is_adapt == 0:
             self._cur += cfg.TRAIN.IMS_PER_BATCH
             if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
                 self._shuffle_roidb_inds()
@@ -59,7 +64,13 @@ class GtSynthesizeLayer(object):
             if self._cur_syn + cfg.TRAIN.IMS_PER_BATCH >= cfg.TRAIN.SYNNUM:
                 self._shuffle_syn_inds()
 
-        return db_inds, db_inds_syn
+        db_inds_adapt = self._perm_adapt[self._cur_adapt:self._cur_adapt + cfg.TRAIN.IMS_PER_BATCH]
+        if is_adapt:
+            self._cur_adapt += cfg.TRAIN.IMS_PER_BATCH
+            if self._cur_adapt + cfg.TRAIN.IMS_PER_BATCH >= cfg.TRAIN.ADAPT_NUM:
+                self._shuffle_adapt_inds()
+
+        return db_inds, db_inds_syn, db_inds_adapt
 
     def _get_next_minibatch(self, iter):
         """Return the blobs to be used for the next minibatch."""
@@ -76,13 +87,22 @@ class GtSynthesizeLayer(object):
         else:
             is_syn = 0
 
-        db_inds, db_inds_syn = self._get_next_minibatch_inds(is_syn)
+        # domain adaptation
+        if cfg.TRAIN.ADAPT:
+            r = np.random.randint(cfg.TRAIN.ADAPT_RATIO+1, size=1)[0]
+            if r == 0:
+                is_adapt = 1
+                is_syn = 0
+            else:
+                is_adapt = 0
+
+        db_inds, db_inds_syn, db_inds_adapt = self._get_next_minibatch_inds(is_syn, is_adapt)
         minibatch_db = [self._roidb[i] for i in db_inds]
         if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
             backgrounds = self._backgrounds_depth
         else:
             backgrounds = self._backgrounds
-        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn)
+        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
             
     def forward(self, iter):
         """Get blobs and copy them into this layer's top blob vector."""
@@ -93,7 +113,6 @@ class GtSynthesizeLayer(object):
     def _read_camera_parameters(self):
         meta_data = scipy.io.loadmat(self._roidb[0]['meta_data'])
         self._intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-
 
     def _build_background_images(self):
 

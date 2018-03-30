@@ -290,7 +290,7 @@ __global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes,
 }
 
 
-__global__ void compute_rois_kernel(const int nthreads, float* top_box, float* top_pose, float* top_target, float* top_weight,
+__global__ void compute_rois_kernel(const int nthreads, float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain,
     const float* extents, const float* meta_data, const float* gt, float* hough_space, float* hough_data, int* max_indexes, int* class_indexes,
     int is_train, int batch_index, const int height, const int width, const int num_classes, const int num_gt, int* num_rois) 
 {
@@ -336,6 +336,11 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
         top_pose[(roi_index + i) * 7 + 4] = rx * bb_distance;
         top_pose[(roi_index + i) * 7 + 5] = ry * bb_distance;
         top_pose[(roi_index + i) * 7 + 6] = bb_distance;
+
+        if (num_gt == 0)
+          top_domain[roi_index + i] = 1;
+        else
+          top_domain[roi_index + i] = 0;
       }
 
       // find the gt index
@@ -486,13 +491,14 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 }
 
 
-void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, int num_classes)
+void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, int num_classes)
 {
   int num = 1024;
   cudaMemset(top_box, 0, num * 7 * sizeof(float));
   cudaMemset(top_pose, 0, num * 7 * sizeof(float));
   cudaMemset(top_target, 0, num * 4 *num_classes * sizeof(float));
   cudaMemset(top_weight, 0, num * 4 * num_classes * sizeof(float));
+  cudaMemset(top_domain, 0, num * sizeof(int));
   cudaMemset(num_rois, 0, sizeof(int));
 }
 
@@ -503,13 +509,14 @@ void copy_num_rois(int* num_rois, int* num_rois_device)
 }
 
 
-void copy_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight,
-  float* top_box_final, float* top_pose_final, float* top_target_final, float* top_weight_final, int num_classes, int num_rois)
+void copy_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain,
+  float* top_box_final, float* top_pose_final, float* top_target_final, float* top_weight_final, int* top_domain_final, int num_classes, int num_rois)
 {
   cudaMemcpy(top_box_final, top_box, num_rois * 7 * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_pose_final, top_pose, num_rois * 7 * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_target_final, top_target, num_rois * 4 * num_classes * sizeof(float), cudaMemcpyDeviceToDevice);
   cudaMemcpy(top_weight_final, top_weight, num_rois * 4 * num_classes * sizeof(float), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(top_domain_final, top_domain, num_rois * sizeof(int), cudaMemcpyDeviceToDevice);
 }
 
 
@@ -524,7 +531,7 @@ void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
     const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, const int skip_pixels, 
-    float* top_box, float* top_pose, float* top_target, float* top_weight, int* num_rois, const Eigen::GpuDevice& d)
+    float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
   int output_size;
@@ -680,7 +687,7 @@ void HoughVotingLaucher(OpKernelContext* context,
   output_size = num_max_host;
   compute_rois_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, top_box, top_pose, top_target, top_weight,
+      output_size, top_box, top_pose, top_target, top_weight, top_domain,
       extents, meta_data, gt, hough_space, hough_data, max_indexes, class_indexes,
       is_train, batch_index, height, width, num_classes, num_gt, num_rois);
   cudaThreadSynchronize();

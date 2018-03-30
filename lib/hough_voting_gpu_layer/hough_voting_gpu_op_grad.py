@@ -12,10 +12,11 @@ def _hough_voting_gpu_shape(op):
   output_shape_1 = tf.TensorShape([None, 7])
   output_shape_2 = tf.TensorShape([None, 4 * num_classes])
   output_shape_3 = tf.TensorShape([None, 4 * num_classes])
-  return [output_shape_0, output_shape_1, output_shape_2, output_shape_3]
+  output_shape_4 = tf.TensorShape([None])
+  return [output_shape_0, output_shape_1, output_shape_2, output_shape_3, output_shape_4]
 
 @ops.RegisterGradient("Houghvotinggpu")
-def _hough_voting_gpu_grad(op, grad, tmp, tmp1, _):
+def _hough_voting_gpu_grad(op, grad, tmp, tmp1, tmp2, _):
   """The gradients for `Houghvotinggpu`.
   Args:
     op: The `backproject` `Operation` that we are differentiating, which we can use
