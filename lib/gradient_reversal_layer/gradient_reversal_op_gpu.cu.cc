@@ -23,12 +23,10 @@ __global__ void GradientreversalForward(const int nthreads, const Dtype* bottom_
 }
 
 
-bool GradientreversalForwardLaucher(
-    const float* bottom_data, const int batch_size, const int height, const int width, const int channels,
-    float* top_data, const Eigen::GpuDevice& d)
+bool GradientreversalForwardLaucher(const float* bottom_data, const int size, float* top_data, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
-  const int output_size = batch_size * height * width * channels;
+  const int output_size = size;
   cudaError_t err;
 
   GradientreversalForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
@@ -55,12 +53,11 @@ __global__ void GradientreversalBackward(const int nthreads, const Dtype* top_di
 }
 
 
-bool GradientreversalBackwardLaucher(const float* top_diff, const int batch_size,
-    const int height, const int width, const int channels, const float lambda,
+bool GradientreversalBackwardLaucher(const float* top_diff, const int size, const float lambda,
     float* bottom_diff, const Eigen::GpuDevice& d)
 {
   const int kThreadsPerBlock = 1024;
-  const int output_size = batch_size * height * width * channels;
+  const int output_size = size;
   cudaError_t err;
 
   GradientreversalBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,

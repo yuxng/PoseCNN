@@ -5,13 +5,7 @@ import gradient_reversal_op
 @ops.RegisterShape("Gradientreversal")
 def _gradient_reversal_shape(op):
 
-  dims_data = op.inputs[0].get_shape().as_list()
-  batch_size = dims_data[0]
-  height = dims_data[1]
-  width = dims_data[2]
-  channels = dims_data[3]
-
-  output_shape = tf.TensorShape([batch_size, height, width, channels])
+  output_shape = op.inputs[0].get_shape()
   return [output_shape]
 
 @ops.RegisterGradient("Gradientreversal")

@@ -58,43 +58,18 @@ class GradientreversalOp : public OpKernel {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
     auto bottom_data_flat = bottom_data.flat<T>();
-
-    // batch size
-    int batch_size = bottom_data.dim_size(0);
-    // height
-    int height = bottom_data.dim_size(1);
-    // width
-    int width = bottom_data.dim_size(2);
-    // channels
-    int channels = bottom_data.dim_size(3);
+    int size = bottom_data.NumElements();
 
     // Create output tensors
-    // top_data
-    int dims[4];
-    dims[0] = batch_size;
-    dims[1] = height;
-    dims[2] = width;
-    dims[3] = channels;
-    TensorShape output_shape;
-    TensorShapeUtils::MakeShape(dims, 4, &output_shape);
+    TensorShape output_shape = bottom_data.shape();
 
     Tensor* top_data_tensor = NULL;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &top_data_tensor));
     auto top_data = top_data_tensor->template flat<T>();
 
-    // identity mapping  
-    for(int n = 0; n < batch_size; n++)
-    {
-      for(int h = 0; h < height; h++)
-      {
-        for(int w = 0; w < width; w++)
-        {
-          int index_pixel = n * height * width + h * width + w;
-          for(int c = 0; c < channels; c++)
-            top_data(index_pixel * channels + c) = bottom_data_flat(index_pixel * channels + c);
-        }
-      }
-    }
+    // identity mapping
+    for (int i = 0; i < size; i++)
+      top_data(i) = bottom_data_flat(i);
   }
  private:
   float lambda_;
@@ -103,13 +78,11 @@ class GradientreversalOp : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("Gradientreversal").Device(DEVICE_CPU).TypeConstraint<float>("T"), GradientreversalOp<CPUDevice, float>);
 REGISTER_KERNEL_BUILDER(Name("Gradientreversal").Device(DEVICE_CPU).TypeConstraint<double>("T"), GradientreversalOp<CPUDevice, double>);
 
-bool GradientreversalForwardLaucher(
-    const float* bottom_data, const int batch_size, const int height, const int width, const int channels,
-    float* top_data, const Eigen::GpuDevice& d);
+bool GradientreversalForwardLaucher(const float* bottom_data, const int size, float* top_data, const Eigen::GpuDevice& d);
 
 static void GradientreversalKernel(
     OpKernelContext* context, const Tensor* bottom_data, 
-    const int batch_size, const int height, const int width, const int channels, const TensorShape& tensor_output_shape) 
+    const int size, const TensorShape& tensor_output_shape) 
 {
   Tensor* top_data = nullptr;
   OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &top_data));
@@ -119,7 +92,7 @@ static void GradientreversalKernel(
   }
 
   GradientreversalForwardLaucher(
-    bottom_data->flat<float>().data(), batch_size, height, width, channels, 
+    bottom_data->flat<float>().data(), size, 
     top_data->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
@@ -142,30 +115,12 @@ class GradientreversalOp<Eigen::GpuDevice, T> : public OpKernel {
   {
     // Grab the input tensor
     const Tensor& bottom_data = context->input(0);
-  
-    OP_REQUIRES(context, bottom_data.dims() == 4,
-                errors::InvalidArgument("depth must be 4-dimensional"));
-
-    // batch size
-    int batch_size = bottom_data.dim_size(0);
-    // height
-    int height = bottom_data.dim_size(1);
-    // width
-    int width = bottom_data.dim_size(2);
-    // channels
-    int channels = bottom_data.dim_size(3);
+    int size = bottom_data.NumElements();
 
     // Create output tensors
-    // top_data
-    int dims[4];
-    dims[0] = batch_size;
-    dims[1] = height;
-    dims[2] = width;
-    dims[3] = channels;
-    TensorShape output_shape;
-    TensorShapeUtils::MakeShape(dims, 4, &output_shape);
+    TensorShape output_shape = bottom_data.shape();
 
-    GradientreversalKernel(context, &bottom_data, batch_size, height, width, channels, output_shape);
+    GradientreversalKernel(context, &bottom_data, size, output_shape);
   }
  private:
   float lambda_;
@@ -174,14 +129,12 @@ class GradientreversalOp<Eigen::GpuDevice, T> : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("Gradientreversal").Device(DEVICE_GPU).TypeConstraint<float>("T"), GradientreversalOp<Eigen::GpuDevice, float>);
 
 
-bool GradientreversalBackwardLaucher(const float* top_diff, const int batch_size,
-    const int height, const int width, const int channels, const float lambda,
+bool GradientreversalBackwardLaucher(const float* top_diff, const int size, const float lambda,
     float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void GradientreversalGradKernel(
     OpKernelContext* context, const Tensor* out_backprop,
-    const int batch_size, const int height, const int width, const int channels,
-    const float lambda, const TensorShape& tensor_output_shape) 
+    const int size, const float lambda, const TensorShape& tensor_output_shape) 
 {
   Tensor* output = nullptr;
   OP_REQUIRES_OK(context, context->allocate_output(0, tensor_output_shape, &output));
@@ -191,7 +144,7 @@ static void GradientreversalGradKernel(
   }
 
   GradientreversalBackwardLaucher(
-    out_backprop->flat<float>().data(), batch_size, height, width, channels, lambda,
+    out_backprop->flat<float>().data(), size, lambda,
     output->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
@@ -216,24 +169,13 @@ class GradientreversalGradOp : public OpKernel {
     const Tensor& bottom_data = context->input(0);
     const Tensor& out_backprop = context->input(1);
 
-    // data should have 5 dimensions.
-    OP_REQUIRES(context, bottom_data.dims() == 4,
-                errors::InvalidArgument("data must be 4-dimensional"));
-
-    // batch size
-    int batch_size = bottom_data.dim_size(0);
-    // height
-    int height = bottom_data.dim_size(1);
-    // width
-    int width = bottom_data.dim_size(2);
-    // channels
-    int channels = bottom_data.dim_size(3);
+    // size
+    int size = bottom_data.NumElements();
 
     // construct the output shape
     TensorShape output_shape = bottom_data.shape();
 
-    GradientreversalGradKernel(context, &out_backprop,
-      batch_size, height, width, channels, lambda_, output_shape);
+    GradientreversalGradKernel(context, &out_backprop, size, lambda_, output_shape);
   }
  private:
   float lambda_;

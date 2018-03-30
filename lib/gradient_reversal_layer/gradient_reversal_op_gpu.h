@@ -12,13 +12,10 @@
 
 namespace tensorflow {
 
-bool GradientreversalForwardLaucher(
-    const float* bottom_data, const int batch_size, const int height, const int width, const int channels,
-    float* top_data, const Eigen::GpuDevice& d);
+bool GradientreversalForwardLaucher(const float* bottom_data, const int size, float* top_data, const Eigen::GpuDevice& d);
 
-bool GradientreversalBackwardLaucher(const float* top_diff, const int batch_size,
-    const int height, const int width, const int channels, const float lambda,
-    float* bottom_diff, const Eigen::GpuDevice& d);
+bool GradientreversalBackwardLaucher(const float* top_diff, const int size,
+    const float lambda, float* bottom_diff, const Eigen::GpuDevice& d);
 
 }  // namespace tensorflow
 
