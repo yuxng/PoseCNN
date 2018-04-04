@@ -89,9 +89,9 @@ if __name__ == '__main__':
     rgb_filenames = []
     depth_filenames = []
     for i in xrange(num):
-        filename = root + '{:06d}-color.png'.format(i+1)
+        filename = root + '{:06d}-color.png'.format(i)
         rgb_filenames.append(filename)
-        filename = root + '{:06d}-depth.png'.format(i+1)
+        filename = root + '{:06d}-depth.png'.format(i)
         depth_filenames.append(filename)
 
     # construct meta data

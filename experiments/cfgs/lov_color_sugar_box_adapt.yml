@@ -12,7 +12,7 @@ TRAIN:
   IMS_PER_BATCH: 2
   NUM_CLASSES: 2
   NUM_UNITS: 64
-  SNAPSHOT_ITERS: 2000
+  SNAPSHOT_ITERS: 5000
   SNAPSHOT_INFIX: lov_sugar_box
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose_add_adapt
   USE_FLIPPED: False
@@ -29,8 +29,8 @@ TRAIN:
   SYNNUM: 80000
   SYN_RATIO: 10
   ADAPT: True
-  ADAPT_ROOT: 'data/motion/004_sugar_box/'
-  ADAPT_NUM: 400
+  ADAPT_ROOT: 'data/motion/004_sugar_box_1/'
+  ADAPT_NUM: 3000
   ADAPT_RATIO: 1
   ADAPT_WEIGHT: 1.0
 TEST:

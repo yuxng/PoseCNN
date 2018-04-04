@@ -189,8 +189,10 @@ class vgg16_convs(Network):
                     if self.adaptation:
                         self.layers['label_domain'] = self.get_output('hough')[4]
 
-                        (self.feed('drop7')
-                             .gradient_reversal(0.05, name='greversal')
+                        (self.feed('pool_score')
+                             .gradient_reversal(0.01, name='greversal')
+                             .fc(256, height=7, width=7, channel=512, name='fc8')
+                             .dropout(self.keep_prob_queue, name='drop8') 
                              .fc(2, name='domain_score')
                              .softmax(-1, name='domain_prob')
                              .argmax(-1, name='domain_label'))
