@@ -435,6 +435,7 @@ def load_and_enqueue(sess, net, data_layer, coord):
 
         sess.run(net.enqueue_op, feed_dict=feed_dict)
 
+
 def loss_cross_entropy(scores, labels):
     """
     scores: a list of tensors [batch_size, height, width, num_classes]
@@ -538,15 +539,13 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
     #with tf.Session(config=config) as sess:
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
-        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
-
-        # thread to load data
+        # data layer
         if cfg.TRAIN.SINGLE_FRAME:
-            # data layer
             data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
         else:
-            # data layer
             data_layer = GtDataLayer(roidb, imdb.num_classes)
+
+        sw = SolverWrapper(sess, network, imdb, roidb, output_dir, pretrained_model=pretrained_model, pretrained_ckpt=pretrained_ckpt)
 
         print 'Solving...'
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:

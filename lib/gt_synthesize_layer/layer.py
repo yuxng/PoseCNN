@@ -95,6 +95,8 @@ class GtSynthesizeLayer(object):
                 is_syn = 0
             else:
                 is_adapt = 0
+        else:
+            is_adapt = 0
 
         db_inds, db_inds_syn, db_inds_adapt = self._get_next_minibatch_inds(is_syn, is_adapt)
         minibatch_db = [self._roidb[i] for i in db_inds]

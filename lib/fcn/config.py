@@ -68,6 +68,9 @@ __C.TRAIN.MATCHING = False
 
 # synthetic training
 __C.TRAIN.SYNTHESIZE = False
+__C.TRAIN.SYN_ONLINE = False
+__C.TRAIN.SYN_WIDTH = 640
+__C.TRAIN.SYN_HEIGHT = 480
 __C.TRAIN.SYNROOT = '/var/Projects/Deep_Pose/data/LOV/data_syn/'
 if not os.path.exists(__C.TRAIN.SYNROOT):
     __C.TRAIN.SYNROOT = '/home/yuxiang/Projects/Deep_Pose/data/LOV/data_syn/'
