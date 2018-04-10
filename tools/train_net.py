@@ -195,7 +195,7 @@ if __name__ == '__main__':
         from transforms3d.quaternions import quat2mat
 
         # start rendering
-        imdb.data_queue = Queue(maxsize=20)
+        imdb.data_queue = Queue(maxsize=100)
         meta_data = scipy.io.loadmat(roidb[0]['meta_data'])
         intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
         t = threading.Thread(target=render_one, args=(imdb.data_queue, intrinsic_matrix, imdb._extents, imdb._points_all))

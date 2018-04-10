@@ -134,6 +134,23 @@ void Synthesizer::loadPoses(const std::string filename)
 
     std::cout << model_names[m] << std::endl;
   }
+
+  // sample the poses uniformly
+  pose_index_ = 0;
+  for (int roll = 0; roll < 360; roll += 10)
+  {
+    for (int pitch = 0; pitch < 360; pitch += 10)
+    {
+      for (int yaw = 0; yaw < 360; yaw += 10)
+      {
+        Eigen::Quaterniond q = Eigen::AngleAxisd(double(roll), Eigen::Vector3d::UnitX())
+                      * Eigen::AngleAxisd(double(pitch), Eigen::Vector3d::UnitY())
+                      * Eigen::AngleAxisd(double(yaw), Eigen::Vector3d::UnitZ());
+        poses_uniform_.push_back(q);
+      }
+    }
+  }
+  std::random_shuffle(poses_uniform_.begin(), poses_uniform_.end());
 }
 
 // read the 3D models
@@ -698,7 +715,15 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   float* pose = poses_[class_id] + seed * 7;
 
   // Eigen::Quaterniond quaternion_first(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-  Eigen::Quaterniond quaternion_first(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
+  // Eigen::Quaterniond quaternion_first(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
+
+  Eigen::Quaterniond quaternion_first = poses_uniform_[pose_index_++];
+  if (pose_index_ >= poses_uniform_.size())
+  {
+    pose_index_ = 0;
+    std::random_shuffle(poses_uniform_.begin(), poses_uniform_.end());
+  }
+
   Sophus::SE3d::Point translation_first(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
   const Sophus::SE3d T_co_first(quaternion_first, translation_first);
 
