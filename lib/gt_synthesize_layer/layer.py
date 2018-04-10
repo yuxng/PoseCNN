@@ -20,7 +20,7 @@ import scipy.io
 class GtSynthesizeLayer(object):
     """FCN data layer used for training."""
 
-    def __init__(self, roidb, num_classes, extents, points, symmetry, cache_path, name, model_file, pose_file):
+    def __init__(self, roidb, num_classes, extents, points, symmetry, cache_path, name, data_queue, model_file, pose_file):
         """Set the roidb to be used by this layer during training."""
         self._roidb = roidb
         self._num_classes = num_classes
@@ -29,6 +29,7 @@ class GtSynthesizeLayer(object):
         self._symmetry = symmetry
         self._cache_path = cache_path
         self._name = name
+        self._data_queue = data_queue
         self._shuffle_roidb_inds()
         self._shuffle_syn_inds()
         self._shuffle_adapt_inds()
@@ -104,7 +105,7 @@ class GtSynthesizeLayer(object):
             backgrounds = self._backgrounds_depth
         else:
             backgrounds = self._backgrounds
-        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
+        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, self._data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
             
     def forward(self, iter):
         """Get blobs and copy them into this layer's top blob vector."""

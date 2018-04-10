@@ -77,6 +77,7 @@ if not os.path.exists(__C.TRAIN.SYNROOT):
 __C.TRAIN.SYNITER = 0
 __C.TRAIN.SYNNUM = 80000
 __C.TRAIN.SYN_RATIO = 1
+__C.TRAIN.SYN_CLASS_INDEX = 1
 
 # domain adaptation
 __C.TRAIN.ADAPT = False

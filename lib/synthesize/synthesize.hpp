@@ -53,6 +53,11 @@
 #include "thread_rand.h"
 #include "iou.h"
 
+#include <boost/python.hpp>
+#include <boost/python/numpy.hpp>
+#include <boost/scoped_array.hpp>
+namespace np = boost::python::numpy;
+
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
 typedef pcl::PointNormal PointNormalT;
@@ -110,8 +115,12 @@ class Synthesizer
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               float* vertex_targets, float* vertex_weights, float weight);
+
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
+  void render_one_python(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+              np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents);
+
   void loadModels(std::string filename);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
@@ -210,3 +219,13 @@ class Synthesizer
   df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
   df::GLRenderer<df::VertAndNormalRenderType>* renderer_vn_;
 };
+
+using namespace boost::python;
+BOOST_PYTHON_MODULE(libsynthesizer)
+{
+  np::initialize();
+  class_<Synthesizer>("Synthesizer", init<std::string, std::string>())
+    .def("setup", &Synthesizer::setup)
+    .def("render_one_python", &Synthesizer::render_one_python)
+  ;
+}

@@ -18,6 +18,9 @@ import pprint
 import numpy as np
 import sys
 import os.path as osp
+import tensorflow as tf
+import threading
+from Queue import Queue
 
 def parse_args():
     """
@@ -65,6 +68,86 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
+def render_one(data_queue, intrinsic_matrix, extents, points):
+
+    synthesizer = libsynthesizer.Synthesizer(cfg.CAD, cfg.POSE)
+    synthesizer.setup(cfg.TRAIN.SYN_WIDTH, cfg.TRAIN.SYN_HEIGHT)
+
+    which_class = cfg.TRAIN.SYN_CLASS_INDEX
+    height = cfg.TRAIN.SYN_HEIGHT
+    width = cfg.TRAIN.SYN_WIDTH
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    px = intrinsic_matrix[0, 2]
+    py = intrinsic_matrix[1, 2]
+    zfar = 6.0
+    znear = 0.25;
+    factor_depth = 1000.0
+
+    while True:
+
+        # render a synthetic image
+        im_syn = np.zeros((height, width, 4), dtype=np.uint8)
+        depth_syn = np.zeros((height, width), dtype=np.float32)
+        vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
+        poses = np.zeros((1, 7), dtype=np.float32)
+        centers = np.zeros((1, 2), dtype=np.float32)
+        synthesizer.render_one_python(int(which_class), int(width), int(height), fx, fy, px, py, znear, zfar, \
+            im_syn, depth_syn, vertmap_syn, poses, centers, extents)
+        im_syn = im_syn[::-1, :, :]
+        depth_syn = depth_syn[::-1, :]
+
+        # convert depth
+        im_depth_raw = factor_depth * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))
+        I = np.where(depth_syn == 1)
+        im_depth_raw[I[0], I[1]] = 0
+
+        # compute labels from vertmap
+        label = np.round(vertmap_syn[:, :, 0]) + 1
+        label[np.isnan(label)] = 0
+
+        I = np.where(label != which_class + 1)
+        label[I[0], I[1]] = 0
+
+        I = np.where(label == which_class + 1)
+        if len(I[0]) < 800:
+            continue
+
+        # convert pose
+        qt = np.zeros((3, 4, 1), dtype=np.float32)
+        qt[:, :3, 0] = quat2mat(poses[0, :4])
+        qt[:, 3, 0] = poses[0, 4:]
+
+        # process the vertmap
+        vertmap_syn[:, :, 0] = vertmap_syn[:, :, 0] - np.round(vertmap_syn[:, :, 0])
+        vertmap_syn[np.isnan(vertmap_syn)] = 0
+
+        # compute box
+        x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+        cls = 1
+        x3d[0, :] = points[cls,:,0]
+        x3d[1, :] = points[cls,:,1]
+        x3d[2, :] = points[cls,:,2]
+        RT = qt[:, :, 0]
+        x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+        x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+        x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+        box = np.zeros((1, 4), dtype=np.float32)
+        box[0, 0] = np.min(x2d[0, :])
+        box[0, 1] = np.min(x2d[1, :])
+        box[0, 2] = np.max(x2d[0, :])
+        box[0, 3] = np.max(x2d[1, :])
+
+        # metadata
+        metadata = {'poses': qt, 'center': centers, 'box': box, \
+                    'cls_indexes': np.array([which_class + 1]), 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
+
+        # construct data
+        data = {'image': im_syn, 'depth': im_depth_raw.astype(np.uint16), 'label': label.astype(np.uint8), 'meta_data': metadata}
+        data_queue.put(data)
+
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -105,6 +188,20 @@ if __name__ == '__main__':
     cfg.CAD = args.cad_name
     cfg.POSE = args.pose_name
     cfg.IS_TRAIN = True
+
+    if cfg.TRAIN.SYNTHESIZE and cfg.TRAIN.SYN_ONLINE:
+        import libsynthesizer
+        import scipy.io
+        from transforms3d.quaternions import quat2mat
+
+        # start rendering
+        imdb.data_queue = Queue(maxsize=20)
+        meta_data = scipy.io.loadmat(roidb[0]['meta_data'])
+        intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
+        t = threading.Thread(target=render_one, args=(imdb.data_queue, intrinsic_matrix, imdb._extents, imdb._points_all))
+        t.start()
+    else:
+        imdb.data_queue = []
 
     from networks.factory import get_network
     network = get_network(args.network_name)

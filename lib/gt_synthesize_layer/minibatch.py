@@ -19,16 +19,16 @@ import scipy.io
 from normals import gpu_normals
 from transforms3d.quaternions import mat2quat, quat2mat
 
-def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
+def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
     """Given a roidb, construct a minibatch sampled from it."""
 
     # Get the input image blob, formatted for tensorflow
     random_scale_ind = npr.randint(0, high=len(cfg.TRAIN.SCALES_BASE))
-    im_blob, im_depth_blob, im_normal_blob, im_scales = _get_image_blob(roidb, random_scale_ind, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
+    im_blob, im_depth_blob, im_normal_blob, im_scales, data_out = _get_image_blob(roidb, random_scale_ind, num_classes, backgrounds, intrinsic_matrix, data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
 
     # build the label blob
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gt_boxes \
-        = _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales, extents, is_syn, db_inds_adapt, is_adapt)
+        = _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn, im_scales, extents, is_syn, db_inds_adapt, is_adapt)
 
     if not cfg.TRAIN.SEGMENTATION:
         im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
@@ -71,7 +71,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
 
     return blobs
 
-def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
+def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix, data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
     """Builds an input blob from the images in the roidb at the specified
     scales.
     """
@@ -81,6 +81,7 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
     processed_ims_normal = []
     im_scales = []
     roidb_syn = []
+    data_out = []
 
     for i in xrange(num_images):
 
@@ -101,13 +102,19 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
                 im = rgba
         else:
             if is_syn:
-                # depth raw
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(db_inds_syn[i])
-                im_depth_raw = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+                if cfg.TRAIN.SYN_ONLINE:
+                    data = data_queue.get()
+                    data_out.append(data)
+                    im_depth_raw = pad_im(data['depth'], 16)
+                    rgba = pad_im(data['image'], 16)
+                else:
+                    # depth raw
+                    filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(db_inds_syn[i])
+                    im_depth_raw = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
-                # rgba
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(db_inds_syn[i])
-                rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+                    # rgba
+                    filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(db_inds_syn[i])
+                    rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
                 # sample a background image
                 ind = np.random.randint(len(backgrounds), size=1)[0]
@@ -207,7 +214,7 @@ def _get_image_blob(roidb, scale_ind, num_classes, backgrounds, intrinsic_matrix
     blob = im_list_to_blob(processed_ims, 3)
     blob_depth = im_list_to_blob(processed_ims_depth, 3)
 
-    return blob, blob_depth, blob_normal, im_scales
+    return blob, blob_depth, blob_normal, im_scales, data_out
 
 
 def _process_label_image(label_image, class_colors, class_weights):
@@ -238,7 +245,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index, labels
 
 
-def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales, extents, is_syn, db_inds_adapt, is_adapt):
+def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn, im_scales, extents, is_syn, db_inds_adapt, is_adapt):
     """ build the label blob """
 
     num_images = len(roidb)
@@ -274,16 +281,22 @@ def _get_label_blob(roidb, intrinsic_matrix, num_classes, db_inds_syn, im_scales
             meta_data = dict({'intrinsic_matrix': intrinsic_matrix, 'factor_depth': 1000.0})
         else:
             if is_syn:
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(db_inds_syn[i])
-                meta_data = scipy.io.loadmat(filename)
-                meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
+                if cfg.TRAIN.SYN_ONLINE:
+                    meta_data = data_out[i]['meta_data']
+                    meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
+                    im_depth = pad_im(data_out[i]['depth'], 16)
+                    im = pad_im(data_out[i]['label'], 16)
+                else:
+                    filename = cfg.TRAIN.SYNROOT + '{:06d}-meta.mat'.format(db_inds_syn[i])
+                    meta_data = scipy.io.loadmat(filename)
+                    meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(db_inds_syn[i])
-                im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+                    filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(db_inds_syn[i])
+                    im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
-                # read label image
-                filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])
-                im = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
+                    # read label image
+                    filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(db_inds_syn[i])
+                    im = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
             else:
                 meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
                 meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()

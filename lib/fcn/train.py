@@ -541,7 +541,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
 
         # data layer
         if cfg.TRAIN.SINGLE_FRAME:
-            data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, cfg.CAD, cfg.POSE)
+            data_layer = GtSynthesizeLayer(roidb, imdb.num_classes, imdb._extents, imdb._points_all, imdb._symmetry, imdb.cache_path, imdb.name, imdb.data_queue, cfg.CAD, cfg.POSE)
         else:
             data_layer = GtDataLayer(roidb, imdb.num_classes)
 

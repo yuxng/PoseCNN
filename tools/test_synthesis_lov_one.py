@@ -14,7 +14,7 @@ import argparse
 import os, sys
 from transforms3d.quaternions import quat2mat
 from fcn.config import cfg, cfg_from_file, get_output_dir
-from synthesize import synthesizer
+import libsynthesizer
 import scipy.io
 import cv2
 import numpy as np
@@ -69,14 +69,14 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    which_class = 2
+    which_class = 3
     classes_all = ('002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
                    '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
                    '021_bleach_cleanser', '024_bowl', '025_mug', '035_power_drill', '036_wood_block', '037_scissors', '040_large_marker', \
                    '051_large_clamp', '052_extra_large_clamp', '061_foam_brick')
     num_classes = len(classes_all)
 
-    num_images = 80000
+    num_images = 100
     height = 480
     width = 640
     fx = 1066.778
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     if not os.path.exists(root):
         os.makedirs(root)
 
-    synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
+    synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
 
     extent_file = '/home/yuxiang/Projects/Deep_Pose/data/LOV/extents.txt'
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
         poses = np.zeros((1, 7), dtype=np.float32)
         centers = np.zeros((1, 2), dtype=np.float32)
-        synthesizer_.render_one(im_syn, depth_syn, vertmap_syn, poses, centers, extents, fx, fy, px, py, znear, zfar, int(which_class))
+        synthesizer_.render_one_python(int(which_class), int(width), int(height), fx, fy, px, py, znear, zfar, im_syn, depth_syn, vertmap_syn, poses, centers, extents)
         im_syn = im_syn[::-1, :, :]
         depth_syn = depth_syn[::-1, :]
 

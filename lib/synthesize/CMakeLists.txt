@@ -5,7 +5,7 @@ if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 add_definitions(-std=c++11)
 add_definitions(-Wall)
@@ -27,6 +27,9 @@ if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
+
+set(BOOST_INCLUDEDIR "/usr/local/include")
+set(BOOST_LIBRARYDIR "/usr/local/lib")
 
 set(xFusion_ROOT "/home/yuxiang/Projects/Deep_Pose/lib/kinect_fusion")
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
@@ -50,7 +53,8 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${OpenCV_INCLUDE_DIRS}
                     ${PCL_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
-                    ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc)
+                    ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc
+                    ${BOOST_INCLUDEDIR})
 
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
@@ -65,6 +69,8 @@ link_libraries(${Pangolin_LIBRARIES}
                ${OpenCV_LIBS}
                ${NLOPT_LIBRARIES}
                ${PCL_LIBRARIES}
+               boost_python
+               boost_numpy
                assimp
                util)
 

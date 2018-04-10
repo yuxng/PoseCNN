@@ -642,6 +642,16 @@ jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
 }
 
 
+void Synthesizer::render_one_python(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+  np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents)
+{
+  render_one(which_class, width, height, fx, fy, px, py, znear, zfar,
+    reinterpret_cast<unsigned char*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
+    reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(poses_return.get_data()),
+    reinterpret_cast<float*>(centers_return.get_data()), reinterpret_cast<float*>(extents.get_data()));
+}
+
+
 // render for one class
 void Synthesizer::render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
