@@ -52,7 +52,7 @@ class lov_single(datasets.imdb):
                 break
 
         self._points, self._points_all = self._load_object_points()
-        self._extents = self._load_object_extents()
+        self._extents, self._extents_all = self._load_object_extents()
 
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
@@ -180,10 +180,13 @@ class lov_single(datasets.imdb):
                 'Path does not exist: {}'.format(extent_file)
 
         extents = np.zeros((self.num_classes, 3), dtype=np.float32)
-        extents_all = np.loadtxt(extent_file)
-        extents[1, :] = extents_all[self._cls_index - 1, :]
+        extents_txt = np.loadtxt(extent_file)
+        extents[1, :] = extents_txt[self._cls_index - 1, :]
 
-        return extents
+        extents_all = np.zeros((self._num_classes_all, 3), dtype=np.float32)
+        extents_all[1:, :] = extents_txt
+
+        return extents, extents_all
 
 
     def compute_class_weights(self):

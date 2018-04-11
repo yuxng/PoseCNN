@@ -137,20 +137,21 @@ void Synthesizer::loadPoses(const std::string filename)
 
   // sample the poses uniformly
   pose_index_ = 0;
-  for (int roll = 0; roll < 360; roll += 10)
+  for (int roll = 0; roll < 360; roll += 15)
   {
-    for (int pitch = 0; pitch < 360; pitch += 10)
+    for (int pitch = 0; pitch < 360; pitch += 15)
     {
-      for (int yaw = 0; yaw < 360; yaw += 10)
+      for (int yaw = 0; yaw < 360; yaw += 15)
       {
-        Eigen::Quaterniond q = Eigen::AngleAxisd(double(roll), Eigen::Vector3d::UnitX())
-                      * Eigen::AngleAxisd(double(pitch), Eigen::Vector3d::UnitY())
-                      * Eigen::AngleAxisd(double(yaw), Eigen::Vector3d::UnitZ());
+        Eigen::Quaterniond q = Eigen::AngleAxisd(double(roll) * M_PI / 180.0, Eigen::Vector3d::UnitX())
+                             * Eigen::AngleAxisd(double(pitch) * M_PI / 180.0, Eigen::Vector3d::UnitY())
+                             * Eigen::AngleAxisd(double(yaw) * M_PI / 180.0, Eigen::Vector3d::UnitZ());
         poses_uniform_.push_back(q);
       }
     }
   }
   std::random_shuffle(poses_uniform_.begin(), poses_uniform_.end());
+  std::cout << poses_uniform_.size() << " poses" << std::endl;
 }
 
 // read the 3D models
@@ -685,7 +686,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   int num_classes = pose_nums_.size();
   // sample the number of objects in the scene
   int num;
-  if (irand(0, 5) == 0)
+  if (irand(0, 2) == 0)
     num = 1;
   else
     num = 2;
