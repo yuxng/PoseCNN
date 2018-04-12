@@ -225,7 +225,7 @@ def _process_label_image(label_image, class_colors, class_weights):
     width = label_image.shape[1]
     num_classes = len(class_colors)
     label_index = np.zeros((height, width, num_classes), dtype=np.float32)
-    labels = np.zeros((height, width), dtype=np.float32)
+    labels = np.zeros((height, width), dtype=np.int32)
 
     if len(label_image.shape) == 3:
         # label image is in BGR order
@@ -336,7 +336,7 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
                 meta_data['box'] = meta_data['box'][ind,:]
 
             im_cls, im_labels = _process_label_image(im, roidb[i]['class_colors'], roidb[i]['class_weights'])
-            processed_label.append(im_cls)
+            processed_label.append(im_labels)
 
             # bounding boxes
             if not cfg.TRAIN.SEGMENTATION:
@@ -473,14 +473,14 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     if is_adapt:
-        label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
+        label_blob = np.zeros((num_images, height, width), dtype=np.int32)
     else:
         height = processed_label[0].shape[0]
         width = processed_label[0].shape[1]
-        label_blob = np.zeros((num_images, height, width, num_classes), dtype=np.float32)
+        label_blob = np.zeros((num_images, height, width), dtype=np.int32)
 
         for i in xrange(num_images):
-            label_blob[i,:,:,:] = processed_label[i]
+            label_blob[i,:,:] = processed_label[i]
             if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                 vertex_target_blob[i,:,:,:] = processed_vertex_targets[i]
                 vertex_weight_blob[i,:,:,:] = processed_vertex_weights[i]
@@ -648,23 +648,21 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blo
         ax.set_title('depth') 
 
         # show label
-        label = label_blob[i, :, :, :]
+        label = label_blob[i, :, :]
         height = label.shape[0]
         width = label.shape[1]
-        num_classes = label.shape[2]
-        l = 255 * np.ones((height, width), dtype=np.int32)
+        num_classes = vertex_target_blob.shape[3] / 3
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
             vertex_target = vertex_target_blob[i, :, :, :]
             center = np.zeros((height, width, 3), dtype=np.float32)
         for k in xrange(num_classes):
-            index = np.where(label[:,:,k] > 0)
-            l[index] = k
+            index = np.where(label == k)
             if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D and len(index[0]) > 0 and k > 0:
                 center[index[0], index[1], :] = vertex_target[index[0], index[1], 3*k:3*k+3]
         ax = fig.add_subplot(2, 3, 3)
         ax.set_title('label') 
         if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
-            plt.imshow(l)
+            plt.imshow(label)
             ax = fig.add_subplot(2, 3, 4)
             plt.imshow(center[:,:,0])
             if cfg.TRAIN.VERTEX_REG_2D:

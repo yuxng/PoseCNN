@@ -488,7 +488,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         else:
             if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                 scores = network.get_output('prob')
-                labels = network.get_output('gt_label_2d')
+                labels = network.get_output('gt_label_weight')
                 loss_cls = loss_cross_entropy_single_frame(scores, labels)
 
                 vertex_pred = network.get_output('vertex_pred')
@@ -517,7 +517,7 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     loss = loss_cls + loss_vertex + loss_regu
             else:
                 scores = network.get_output('prob')
-                labels = network.get_output('gt_label_2d')
+                labels = network.get_output('gt_label_weight')
                 loss = loss_cross_entropy_single_frame(scores, labels) + loss_regu
     else:
         # classification loss

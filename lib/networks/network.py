@@ -22,6 +22,8 @@ import roi_pooling_layer.roi_pooling_op as roi_pool_op
 import roi_pooling_layer.roi_pooling_op_grad
 import gradient_reversal_layer.gradient_reversal_op as gradient_reversal_op
 import gradient_reversal_layer.gradient_reversal_op_grad
+import hard_label_layer.hard_label_op as hard_label_op
+import hard_label_layer.hard_label_op_grad
 from gru2d import GRU2DCell
 from gru2d_original import GRUCell
 from gru3d import GRU3DCell
@@ -331,6 +333,10 @@ class Network(object):
     @layer
     def gradient_reversal(self, input, lambda_, name):
         return gradient_reversal_op.gradient_reversal(input, lambda_, name=name)
+
+    @layer
+    def hard_label(self, input, threshold, name):
+        return hard_label_op.hard_label(input[0], input[1], threshold, name=name)
 
     @layer
     def lrn(self, input, radius, alpha, beta, name, bias=1.0):
