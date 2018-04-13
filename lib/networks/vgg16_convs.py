@@ -136,7 +136,7 @@ class vgg16_convs(Network):
              .argmax_2d(name='label_2d'))
 
         (self.feed('prob_normalized', 'gt_label_2d')
-             .hard_label(threshold=0.8, name='gt_label_weight'))
+             .hard_label(threshold=0.7, name='gt_label_weight'))
 
         if self.vertex_reg:
             (self.feed('conv5_3')
