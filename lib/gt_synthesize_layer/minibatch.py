@@ -473,7 +473,7 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
         meta_data_blob[i,0,0,:] = processed_meta_data[i]
 
     if is_adapt:
-        label_blob = np.zeros((num_images, height, width), dtype=np.int32)
+        label_blob = -1 * np.ones((num_images, height, width), dtype=np.int32)
     else:
         height = processed_label[0].shape[0]
         width = processed_label[0].shape[1]

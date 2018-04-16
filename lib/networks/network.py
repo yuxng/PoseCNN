@@ -234,8 +234,8 @@ class Network(object):
         return triplet_loss_op.triplet_loss(input[0], input[1], tf.cast(input[2], tf.int32), margin, name=name)
 
     @layer
-    def average_distance_loss(self, input, name):
-        return average_distance_loss_op.average_distance_loss(input[0], input[1], input[2], input[3], input[4], name=name)
+    def average_distance_loss(self, input, margin, name):
+        return average_distance_loss_op.average_distance_loss(input[0], input[1], input[2], input[3], input[4], margin, name=name)
 
     @layer
     def matching_loss(self, input, filename_model, name):

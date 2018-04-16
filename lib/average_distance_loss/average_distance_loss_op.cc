@@ -37,6 +37,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 REGISTER_OP("Averagedistance")
     .Attr("T: {float, double}")
+    .Attr("margin: float")
     .Input("bottom_prediction: T")
     .Input("bottom_target: T")
     .Input("bottom_weight: T")
@@ -47,6 +48,7 @@ REGISTER_OP("Averagedistance")
 
 REGISTER_OP("AveragedistanceGrad")
     .Attr("T: {float, double}")
+    .Attr("margin: float")
     .Input("bottom_diff: T")
     .Input("grad: T")
     .Output("output: T");
@@ -56,6 +58,12 @@ class AveragedistanceOp : public OpKernel {
  public:
   explicit AveragedistanceOp(OpKernelConstruction* context) : OpKernel(context) 
   {
+    // Get the margin
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("margin", &margin_));
+    // Check that margin is positive
+    OP_REQUIRES(context, margin_ > 0,
+                errors::InvalidArgument("Need margin > 0, got ", margin_));
   }
 
   // bottom_prediction: (batch_size, 4 * num_classes)
@@ -176,7 +184,10 @@ class AveragedistanceOp : public OpKernel {
         int index = index_cls * num_points * 3 + i * 3;
         Eigen::Vector3f x3d(point[index], point[index + 1], point[index + 2]);
         Eigen::Vector3f diff = Ru * x3d - Rgt * x3d;
-        loss += diff.dot(diff) / 2.0;
+        T distance = diff.dot(diff);
+        if (distance < margin_)
+          continue;
+        loss += (distance - margin_) / 2.0;
 
         // compute the gradient from this point
         Eigen::Matrix3f f0;
@@ -207,6 +218,7 @@ class AveragedistanceOp : public OpKernel {
     top_data(0) = loss;
   }
  private:
+  float margin_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Averagedistance").Device(DEVICE_CPU).TypeConstraint<float>("T"), AveragedistanceOp<CPUDevice, float>);
@@ -215,12 +227,12 @@ REGISTER_KERNEL_BUILDER(Name("Averagedistance").Device(DEVICE_CPU).TypeConstrain
 // GPU implementation for forward pass
 bool AveragedistanceForwardLaucher(OpKernelContext* context,
     const float* bottom_prediction, const float* bottom_target, const float* bottom_weight, const float* bottom_point,
-    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
+    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points, const float margin,
     float* top_data, float* bottom_diff, const Eigen::GpuDevice& d);
 
 static void AveragedistanceKernel(
     OpKernelContext* context, const Tensor* bottom_prediction, const Tensor* bottom_target, const Tensor* bottom_weight,
-    const Tensor* bottom_point, const Tensor* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
+    const Tensor* bottom_point, const Tensor* bottom_symmetry, const int batch_size, const int num_classes, const int num_points, const float margin,
     const TensorShape& tensor_output_shape, const TensorShape& tensor_output_shape_diff) 
 {
   Tensor* top_data = nullptr;
@@ -234,7 +246,7 @@ static void AveragedistanceKernel(
 
    AveragedistanceForwardLaucher(context,
     bottom_prediction->flat<float>().data(), bottom_target->flat<float>().data(), bottom_weight->flat<float>().data(),
-    bottom_point->flat<float>().data(), bottom_symmetry->flat<float>().data(), batch_size, num_classes, num_points,
+    bottom_point->flat<float>().data(), bottom_symmetry->flat<float>().data(), batch_size, num_classes, num_points, margin,
     top_data->flat<float>().data(), bottom_diff->flat<float>().data(), context->eigen_device<Eigen::GpuDevice>());
 }
 
@@ -245,6 +257,12 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
 
   explicit AveragedistanceOp(OpKernelConstruction* context) : OpKernel(context) 
   {
+    // Get the margin
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("margin", &margin_));
+    // Check that margin is positive
+    OP_REQUIRES(context, margin_ > 0,
+                errors::InvalidArgument("Need margin > 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -287,9 +305,10 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
     TensorShape output_shape_diff = bottom_prediction.shape();
 
     AveragedistanceKernel(context, &bottom_prediction, &bottom_target, &bottom_weight, &bottom_point, &bottom_symmetry, batch_size, num_classes,
-      num_points, output_shape, output_shape_diff);
+      num_points, margin_, output_shape, output_shape_diff);
   }
  private:
+  float margin_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("Averagedistance").Device(DEVICE_GPU).TypeConstraint<float>("T"), AveragedistanceOp<Eigen::GpuDevice, float>);
@@ -300,6 +319,12 @@ class AveragedistanceGradOp : public OpKernel {
  public:
   explicit AveragedistanceGradOp(OpKernelConstruction* context) : OpKernel(context) 
   {
+    // Get the margin
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("margin", &margin_));
+    // Check that margin is positive
+    OP_REQUIRES(context, margin_ > 0,
+                errors::InvalidArgument("Need margin > 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -329,6 +354,7 @@ class AveragedistanceGradOp : public OpKernel {
       top_data(i) = loss * bottom_diff_flat(i);
   }
  private:
+  float margin_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("AveragedistanceGrad").Device(DEVICE_CPU).TypeConstraint<float>("T"), AveragedistanceGradOp<CPUDevice, float>);
@@ -361,6 +387,12 @@ class AveragedistanceGradOp<Eigen::GpuDevice, T> : public OpKernel {
 
   explicit AveragedistanceGradOp(OpKernelConstruction* context) : OpKernel(context) 
   {
+    // Get the margin
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("margin", &margin_));
+    // Check that margin is positive
+    OP_REQUIRES(context, margin_ > 0,
+                errors::InvalidArgument("Need margin > 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -385,6 +417,7 @@ class AveragedistanceGradOp<Eigen::GpuDevice, T> : public OpKernel {
       context, &bottom_diff, &out_backprop, batch_size, num_channels, output_shape);
   }
  private:
+  float margin_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("AveragedistanceGrad").Device(DEVICE_GPU).TypeConstraint<float>("T"), AveragedistanceGradOp<Eigen::GpuDevice, float>);

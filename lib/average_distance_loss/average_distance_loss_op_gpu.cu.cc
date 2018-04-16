@@ -34,7 +34,7 @@ cudaError_t checkCuda(cudaError_t result)
 template <typename Dtype>
 __global__ void AveragedistanceForward(const int nthreads, const Dtype* prediction, const Dtype* target,
     const Dtype* weight, const Dtype* point, const Dtype* symmetry, const int batch_size, const int num_classes, 
-    const int num_points, Dtype* rotations, Dtype* losses, Dtype* diffs) 
+    const int num_points, const float margin, Dtype* rotations, Dtype* losses, Dtype* diffs) 
 {
   CUDA_1D_KERNEL_LOOP(index_thread, nthreads) 
   {
@@ -174,7 +174,11 @@ __global__ void AveragedistanceForward(const int nthreads, const Dtype* predicti
     y2 = rotations[ind + 3] * point[index_min + 0] + rotations[ind + 4] * point[index_min + 1] + rotations[ind + 5] * point[index_min + 2];
     z2 = rotations[ind + 6] * point[index_min + 0] + rotations[ind + 7] * point[index_min + 1] + rotations[ind + 8] * point[index_min + 2];
 
-    losses[index_thread] = ((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2)) / (2.0 * batch_size * num_points);
+    Dtype distance = ((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2));
+    if (distance < margin)
+      continue;
+
+    losses[index_thread] = (distance - margin) / (2.0 * batch_size * num_points);
 
     int index_diff = n * num_points * POSE_CHANNELS * num_classes + p * POSE_CHANNELS * num_classes + POSE_CHANNELS * index_cls;
     for (int j = 0; j < 3; j++)
@@ -251,7 +255,7 @@ __global__ void sum_losses_gradients(const int nthreads, const Dtype* losses, co
 // bottom_data: (batch_size, 4 * num_classes)
 void AveragedistanceForwardLaucher(OpKernelContext* context,
     const float* bottom_prediction, const float* bottom_target, const float* bottom_weight, const float* bottom_point,
-    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points,
+    const float* bottom_symmetry, const int batch_size, const int num_classes, const int num_points, const float margin,
     float* top_data, float* bottom_diff, const Eigen::GpuDevice& d)
 {
   // run kernels
@@ -306,7 +310,7 @@ void AveragedistanceForwardLaucher(OpKernelContext* context,
   AveragedistanceForward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
       output_size, bottom_prediction, bottom_target, bottom_weight, bottom_point, bottom_symmetry,
-      batch_size, num_classes, num_points, rotations, losses, diffs);
+      batch_size, num_classes, num_points, margin, rotations, losses, diffs);
   cudaDeviceSynchronize();
 
   err = cudaGetLastError();

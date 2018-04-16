@@ -186,7 +186,7 @@ class vgg16_convs(Network):
                          .l2_normalize(dim=1, name='poses_pred'))
 
                     (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
-                         .average_distance_loss(name='loss_pose'))
+                         .average_distance_loss(margin=0.01, name='loss_pose'))
 
                     # domain adaptation
                     if self.adaptation:

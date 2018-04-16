@@ -28,9 +28,11 @@ TRAIN:
   SYNROOT: 'data/LOV/data_syn_004_sugar_box/'
   SYNNUM: 80000
   SYN_RATIO: 10
+  SYN_ONLINE: True
+  SYN_CLASS_INDEX: 2
   ADAPT: True
-  ADAPT_ROOT: 'data/motion/004_sugar_box_1/'
-  ADAPT_NUM: 3000
+  ADAPT_ROOT: 'data/motion/004_sugar_box/'
+  ADAPT_NUM: 400
   ADAPT_RATIO: 1
   ADAPT_WEIGHT: 1.0
 TEST:
