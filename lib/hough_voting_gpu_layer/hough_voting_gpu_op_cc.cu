@@ -6,7 +6,8 @@
 #include <cfloat>
 #include <time.h>
 #include <thrust/extrema.h>
-#include <Eigen/Geometry> 
+#include <thrust/execution_policy.h>
+#include <Eigen/Geometry>
 #include <cublas_v2.h>
 #include "hough_voting_gpu_op.h"
 
