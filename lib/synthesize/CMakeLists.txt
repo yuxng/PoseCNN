@@ -1,6 +1,8 @@
 project("synthesizer")
 cmake_minimum_required(VERSION 2.8)
 
+cmake_policy(SET CMP0015 NEW)
+
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -28,7 +30,7 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(xFusion_ROOT "/home/yuxiang/Projects/Deep_Pose/lib/kinect_fusion")
+set(xFusion_ROOT "../kinect_fusion")
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
 set(xFusion_LIBRARY_DIRS ${xFusion_ROOT}/build)
 set(xFusion_LIBRARIES kfusion)

@@ -94,7 +94,7 @@ __global__ void warpMeshKernel(DeviceTensor<DTensor, Eigen::UnalignedVec3<Scalar
 
 //            const NNVec nearestNeighborIndices = nearestNeighborGrid(nearestNeighborVoxel);
 
-            DualQuaternion blendedTransform;
+            DualQuaternion blendedTransform(deformationGraphTransforms(0));
 
             const bool initialized = blendDualQuaternions(blendedTransform, unwarpedVertexGridCoords,
                                                           unwarpedVertexWorldCoords, deformationGraphVertices,
@@ -755,9 +755,9 @@ __global__ void initializeNewBaseLevelVertexTransformsKernel(const DeviceTensor1
 
         const Vec3 newVertexInGridCoords = nearestNeighborGrid.worldToGrid(newVertexInWorldCoords);
 
-        DualQuaternion<Scalar,Eigen::DontAlign> blendedTransform;
 
-        const bool initialized = blendDualQuaternions(blendedTransform,newVertexInGridCoords,newVertexInWorldCoords,
+        const bool initialized = blendDualQuaternions(baseLevelTransforms(index),
+                                                      newVertexInGridCoords,newVertexInWorldCoords,
                                                       baseLevelVertices, baseLevelTransforms, nearestNeighborGrid,
                                                       oneOverBlendingSigmaSquared);
 
@@ -765,9 +765,7 @@ __global__ void initializeNewBaseLevelVertexTransformsKernel(const DeviceTensor1
 
             printf("initialized %d\n",index);
 
-            blendedTransform.normalize();
-
-            baseLevelTransforms(index) = blendedTransform;
+            baseLevelTransforms(index).normalize();
 
         }
 

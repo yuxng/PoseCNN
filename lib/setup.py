@@ -11,6 +11,8 @@ import numpy as np
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
+import tensorflow as tf
+import subprocess
 
 def find_in_path(name, path):
     "Find a file in a search path"
@@ -104,7 +106,80 @@ class custom_build_ext(build_ext):
         customize_compiler_for_nvcc(self.compiler)
         build_ext.build_extensions(self)
 
+def includes_from_flags(flags):
+    return [f[2:] for f in flags if f.startswith('-I')]
+
+def lib_libdir_from_flags(flags):
+    return [f[2:] for f in flags if f.startswith('-L')], [f[2:] for f in flags if f.startswith('-l')]
+
+tf_compile_flags = [f for f in tf.sysconfig.get_compile_flags() if not f.startswith('-I')]
+tf_include_dirs = includes_from_flags(tf.sysconfig.get_compile_flags())
+
+opencv_cflags = subprocess.check_output(['pkg-config', '--cflags', 'opencv-3.3.1-dev']).split()
+opencv_includes = includes_from_flags(opencv_cflags)
+opencv_libs = subprocess.check_output(['pkg-config', '--libs', 'opencv-3.3.1-dev']).split()
+opencv_libdirs, opencv_libs = lib_libdir_from_flags(opencv_libs)
+
+def custom_tf_op(name, sources, use_opencv=False):
+    ext = Extension(name, sources,
+        library_dirs=[CUDA['lib64'], tf.sysconfig.get_lib()],
+        libraries=['cudart', 'tensorflow_framework'],
+        language='c++',
+        runtime_library_dirs=[CUDA['lib64']],
+        extra_compile_args={'gcc': ['-std=c++11',
+                                    '-D GOOGLE_CUDA=1']+tf_compile_flags,
+                            'nvcc': ['-std=c++11',
+                                     '-D GOOGLE_CUDA=1',
+                                     '-D_MWAITXINTRIN_H_INCLUDED']
+                            +tf_compile_flags+
+                                     ['-Xcompiler',
+                                      '-fPIC',
+                                      '-arch=sm_50']},
+        include_dirs = tf_include_dirs+[CUDA['include'], '/usr/include/eigen3']
+        )
+    if use_opencv:
+        ext.include_dirs += opencv_includes
+        ext.libraries += opencv_libs
+        ext.library_dirs += opencv_libdirs
+    return ext
+
 ext_modules = [
+    custom_tf_op('average_distance_loss.average_distance_loss',
+        ['average_distance_loss/average_distance_loss_op_gpu.cu',
+         'average_distance_loss/average_distance_loss_op.cc']),
+    custom_tf_op('hough_voting_gpu_layer.hough_voting_gpu',
+        ['hough_voting_gpu_layer/hough_voting_gpu_op_cc.cu',
+         'hough_voting_gpu_layer/hough_voting_gpu_op.cc'],
+        use_opencv=True),
+    custom_tf_op('hough_voting_layer.houg_voting',
+        ['hough_voting_layer/Hypothesis.cpp',
+         'hough_voting_layer/thread_rand.cpp',
+         'hough_voting_layer/hough_voting_op.cc'],
+        use_opencv = True),
+    custom_tf_op('roi_pooling_layer.roi_pooling_layer',
+        ['roi_pooling_layer/roi_pooling_op_gpu.cu',
+         'roi_pooling_layer/roi_pooling_op.cc']),
+    custom_tf_op('triplet_loss.triplet_loss',
+        ['triplet_loss/triplet_loss_op_gpu.cu',
+         'triplet_loss/triplet_loss_op.cc']),
+    custom_tf_op('lifted_structured_loss.lifted_structured_loss',
+        ['lifted_structured_loss/lifted_structured_loss_op_gpu.cu',
+         'lifted_structured_loss/lifted_structured_loss_op.cc']),
+    custom_tf_op('computing_flow_layer.computing_flow_layer',
+        ['computing_flow_layer/computing_flow_op_gpu.cu',
+         'computing_flow_layer/computing_flow_op.cc']),
+    custom_tf_op('backprojecting_layer.backprojecting',
+        ['backprojecting_layer/backprojecting_op_gpu.cu',
+         'backprojecting_layer/backprojecting_op.cc']),
+    custom_tf_op('projecting_layer.projecting',
+        ['projecting_layer/projecting_op_gpu.cu',
+         'projecting_layer/projecting_op.cc']),
+    custom_tf_op('computing_label_layer.computing_label',
+        ['computing_label_layer/computing_label_op_gpu.cu',
+         'computing_label_layer/computing_label_op.cc']),
+    custom_tf_op('gradient_reversal_layer.gradient_reversal',
+        ['gradient_reversal_layer/gradient_reversal_op_gpu.cu',
+         'gradient_reversal_layer/gradient_reversal_op.cc']),
     Extension('normals.gpu_normals',
         ['normals/compute_normals.cu', 'normals/gpu_normals.pyx'],
         library_dirs=[CUDA['lib64']],
@@ -120,7 +195,7 @@ ext_modules = [
                                      '-c',
                                      '--compiler-options',
                                      "'-fPIC'"]},
-        include_dirs = [numpy_include, CUDA['include'], '/usr/local/include/eigen3']
+        include_dirs = [numpy_include, CUDA['include'], '/usr/include/eigen3']
     ),
     Extension(
         "utils.cython_bbox",
