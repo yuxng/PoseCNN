@@ -78,7 +78,7 @@ void Synthesizer::create_window(int width, int height)
   gtView_ = &pangolin::Display("gt").SetAspect(float(width)/float(height));
 
   // create render
-  renderer_ = new df::GLRenderer<df::CanonicalVertRenderType>(width, height);
+  renderer_ = new df::GLRenderer<df::CanonicalVertAndColorRenderType>(width, height);
   renderer_vn_ = new df::GLRenderer<df::VertAndNormalRenderType>(width, height);
 }
 
@@ -664,7 +664,7 @@ void Synthesizer::render_one_python(int which_class, int width, int height, floa
   np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents)
 {
   render_one(which_class, width, height, fx, fy, px, py, znear, zfar,
-    reinterpret_cast<unsigned char*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
+    reinterpret_cast<float*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
     reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(poses_return.get_data()),
     reinterpret_cast<float*>(centers_return.get_data()), reinterpret_cast<float*>(extents.get_data()));
 }
@@ -672,7 +672,7 @@ void Synthesizer::render_one_python(int which_class, int width, int height, floa
 
 // render for one class
 void Synthesizer::render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
+              float* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents)
 {
   int is_save = 0;
 
@@ -770,6 +770,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<Eigen::Matrix4f> transforms(num);
   std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
   std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+  std::vector<pangolin::GlTexture*> textureBuffers(num);
 
   for (int i = 0; i < num; i++)
   {
@@ -777,12 +778,14 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     transforms[i] = poses[i].matrix().cast<float>();
     attributeBuffers[i].push_back(&texturedVertices_[class_id]);
     attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+    attributeBuffers[i].push_back(&texturedCoords_[class_id]);
     modelIndexBuffers[i] = &texturedIndices_[class_id];
+    textureBuffers[i] = &texturedTextures_[class_id];
   }
 
   glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
   renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, transforms);
+  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms);
 
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
@@ -808,6 +811,11 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     }
   }
 
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+  renderer_->texture(1).RenderToViewportFlipY();
+
+/*
   GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
 
   // render color image
@@ -873,11 +881,12 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     glDisable(GL_LIGHT0);
     glDisable(GL_LIGHTING);
   }
-
+*/
   // read color image
   if (color)
   {
-    glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
+    renderer_->texture(1).Download(color, GL_RGB, GL_FLOAT);
+    // glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
     if (is_save)
     {
       cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
@@ -891,7 +900,8 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   // read depth image
   if (depth)
   {
-    glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
+    renderer_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
+    // glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
 
     if (is_save)
     {

@@ -30,6 +30,12 @@ public:
                 const std::vector<Eigen::Matrix4f> & transforms,
                 const GLenum mode = GL_TRIANGLES);
 
+    void render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                const std::vector<pangolin::GlBuffer*> & indexBuffers,
+                const std::vector<pangolin::GlTexture*> & textureBuffers,
+                const std::vector<Eigen::Matrix4f> & transforms,
+                const GLenum mode = GL_TRIANGLES);
+
     inline const pangolin::GlTextureCudaArray & texture(const int i) const {
         assert(i < RenderType::numTextures);
         return textures_[i];
@@ -78,6 +84,7 @@ private:
     GLint projectionMatrixHandle_;
     GLint modelViewMatrixHandle_;
     GLint cameraParamsHandle_;
+    GLint textureHandle_;
 
     Eigen::Matrix4f projectionMatrix_;
     Eigen::Matrix4f modelViewMatrix_;
@@ -124,12 +131,15 @@ GLRenderer<RenderType>::GLRenderer(const int renderWidth, const int renderHeight
     projectionMatrixHandle_ = program_.GetUniformHandle("projectionMatrix");
     modelViewMatrixHandle_ = program_.GetUniformHandle("modelViewMatrix");
     cameraParamsHandle_ = program_.GetUniformHandle("cameraParams");
+    textureHandle_ = program_.GetUniformHandle("materialTex");
 
     std::cout << "projection handle: " << projectionMatrixHandle_ << std::endl;
 
     std::cout << "modelview matrix handle: " << modelViewMatrixHandle_ << std::endl;
 
     std::cout << "camera param handle: " << cameraParamsHandle_ << std::endl;
+
+    std::cout << "texture handle: " << textureHandle_ << std::endl;
 
 }
 
@@ -155,6 +165,9 @@ void GLRenderer<RenderType>::matrixSetup() {
     }
     if (cameraParamsHandle_ >= 0) {
         glUniform1fv(cameraParamsHandle_, cameraParams_.size(), cameraParams_.data());
+    }
+    if (textureHandle_ >= 0) {
+        glUniform1i(textureHandle_, 0);
     }
     glUniformMatrix4fv(modelViewMatrixHandle_, 1, GL_FALSE, modelViewMatrix_.data());
 
@@ -284,6 +297,45 @@ void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBu
         glDrawElements(mode, indexBuffers[m]->num_elements, GL_UNSIGNED_INT, 0);
 
         indexBuffers[m]->Unbind();
+
+    }
+
+    renderTeardown(vertexAttributeBuffers.back());
+
+}
+
+
+template <typename RenderType>
+void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                                    const std::vector<pangolin::GlBuffer*> & indexBuffers,
+                                    const std::vector<pangolin::GlTexture*> & textureBuffers,
+                                    const std::vector<Eigen::Matrix4f> & transforms,
+                                    const GLenum mode) {
+
+    assert(indexBuffers.size() == vertexAttributeBuffers.size());
+
+    renderSetup();
+
+    for (int m = 0; m < vertexAttributeBuffers.size(); ++m) {
+
+        setModelViewMatrix(transforms[m]);
+
+        matrixSetup();
+
+        vertexAttributeSetup(vertexAttributeBuffers[m]);
+
+        indexBuffers[m]->Bind();
+
+        glEnable(GL_TEXTURE_2D);
+        glActiveTexture(GL_TEXTURE0);
+        textureBuffers[m]->Bind();
+
+        glDrawElements(mode, indexBuffers[m]->num_elements, GL_UNSIGNED_INT, 0);
+
+        indexBuffers[m]->Unbind();
+
+        textureBuffers[m]->Unbind();
+        glDisable(GL_TEXTURE_2D);
 
     }
 

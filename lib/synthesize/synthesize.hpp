@@ -117,7 +117,7 @@ class Synthesizer
               float* vertex_targets, float* vertex_weights, float weight);
 
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
+              float* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
   void render_one_python(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents);
 
@@ -218,7 +218,7 @@ class Synthesizer
   std::vector<pangolin::GlBuffer> texturedCoords_;
   std::vector<pangolin::GlTexture> texturedTextures_;
 
-  df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
+  df::GLRenderer<df::CanonicalVertAndColorRenderType>* renderer_;
   df::GLRenderer<df::VertAndNormalRenderType>* renderer_vn_;
 };
 

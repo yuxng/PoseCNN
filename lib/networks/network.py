@@ -504,6 +504,27 @@ class Network(object):
         s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
         return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
+
+    @layer
+    def focal_softmax_high_dimension(self, input, num_classes, gamma, name):
+        # only use the first input
+        if isinstance(input, tuple):
+            input = input[0]
+        input_shape = input.get_shape()
+        ndims = input_shape.ndims
+        array = np.ones(ndims)
+        array[-1] = num_classes
+
+        m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+        d = tf.subtract(input, tf.tile(m, multiples))
+        e = tf.exp(d)
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+
+        summation = tf.tile(s, multiples)
+        return tf.multiply(tf.pow(1 - tf.div(e, summation), gamma), tf.subtract(d, tf.log(summation)))
+
+
     @layer
     def batch_normalization(self, input, name, scale_offset=False, relu=False, reuse=None, trainable=True):
         # NOTE: Currently, only inference is supported
