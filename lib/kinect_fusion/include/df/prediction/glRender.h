@@ -10,6 +10,15 @@
 
 namespace df {
 
+
+struct Light {
+    Eigen::Vector4f position;
+    Eigen::Vector3f intensities; //a.k.a. the color of the light
+    float attenuation;
+    float ambientCoefficient;
+};
+
+
 template <typename RenderType>
 class GLRenderer {
 public:
@@ -34,6 +43,8 @@ public:
                 const std::vector<pangolin::GlBuffer*> & indexBuffers,
                 const std::vector<pangolin::GlTexture*> & textureBuffers,
                 const std::vector<Eigen::Matrix4f> & transforms,
+                const std::vector<Light> & lights,
+                const std::vector<float> & materialShininesses,
                 const GLenum mode = GL_TRIANGLES);
 
     inline const pangolin::GlTextureCudaArray & texture(const int i) const {
@@ -72,6 +83,11 @@ private:
     void vertexAttributeSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers);
 
     void renderTeardown(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers);
+
+    std::string getLightUniformName(const char* propertyName, size_t lightIndex);
+    void lightSetup(const std::vector<Light> & lights);
+
+    void materialSetup(float materialShininess);
 
     int renderWidth_;
     int renderHeight_;
@@ -172,6 +188,59 @@ void GLRenderer<RenderType>::matrixSetup() {
     glUniformMatrix4fv(modelViewMatrixHandle_, 1, GL_FALSE, modelViewMatrix_.data());
 
 }
+
+template <typename RenderType>
+std::string GLRenderer<RenderType>::getLightUniformName(const char* propertyName, size_t lightIndex)
+{
+    std::ostringstream ss;
+    ss << "allLights[" << lightIndex << "]." << propertyName;
+    std::string uniformName = ss.str();
+    return uniformName;
+}
+
+template <typename RenderType>
+void GLRenderer<RenderType>::lightSetup(const std::vector<Light> & lights) 
+{
+  std::string uniformName;
+  GLint handle;
+
+  handle = program_.GetUniformHandle("numLights");
+  glUniform1i(handle, lights.size());
+
+  for(uint i = 0; i < lights.size(); i++)
+  {
+    uniformName = getLightUniformName("position", i);
+    handle = program_.GetUniformHandle(uniformName.c_str());
+    glUniform4fv(handle, 1, lights[i].position.data());
+
+    uniformName = getLightUniformName("intensities", i);
+    handle = program_.GetUniformHandle(uniformName.c_str());
+    glUniform3fv(handle, 1, lights[i].intensities.data());
+
+    uniformName = getLightUniformName("attenuation", i);
+    handle = program_.GetUniformHandle(uniformName.c_str());
+    glUniform1f(handle, lights[i].attenuation);
+
+    uniformName = getLightUniformName("ambientCoefficient", i);
+    handle = program_.GetUniformHandle(uniformName.c_str());
+    glUniform1f(handle, lights[i].ambientCoefficient);
+  }
+}
+
+
+template <typename RenderType>
+void GLRenderer<RenderType>::materialSetup(float materialShininess)
+{
+  GLint handle;
+
+  handle = program_.GetUniformHandle("materialShininess");
+  glUniform1f(handle, materialShininess);
+
+  Eigen::Vector3f specularColor(1.0f, 1.0f, 1.0f);
+  handle = program_.GetUniformHandle("materialSpecularColor");
+  glUniform3fv(handle, 1, specularColor.data());
+}
+
 
 template <typename RenderType>
 void GLRenderer<RenderType>::vertexAttributeSetup(const std::vector<pangolin::GlBuffer *> & vertexAttributeBuffers) {
@@ -310,17 +379,22 @@ void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBu
                                     const std::vector<pangolin::GlBuffer*> & indexBuffers,
                                     const std::vector<pangolin::GlTexture*> & textureBuffers,
                                     const std::vector<Eigen::Matrix4f> & transforms,
+                                    const std::vector<Light> & lights,
+                                    const std::vector<float> & materialShininesses,
                                     const GLenum mode) {
 
     assert(indexBuffers.size() == vertexAttributeBuffers.size());
 
     renderSetup();
+    lightSetup(lights);
 
     for (int m = 0; m < vertexAttributeBuffers.size(); ++m) {
 
         setModelViewMatrix(transforms[m]);
 
         matrixSetup();
+
+        materialSetup(materialShininesses[m]);
 
         vertexAttributeSetup(vertexAttributeBuffers[m]);
 

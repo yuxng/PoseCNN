@@ -766,26 +766,39 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
     poses[1] = T_co_second;
   }
 
+  // setup lights
+  std::vector<df::Light> lights;
+
+  df::Light spotlight;
+  spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
+  spotlight.intensities = Eigen::Vector3f(2.0, 2.0, 2.0); //strong white light
+  spotlight.attenuation = 0.0f;
+  spotlight.ambientCoefficient = 0.0f; //no ambient light
+  lights.push_back(spotlight);
+
   // render vertmap
   std::vector<Eigen::Matrix4f> transforms(num);
   std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
   std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
   std::vector<pangolin::GlTexture*> textureBuffers(num);
+  std::vector<float> materialShininesses(num);
 
   for (int i = 0; i < num; i++)
   {
     int class_id = class_ids[i];
     transforms[i] = poses[i].matrix().cast<float>();
+    materialShininesses[i] = 120;
     attributeBuffers[i].push_back(&texturedVertices_[class_id]);
     attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
     attributeBuffers[i].push_back(&texturedCoords_[class_id]);
+    attributeBuffers[i].push_back(&vertexNormals_[class_id]);
     modelIndexBuffers[i] = &texturedIndices_[class_id];
     textureBuffers[i] = &texturedTextures_[class_id];
   }
 
   glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
   renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms);
+  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
 
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
@@ -885,7 +898,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   // read color image
   if (color)
   {
-    renderer_->texture(1).Download(color, GL_RGB, GL_FLOAT);
+    renderer_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
     // glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
     if (is_save)
     {

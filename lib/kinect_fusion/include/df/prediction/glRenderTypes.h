@@ -119,13 +119,13 @@ struct CanonicalVertAndColorRenderType {
         static const GLenum formats[numTextures] = { GL_RGBA32F, GL_RGBA32F, GL_RGBA32F};
         return formats;
     }
-    static constexpr int numVertexAttributes = 3;
+    static constexpr int numVertexAttributes = 4;
     static const int * vertexAttributeSizes() {
-        static const int sizes[numVertexAttributes] = { 3, 3, 2 };
+        static const int sizes[numVertexAttributes] = { 3, 3, 2, 3 };
         return sizes;
     }
     static const GLenum * vertexAttributeTypes() {
-        static const GLenum types[numVertexAttributes] = { GL_FLOAT, GL_FLOAT, GL_FLOAT };
+        static const GLenum types[numVertexAttributes] = { GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
         return types;
     }
 };

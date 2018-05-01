@@ -104,7 +104,7 @@ if __name__ == '__main__':
     while i < num_images:
         
         # render a synthetic image
-        im_syn = np.zeros((height, width, 3), dtype=np.float32)
+        im_syn = np.zeros((height, width, 4), dtype=np.float32)
         depth_syn = np.zeros((height, width, 3), dtype=np.float32)
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
         poses = np.zeros((1, 7), dtype=np.float32)
@@ -112,12 +112,9 @@ if __name__ == '__main__':
         synthesizer_.render_one_python(int(which_class), int(width), int(height), fx, fy, px, py, znear, zfar, im_syn, depth_syn, vertmap_syn, poses, centers, extents)
 
         # convert images
-        index = np.where(np.isnan(im_syn[:,:,0]))
-        color = 255 * np.ones((height, width, 4), dtype=np.uint8)
-        im_syn[index[0], index[1], :] = 0
-        im_syn = 255 * im_syn
-        color[:, :, :3] = im_syn[:, :, ::-1].astype(np.uint8)
-        color[index[0], index[1], 3] = 0 
+        im_syn_raw = im_syn.copy()
+        im_syn = np.clip(255 * im_syn, 0, 255)
+        im_syn = im_syn.astype(np.uint8)
         depth_syn = depth_syn[:, :, 0]
 
         # convert depth
@@ -146,12 +143,12 @@ if __name__ == '__main__':
         vertmap_syn[np.isnan(vertmap_syn)] = 0
 
         # metadata
-        metadata = {'poses': qt, 'center': centers, 'depth': depth_syn, \
+        metadata = {'poses': qt, 'center': centers, 'im': im_syn_raw, \
                     'cls_indexes': which_class + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
 
         # save image
         filename = root + '{:06d}-color.png'.format(i)
-        cv2.imwrite(filename, color)
+        cv2.imwrite(filename, im_syn)
 
         # save depth
         filename = root + '{:06d}-depth.png'.format(i)
