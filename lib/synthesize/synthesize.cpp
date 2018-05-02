@@ -770,9 +770,10 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<df::Light> lights;
 
   df::Light spotlight;
+  float light_intensity = drand(1, 3);
   spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
-  spotlight.intensities = Eigen::Vector3f(2.0, 2.0, 2.0); //strong white light
-  spotlight.attenuation = 0.0f;
+  spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity); //strong white light
+  spotlight.attenuation = 0.01f;
   spotlight.ambientCoefficient = 0.0f; //no ambient light
   lights.push_back(spotlight);
 
@@ -787,7 +788,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   {
     int class_id = class_ids[i];
     transforms[i] = poses[i].matrix().cast<float>();
-    materialShininesses[i] = 120;
+    materialShininesses[i] = drand(40, 120);
     attributeBuffers[i].push_back(&texturedVertices_[class_id]);
     attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
     attributeBuffers[i].push_back(&texturedCoords_[class_id]);

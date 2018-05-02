@@ -89,15 +89,18 @@ def render_one(data_queue, intrinsic_matrix, extents, points):
     while True:
 
         # render a synthetic image
-        im_syn = np.zeros((height, width, 4), dtype=np.uint8)
-        depth_syn = np.zeros((height, width), dtype=np.float32)
+        im_syn = np.zeros((height, width, 4), dtype=np.float32)
+        depth_syn = np.zeros((height, width, 3), dtype=np.float32)
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
         poses = np.zeros((1, 7), dtype=np.float32)
         centers = np.zeros((1, 2), dtype=np.float32)
         synthesizer.render_one_python(int(which_class), int(width), int(height), fx, fy, px, py, znear, zfar, \
             im_syn, depth_syn, vertmap_syn, poses, centers, extents)
-        im_syn = im_syn[::-1, :, :]
-        depth_syn = depth_syn[::-1, :]
+
+        # convert images
+        im_syn = np.clip(255 * im_syn, 0, 255)
+        im_syn = im_syn.astype(np.uint8)
+        depth_syn = depth_syn[:, :, 0]
 
         # convert depth
         im_depth_raw = factor_depth * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))

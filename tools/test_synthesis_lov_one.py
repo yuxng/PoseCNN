@@ -112,7 +112,6 @@ if __name__ == '__main__':
         synthesizer_.render_one_python(int(which_class), int(width), int(height), fx, fy, px, py, znear, zfar, im_syn, depth_syn, vertmap_syn, poses, centers, extents)
 
         # convert images
-        im_syn_raw = im_syn.copy()
         im_syn = np.clip(255 * im_syn, 0, 255)
         im_syn = im_syn.astype(np.uint8)
         depth_syn = depth_syn[:, :, 0]
@@ -143,7 +142,7 @@ if __name__ == '__main__':
         vertmap_syn[np.isnan(vertmap_syn)] = 0
 
         # metadata
-        metadata = {'poses': qt, 'center': centers, 'im': im_syn_raw, \
+        metadata = {'poses': qt, 'center': centers, \
                     'cls_indexes': which_class + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
 
         # save image
