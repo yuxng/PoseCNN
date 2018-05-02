@@ -770,7 +770,7 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<df::Light> lights;
 
   df::Light spotlight;
-  float light_intensity = drand(1, 3);
+  float light_intensity = drand(0.5, 5);
   spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
   spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity); //strong white light
   spotlight.attenuation = 0.01f;

@@ -24,11 +24,11 @@ import math
 import tensorflow as tf
 import time
 from transforms3d.quaternions import quat2mat, mat2quat
-from synthesize import synthesizer
 import scipy.io
 from scipy.optimize import minimize
 from normals import gpu_normals
 
+# from synthesize import synthesizer
 # from pose_estimation import ransac
 # from kinect_fusion import kfusion
 # from pose_refinement import refiner
