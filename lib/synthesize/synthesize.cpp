@@ -3,27 +3,6 @@
 using namespace df;
 static double optEnergy(const std::vector<double> &pose, std::vector<double> &grad, void *data);
 
-/*
-void writeHalfPrecisionVertMap(const std::string filename, const float* vertMap, const int N) {
-
-    std::cout << "writing " << filename << std::endl;
-
-    std::vector<half> halfVertMap(N*3);
-    for (int i=0; i<N; ++i) {
-        halfVertMap[3*i  ] = half(vertMap[3*i]);
-        halfVertMap[3*i+1] = half(vertMap[3*i+1]);
-        halfVertMap[3*i+2] = half(vertMap[3*i+2]);
-    }
-
-    std::ofstream vertStream;
-    vertStream.open(filename,std::ios_base::out | std::ios_base::binary);
-
-    vertStream.write(reinterpret_cast<const char *>(halfVertMap.data()),halfVertMap.size()*sizeof(half));
-
-    vertStream.close();
-
-}
-*/
 
 Synthesizer::Synthesizer(std::string model_file, std::string pose_file)
 {
@@ -330,12 +309,22 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 }
 
 
+void Synthesizer::render_python(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+  np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& class_indexes, 
+  np::ndarray& poses_return, np::ndarray& centers_return, bool is_sampling)
+{
+  render(width, height, fx, fy, px, py, znear, zfar,
+    reinterpret_cast<float*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
+    reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(class_indexes.get_data()),
+    reinterpret_cast<float*>(poses_return.get_data()), reinterpret_cast<float*>(centers_return.get_data()), is_sampling);
+}
+
+
 void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
-              float* vertex_targets, float* vertex_weights, float weight)
+              float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
+              bool is_sampling)
 {
   double threshold = 0.2; // 0.2 for YCB
-  bool is_sampling = false;
   int is_save = 0;
 
   pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
@@ -396,12 +385,13 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     while(1)
     {
       // sample a pose
-      int seed = irand(0, pose_nums_[class_id]);
-      float* pose = poses_[class_id] + seed * 7;
+      // int seed = irand(0, pose_nums_[class_id]);
+      // float* pose = poses_[class_id] + seed * 7;
+      // Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
+      // Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.3, 0.3));
 
-      Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-      Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.3, 0.3));
-      // Sophus::SE3d::Point translation(pose[4] + drand(-0.1, 0.1), pose[5] + drand(-0.1, 0.1), pose[6] + drand(0, 1.0));
+      Eigen::Quaterniond quaternion(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
+      Sophus::SE3d::Point translation(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
@@ -434,23 +424,40 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     }
   }
 
+  // setup lights
+  std::vector<df::Light> lights;
+
+  df::Light spotlight;
+  float light_intensity = drand(0.5, 5);
+  spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
+  spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity); //strong white light
+  spotlight.attenuation = 0.01f;
+  spotlight.ambientCoefficient = 0.0f; //no ambient light
+  lights.push_back(spotlight);
+
   // render vertmap
   std::vector<Eigen::Matrix4f> transforms(num);
   std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
   std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+  std::vector<pangolin::GlTexture*> textureBuffers(num);
+  std::vector<float> materialShininesses(num);
 
   for (int i = 0; i < num; i++)
   {
     int class_id = class_ids[i];
     transforms[i] = poses[i].matrix().cast<float>();
+    materialShininesses[i] = drand(40, 120);
     attributeBuffers[i].push_back(&texturedVertices_[class_id]);
     attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+    attributeBuffers[i].push_back(&texturedCoords_[class_id]);
+    attributeBuffers[i].push_back(&vertexNormals_[class_id]);
     modelIndexBuffers[i] = &texturedIndices_[class_id];
+    textureBuffers[i] = &texturedTextures_[class_id];
   }
 
   glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
   renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, transforms);
+  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
 
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
@@ -459,11 +466,6 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   if (vertmap)
   {
     renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
-    if (is_save)
-    {
-      std::string filename = std::to_string(counter_) + ".vertmap";
-      // writeHalfPrecisionVertMap(filename, vertmap, height*width);
-    }
 
     // compute object 2D centers
     std::vector<float> center_x(num_classes, 0);
@@ -486,143 +488,20 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
         centers_return[2 * i + 1] = center_y[i];
       }
     }
-
-    // compute center regression targets and weights
-    for (int x = 0; x < width; x++)
-    {
-      for (int y = 0; y < height; y++)
-      {
-        float vx = vertmap[3 * (y * width + x)];
-        if (std::isnan(vx))
-          continue;
-        int label = std::round(vx);
-        // object center
-        float cx = center_x[label];
-        float cy = center_y[label];
-
-        float rx = cx - x;
-        float ry = cy - y;
-        float norm = std::sqrt(rx * rx + ry * ry) + 1e-10;
-
-        // assign value
-        int offset = (label + 1) * 2 + 2 * (num_classes + 1) * (y * width + x);
-        vertex_targets[offset] = rx / norm;
-        vertex_weights[offset] = weight;
-
-        offset = (label + 1) * 2 + 1 + 2 * (num_classes + 1) * (y * width + x);
-        vertex_targets[offset] = ry / norm;
-        vertex_weights[offset] = weight;
-      }
-    }
   }
-
-  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
 
   // render color image
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
-  for (int i = 0; i < num; i++)
-  {
-    int class_id = class_ids[i];
-
-    glMatrixMode(GL_PROJECTION);
-    projectionMatrix.Load();
-    glMatrixMode(GL_MODELVIEW);
-
-    Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
-    pangolin::OpenGlMatrix mvMatrix(mv);
-    mvMatrix.Load();
-
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
-    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.1);  // 0.4
-
-    if(is_textured_[class_id])
-    {
-      glEnable(GL_TEXTURE_2D);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-      texturedTextures_[class_id].Bind();
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedCoords_[class_id].Bind();
-      glTexCoordPointer(2,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedTextures_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      texturedCoords_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-      glDisable(GL_TEXTURE_2D);
-    }
-    else
-    {
-      glEnable(GL_COLOR_MATERIAL);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      glEnableClientState(GL_COLOR_ARRAY);
-      vertexColors_[class_id].Bind();
-      glColorPointer(3,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      vertexColors_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_COLOR_ARRAY);
-      glDisable(GL_COLOR_MATERIAL);
-    }
-
-    glDisable(GL_LIGHT0);
-    glDisable(GL_LIGHTING);
-  }
+  renderer_->texture(1).RenderToViewportFlipY();
 
   // read color image
   if (color)
-  {
-    glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
-    if (is_save)
-    {
-      cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
-      cv::Mat output;
-      cv::flip(C, output, 0);
-      std::string filename = std::to_string(counter_) + "_color.png";
-      cv::imwrite(filename.c_str(), output);
-    }
-  }
+    renderer_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
   
   // read depth image
   if (depth)
-  {
-    glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
-
-    if (is_save)
-    {
-      // write depth
-      cv::Mat D = cv::Mat(height, width, CV_32FC1, depth);
-      cv::Mat DD = cv::Mat(height, width, CV_16UC1);
-      for (int x = 0; x < width; x++)
-      { 
-        for (int y = 0; y < height; y++)
-        {
-          if (D.at<float>(y, x) == 1)
-            DD.at<short>(y, x) = 0;
-          else
-            DD.at<short>(y, x) = short(10000 * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * D.at<float>(y, x) - 1)));
-        }
-      }
-
-      std::string filename = std::to_string(counter_) + "_depth.png";
-      cv::Mat output;
-      cv::flip(DD, output, 0);
-      cv::imwrite(filename.c_str(), output);
-    }
-  }
+    renderer_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
 
   if (is_save)
   {
@@ -632,31 +511,6 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   pangolin::FinishFrame();
 
   counter_++;
-}
-
-
-jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
-{
-  Eigen::Matrix4d mv = T_co.matrix();
-
-  // map data types
-  cv::Mat rmat(3, 3, CV_64F);
-  for (int i = 0; i < 3; i++)
-  {
-    for (int j = 0; j < 3; j++)
-      rmat.at<double>(i,j) = mv(i, j);
-  }
-
-  cv::Point3d tpt(mv(0, 3), mv(1, 3), mv(2, 3));
-
-  // result may be reconstructed behind the camera
-  if(cv::determinant(rmat) < 0)
-  {
-    tpt = -tpt;
-    rmat = -rmat;
-  }
-	
-  return jp::jp_trans_t(rmat, tpt);  
 }
 
 
@@ -711,13 +565,6 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<Sophus::SE3d> poses(num);
 
   // sample the target object
-  int class_id = class_ids[0];
-  int seed = irand(0, pose_nums_[class_id]);
-  float* pose = poses_[class_id] + seed * 7;
-
-  // Eigen::Quaterniond quaternion_first(pose[0] + drand(-0.2, 0.2), pose[1]  + drand(-0.2, 0.2), pose[2]  + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-  // Eigen::Quaterniond quaternion_first(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
-
   Eigen::Quaterniond quaternion_first = poses_uniform_[pose_index_++];
   if (pose_index_ >= poses_uniform_.size())
   {
@@ -743,9 +590,9 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   if (num > 1)
   {
     // sample the second object
-    class_id = class_ids[1];
-    seed = irand(0, pose_nums_[class_id]);
-    pose = poses_[class_id] + seed * 7;
+    int class_id = class_ids[1];
+    int seed = irand(0, pose_nums_[class_id]);
+    float* pose = poses_[class_id] + seed * 7;
     Eigen::Quaterniond quaternion_second(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
     Sophus::SE3d::Point translation_second;
     float extent = (extents[3 * (class_id + 1)] + extents[3 * (class_id + 1) + 1] + extents[3 * (class_id + 1) + 2]) / 3;
@@ -770,11 +617,11 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<df::Light> lights;
 
   df::Light spotlight;
-  float light_intensity = drand(0.5, 5);
-  spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
-  spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity); //strong white light
+  float light_intensity = drand(0.5, 2);
+  spotlight.position = Eigen::Vector4f(drand(-2, 2), drand(-2, 2), 0, 1);
+  spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity);
   spotlight.attenuation = 0.01f;
-  spotlight.ambientCoefficient = 0.0f; //no ambient light
+  spotlight.ambientCoefficient = 0.5f;
   lights.push_back(spotlight);
 
   // render vertmap
@@ -808,11 +655,6 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   if (vertmap)
   {
     renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
-    if (is_save)
-    {
-      std::string filename = std::to_string(counter_) + ".vertmap";
-      // writeHalfPrecisionVertMap(filename, vertmap, height*width);
-    }
 
     // compute object 2D center
     if (centers_return)
@@ -829,116 +671,13 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   gtView_->ActivateScissorAndClear();
   renderer_->texture(1).RenderToViewportFlipY();
 
-/*
-  GLfloat lightpos0[] = {drand(-1, 1), drand(-1, 1), drand(0.2, 5), 1.};
-
-  // render color image
-  glColor3ub(255,255,255);
-  gtView_->ActivateScissorAndClear();
-  for (int i = 0; i < num; i++)
-  {
-    int class_id = class_ids[i];
-
-    glMatrixMode(GL_PROJECTION);
-    projectionMatrix.Load();
-    glMatrixMode(GL_MODELVIEW);
-
-    Eigen::Matrix4f mv = poses[i].cast<float>().matrix();
-    pangolin::OpenGlMatrix mvMatrix(mv);
-    mvMatrix.Load();
-
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glLightfv(GL_LIGHT0, GL_POSITION, lightpos0);
-    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.4);  // 0.4
-
-    if(is_textured_[class_id])
-    {
-      glEnable(GL_TEXTURE_2D);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-      texturedTextures_[class_id].Bind();
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      texturedCoords_[class_id].Bind();
-      glTexCoordPointer(2,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedTextures_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      texturedCoords_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-      glDisable(GL_TEXTURE_2D);
-    }
-    else
-    {
-      glEnable(GL_COLOR_MATERIAL);
-      glEnableClientState(GL_VERTEX_ARRAY);
-      texturedVertices_[class_id].Bind();
-      glVertexPointer(3,GL_FLOAT,0,0);
-      glEnableClientState(GL_COLOR_ARRAY);
-      vertexColors_[class_id].Bind();
-      glColorPointer(3,GL_FLOAT,0,0);
-      texturedIndices_[class_id].Bind();
-      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
-      texturedIndices_[class_id].Unbind();
-      texturedVertices_[class_id].Unbind();
-      vertexColors_[class_id].Unbind();
-      glDisableClientState(GL_VERTEX_ARRAY);
-      glDisableClientState(GL_COLOR_ARRAY);
-      glDisable(GL_COLOR_MATERIAL);
-    }
-
-    glDisable(GL_LIGHT0);
-    glDisable(GL_LIGHTING);
-  }
-*/
   // read color image
   if (color)
-  {
     renderer_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
-    // glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
-    if (is_save)
-    {
-      cv::Mat C = cv::Mat(height, width, CV_8UC4, color);
-      cv::Mat output;
-      cv::flip(C, output, 0);
-      std::string filename = std::to_string(counter_) + "_color.png";
-      cv::imwrite(filename.c_str(), output);
-    }
-  }
   
   // read depth image
   if (depth)
-  {
     renderer_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
-    // glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
-
-    if (is_save)
-    {
-      // write depth
-      cv::Mat D = cv::Mat(height, width, CV_32FC1, depth);
-      cv::Mat DD = cv::Mat(height, width, CV_16UC1);
-      for (int x = 0; x < width; x++)
-      { 
-        for (int y = 0; y < height; y++)
-        {
-          if (D.at<float>(y, x) == 1)
-            DD.at<short>(y, x) = 0;
-          else
-            DD.at<short>(y, x) = short(10000 * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * D.at<float>(y, x) - 1)));
-        }
-      }
-
-      std::string filename = std::to_string(counter_) + "_depth.png";
-      cv::Mat output;
-      cv::flip(DD, output, 0);
-      cv::imwrite(filename.c_str(), output);
-    }
-  }
 
   if (is_save)
   {
@@ -948,6 +687,31 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   pangolin::FinishFrame();
 
   counter_++;
+}
+
+
+jp::jp_trans_t Synthesizer::quat2our(const Sophus::SE3d T_co)
+{
+  Eigen::Matrix4d mv = T_co.matrix();
+
+  // map data types
+  cv::Mat rmat(3, 3, CV_64F);
+  for (int i = 0; i < 3; i++)
+  {
+    for (int j = 0; j < 3; j++)
+      rmat.at<double>(i,j) = mv(i, j);
+  }
+
+  cv::Point3d tpt(mv(0, 3), mv(1, 3), mv(2, 3));
+
+  // result may be reconstructed behind the camera
+  if(cv::determinant(rmat) < 0)
+  {
+    tpt = -tpt;
+    rmat = -rmat;
+  }
+	
+  return jp::jp_trans_t(rmat, tpt);  
 }
 
 
@@ -2510,7 +2274,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1.0);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, true);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;

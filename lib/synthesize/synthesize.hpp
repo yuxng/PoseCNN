@@ -113,8 +113,11 @@ class Synthesizer
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-              unsigned char* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
-              float* vertex_targets, float* vertex_weights, float weight);
+              float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
+              bool is_sampling);
+  void render_python(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+    np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& class_indexes, 
+    np::ndarray& poses_return, np::ndarray& centers_return, bool is_sampling);
 
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               float* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
