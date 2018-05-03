@@ -232,5 +232,6 @@ BOOST_PYTHON_MODULE(libsynthesizer)
   class_<Synthesizer>("Synthesizer", init<std::string, std::string>())
     .def("setup", &Synthesizer::setup)
     .def("render_one_python", &Synthesizer::render_one_python)
+    .def("render_python", &Synthesizer::render_python)
   ;
 }

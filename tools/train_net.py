@@ -152,6 +152,99 @@ def render_one(data_queue, intrinsic_matrix, extents, points):
         data_queue.put(data)
 
 
+def render(data_queue, intrinsic_matrix, points):
+
+    synthesizer = libsynthesizer.Synthesizer(cfg.CAD, cfg.POSE)
+    synthesizer.setup(cfg.TRAIN.SYN_WIDTH, cfg.TRAIN.SYN_HEIGHT)
+
+    height = cfg.TRAIN.SYN_HEIGHT
+    width = cfg.TRAIN.SYN_WIDTH
+    fx = intrinsic_matrix[0, 0]
+    fy = intrinsic_matrix[1, 1]
+    px = intrinsic_matrix[0, 2]
+    py = intrinsic_matrix[1, 2]
+    zfar = 6.0
+    znear = 0.25;
+    factor_depth = 1000.0
+    num_classes = points.shape[0]
+
+    while True:
+
+        # render a synthetic image
+        im_syn = np.zeros((height, width, 4), dtype=np.float32)
+        depth_syn = np.zeros((height, width, 3), dtype=np.float32)
+        vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
+        class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
+        poses = np.zeros((num_classes, 7), dtype=np.float32)
+        centers = np.zeros((num_classes, 2), dtype=np.float32)
+        is_sampling = True
+        synthesizer.render_python(int(width), int(height), fx, fy, px, py, znear, zfar, \
+                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling)
+
+        # convert images
+        im_syn = np.clip(255 * im_syn, 0, 255)
+        im_syn = im_syn.astype(np.uint8)
+        depth_syn = depth_syn[:, :, 0]
+
+        # convert depth
+        im_depth_raw = factor_depth * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))
+        I = np.where(depth_syn == 1)
+        im_depth_raw[I[0], I[1]] = 0
+
+        # compute labels from vertmap
+        label = np.round(vertmap_syn[:, :, 0]) + 1
+        label[np.isnan(label)] = 0
+
+        # convert pose
+        index = np.where(class_indexes >= 0)[0]
+        num = len(index)
+        qt = np.zeros((3, 4, num), dtype=np.float32)
+        for j in xrange(num):
+            ind = index[j]
+            qt[:, :3, j] = quat2mat(poses[ind, :4])
+            qt[:, 3, j] = poses[ind, 4:]
+
+        flag = 1
+        for j in xrange(num):
+            cls = class_indexes[index[j]] + 1
+            I = np.where(label == cls)
+            if len(I[0]) < 800:
+                flag = 0
+                break
+        if flag == 0:
+            continue
+
+        # process the vertmap
+        vertmap_syn[:, :, 0] = vertmap_syn[:, :, 0] - np.round(vertmap_syn[:, :, 0])
+        vertmap_syn[np.isnan(vertmap_syn)] = 0
+
+        # compute box
+        box = np.zeros((num, 4), dtype=np.float32)
+        for j in xrange(num):
+            cls = int(class_indexes[index[j]]) + 1
+            x3d = np.ones((4, points.shape[1]), dtype=np.float32)
+            x3d[0, :] = points[cls,:,0]
+            x3d[1, :] = points[cls,:,1]
+            x3d[2, :] = points[cls,:,2]
+            RT = qt[:, :, j]
+            x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
+            x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
+            x2d[1, :] = np.divide(x2d[1, :], x2d[2, :])
+        
+            box[j, 0] = np.min(x2d[0, :])
+            box[j, 1] = np.min(x2d[1, :])
+            box[j, 2] = np.max(x2d[0, :])
+            box[j, 3] = np.max(x2d[1, :])
+
+        # metadata
+        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], 'box': box, \
+                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
+
+        # construct data
+        data = {'image': im_syn, 'depth': im_depth_raw.astype(np.uint16), 'label': label.astype(np.uint8), 'meta_data': metadata}
+        data_queue.put(data)
+
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -202,7 +295,10 @@ if __name__ == '__main__':
         imdb.data_queue = Queue(maxsize=100)
         meta_data = scipy.io.loadmat(roidb[0]['meta_data'])
         intrinsic_matrix = meta_data['intrinsic_matrix'].astype(np.float32, copy=True)
-        t = threading.Thread(target=render_one, args=(imdb.data_queue, intrinsic_matrix, imdb._extents_all, imdb._points_all))
+        if cfg.TRAIN.SYN_CLASS_INDEX >= 0:
+            t = threading.Thread(target=render_one, args=(imdb.data_queue, intrinsic_matrix, imdb._extents_all, imdb._points_all))
+        else:
+            t = threading.Thread(target=render, args=(imdb.data_queue, intrinsic_matrix, imdb._points_all))
         t.start()
     else:
         imdb.data_queue = []

@@ -76,7 +76,7 @@ if __name__ == '__main__':
                    '051_large_clamp', '052_extra_large_clamp', '061_foam_brick')
     num_classes = len(classes_all)
 
-    num_images = 100
+    num_images = 200
     height = 480
     width = 640
     fx = 1066.778

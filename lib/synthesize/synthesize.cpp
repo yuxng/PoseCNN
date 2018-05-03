@@ -342,7 +342,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   if (is_sampling)
   {
     // sample object classes
-    num = irand(8, 13);
+    num = irand(5, 8);
     for (int i = 0; i < num; )
     {
       int class_id = irand(0, num_classes);
@@ -390,7 +390,12 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       // Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
       // Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.3, 0.3));
 
-      Eigen::Quaterniond quaternion(drand(-1, 1), drand(-1, 1), drand(-1, 1), drand(-1, 1));
+      double roll = drand(0, 360);
+      double pitch = drand(0, 360);
+      double yaw = drand(0, 360);
+      Eigen::Quaterniond quaternion = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
+                                    * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
+                                    * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
       Sophus::SE3d::Point translation(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
       const Sophus::SE3d T_co(quaternion, translation);
 
@@ -428,11 +433,11 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   std::vector<df::Light> lights;
 
   df::Light spotlight;
-  float light_intensity = drand(0.5, 5);
-  spotlight.position = Eigen::Vector4f(0, 0, 0, 1);
+  float light_intensity = drand(0.5, 2);
+  spotlight.position = Eigen::Vector4f(drand(-2, 2), drand(-2, 2), 0, 1);
   spotlight.intensities = Eigen::Vector3f(light_intensity, light_intensity, light_intensity); //strong white light
   spotlight.attenuation = 0.01f;
-  spotlight.ambientCoefficient = 0.0f; //no ambient light
+  spotlight.ambientCoefficient = 0.5f; //no ambient light
   lights.push_back(spotlight);
 
   // render vertmap

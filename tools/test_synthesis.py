@@ -81,7 +81,10 @@ if __name__ == '__main__':
     num_classes = 22
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/Datasets/YCB_Video_Dataset/data_syn/'
+    root = '/capri/YCB_Video_Dataset/data_syn_1/'
+
+    if not os.path.exists(root):
+        os.makedirs(root)
 
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
@@ -147,6 +150,7 @@ if __name__ == '__main__':
         print filename
 
         # save depth
+        '''
         filename = root + '{:06d}-depth.png'.format(i)
         cv2.imwrite(filename, im_depth_raw.astype(np.uint16))
 
@@ -157,5 +161,6 @@ if __name__ == '__main__':
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
         scipy.io.savemat(filename, metadata, do_compression=True)
+        '''
 
         i += 1
