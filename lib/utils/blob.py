@@ -100,6 +100,7 @@ def chromatic_transform(im, label=None, d_h=None, d_s=None, d_l=None):
 
 
 def add_noise(image):
+
     # random number
     r = np.random.rand(1)
 
@@ -109,8 +110,7 @@ def add_noise(image):
         mean = 0
         var = np.random.rand(1) * 0.3 * 256
         sigma = var**0.5
-        gauss = np.random.normal(mean,sigma,(row,col,ch))
-        gauss = gauss.reshape(row,col,ch)
+        gauss = np.random.normal(mean,sigma)
         noisy = image + gauss
         noisy = np.clip(noisy, 0, 255)
     else:
@@ -124,6 +124,7 @@ def add_noise(image):
             kernel_motion_blur[:, int((size-1)/2)] = np.ones(size)
         kernel_motion_blur = kernel_motion_blur / size
         noisy = cv2.filter2D(image, -1, kernel_motion_blur)
+
     return noisy
 
 

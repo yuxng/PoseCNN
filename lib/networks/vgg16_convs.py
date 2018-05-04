@@ -65,6 +65,7 @@ class vgg16_convs(Network):
                 data, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
+        self.queue_size = q.size()
 
         self.setup()
 
