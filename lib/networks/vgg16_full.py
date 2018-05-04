@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_full(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, matching=False, trainable=True, is_train=True):
+    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
@@ -12,7 +12,7 @@ class vgg16_full(Network):
         self.vertex_reg_3d = vertex_reg_3d
         self.vertex_reg = vertex_reg_2d or vertex_reg_3d
         self.pose_reg = pose_reg
-        self.matching = matching
+        self.adaptation = adaptation
         self.trainable = trainable
         if is_train:
             self.is_train = 1
@@ -24,7 +24,7 @@ class vgg16_full(Network):
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
             self.data_p = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        self.gt_label_2d = tf.placeholder(tf.float32, shape=[None, None, None, self.num_classes])
+        self.gt_label_2d = tf.placeholder(tf.int32, shape=[None, None, None])
         self.keep_prob = tf.placeholder(tf.float32)
         if self.vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
@@ -39,7 +39,7 @@ class vgg16_full(Network):
         queue_size = 25
         if input_format == 'RGBD':
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
                                              self.vertex_targets, self.vertex_weights, self.poses, \
                                              self.extents, self.meta_data, self.points, self.symmetry])
@@ -48,23 +48,24 @@ class vgg16_full(Network):
                                     'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
                                     'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.int32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob])
                 data, data_p, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
                 data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
                                     'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.int32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
                 data, gt_label_2d, self.keep_prob_queue = q.dequeue()
                 self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d})
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
+        self.queue_size = q.size()
 
         self.setup()
 
@@ -126,6 +127,9 @@ class vgg16_full(Network):
              .softmax_high_dimension(self.num_classes, name='prob_normalized')
              .argmax_2d(name='label_2d'))
 
+        (self.feed('prob_normalized', 'gt_label_2d')
+             .hard_label(threshold=0.7, name='gt_label_weight'))
+
         if self.vertex_reg:
             (self.feed('conv5_3')
                  .conv(1, 1, self.num_units, 1, 1, name='score_conv5_vertex', c_i=512)
@@ -158,7 +162,7 @@ class vgg16_full(Network):
             (self.feed('score_conv1_vertex', 'upscore_conv2_vertex')
                  .add(name='add_score_vertex')
                  .dropout(self.keep_prob_queue, name='dropout_vertex')
-                 .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128))
+                 .conv(1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=self.num_units))
 
             if self.vertex_reg_2d:
 
@@ -192,4 +196,16 @@ class vgg16_full(Network):
                          .l2_normalize(dim=1, name='poses_pred'))
 
                     (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
-                         .average_distance_loss(name='loss_pose'))
+                         .average_distance_loss(margin=0.01, name='loss_pose'))
+
+                    # domain adaptation
+                    if self.adaptation:
+                        self.layers['label_domain'] = self.get_output('hough')[4]
+
+                        (self.feed('pool_score')
+                             .gradient_reversal(0.01, name='greversal')
+                             .fc(256, height=7, width=7, channel=512, name='fc8')
+                             .dropout(self.keep_prob_queue, name='drop8') 
+                             .fc(2, name='domain_score')
+                             .softmax(-1, name='domain_prob')
+                             .argmax(-1, name='domain_label'))
