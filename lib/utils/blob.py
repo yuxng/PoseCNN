@@ -110,7 +110,8 @@ def add_noise(image):
         mean = 0
         var = np.random.rand(1) * 0.3 * 256
         sigma = var**0.5
-        gauss = np.random.normal(mean,sigma)
+        gauss = sigma * np.random.randn(row,col) + mean
+        gauss = np.repeat(gauss[:, :, np.newaxis], ch, axis=2)
         noisy = image + gauss
         noisy = np.clip(noisy, 0, 255)
     else:

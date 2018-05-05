@@ -18,6 +18,7 @@ from utils.se3 import *
 import scipy.io
 from normals import gpu_normals
 from transforms3d.quaternions import mat2quat, quat2mat
+from utils.timer import Timer
 
 def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
     """Given a roidb, construct a minibatch sampled from it."""
