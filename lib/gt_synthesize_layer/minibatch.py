@@ -20,7 +20,8 @@ from normals import gpu_normals
 from transforms3d.quaternions import mat2quat, quat2mat
 from utils.timer import Timer
 
-def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt):
+def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, intrinsic_matrix, \
+    data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt, is_symmetric):
     """Given a roidb, construct a minibatch sampled from it."""
 
     # Get the input image blob, formatted for tensorflow
@@ -50,10 +51,15 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
         weight = 2.0 / np.amax(extents[i, :])
         if weight < 10:
             weight = 10
-        if symmetry[i] > 0:
+        if symmetry[i] > 0 and is_symmetric:
             point_blob[i, :, :] = 4 * weight * point_blob[i, :, :]
         else:
             point_blob[i, :, :] = weight * point_blob[i, :, :]
+
+    if is_symmetric:
+        symmetry_blob = symmetry
+    else:
+        symmetry_blob = np.zeros_like(symmetry)
 
     blobs = {'data_image_color': im_blob,
              'data_image_depth': im_depth_blob,
@@ -66,7 +72,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
              'data_pose': pose_blob,
              'data_extents': extents,
              'data_points': point_blob,
-             'data_symmetry': symmetry,
+             'data_symmetry': symmetry_blob,
              'data_gt_boxes': gt_boxes,
              'data_im_info': im_info}
 

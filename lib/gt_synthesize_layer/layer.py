@@ -99,13 +99,18 @@ class GtSynthesizeLayer(object):
         else:
             is_adapt = 0
 
+        if iter >= cfg.TRAIN.STEPSIZE:
+          is_symmetric = 1
+        else:
+          is_symmetric = 0
+
         db_inds, db_inds_syn, db_inds_adapt = self._get_next_minibatch_inds(is_syn, is_adapt)
         minibatch_db = [self._roidb[i] for i in db_inds]
         if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
             backgrounds = self._backgrounds_depth
         else:
             backgrounds = self._backgrounds
-        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, self._data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt)
+        return get_minibatch(minibatch_db, self._extents, self._points, self._symmetry, self._num_classes, backgrounds, self._intrinsic_matrix, self._data_queue, db_inds_syn, is_syn, db_inds_adapt, is_adapt, is_symmetric)
             
     def forward(self, iter):
         """Get blobs and copy them into this layer's top blob vector."""
