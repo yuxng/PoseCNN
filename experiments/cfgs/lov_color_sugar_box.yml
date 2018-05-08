@@ -22,7 +22,7 @@ TRAIN:
   VERTEX_REG_3D: False
   VERTEX_W: 5.0
   POSE_W: 1.0
-  VISUALIZE: True
+  VISUALIZE: False
   POSE_REG: True
   SYNTHESIZE: True
   SYN_RATIO: 0
