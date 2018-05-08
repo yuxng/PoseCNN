@@ -69,14 +69,14 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    which_class = 2
+    which_class = 15
     classes_all = ('002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
                    '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
                    '021_bleach_cleanser', '024_bowl', '025_mug', '035_power_drill', '036_wood_block', '037_scissors', '040_large_marker', \
                    '051_large_clamp', '052_extra_large_clamp', '061_foam_brick')
     num_classes = len(classes_all)
 
-    num_images = 200
+    num_images = 10000
     height = 480
     width = 640
     fx = 1066.778
@@ -87,13 +87,14 @@ if __name__ == '__main__':
     znear = 0.25;
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/capri/YCB_Video_Dataset/data_syn_1_' + classes_all[which_class] + '/'
+    root = '/capri/YCB_Video_Dataset/data_syn_' + classes_all[which_class] + '/'
 
     if not os.path.exists(root):
         os.makedirs(root)
 
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
+    synthesizer_.init_rand(1200)
 
     extent_file = '/home/yuxiang/Projects/Deep_Pose/data/LOV/extents.txt'
     extents = np.zeros((num_classes + 1, 3), dtype=np.float32)
@@ -150,7 +151,6 @@ if __name__ == '__main__':
         cv2.imwrite(filename, im_syn)
 
         # save depth
-        '''
         filename = root + '{:06d}-depth.png'.format(i)
         cv2.imwrite(filename, im_depth_raw.astype(np.uint16))
 
@@ -161,7 +161,6 @@ if __name__ == '__main__':
         # save meta_data
         filename = root + '{:06d}-meta.mat'.format(i)
         scipy.io.savemat(filename, metadata, do_compression=True)
-        '''
         print filename
 
         i += 1

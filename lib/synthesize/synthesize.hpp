@@ -110,6 +110,7 @@ class Synthesizer
   ~Synthesizer();
 
   void setup(int width, int height);
+  void init_rand(unsigned seed);
   void create_window(int width, int height);
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
@@ -231,6 +232,7 @@ BOOST_PYTHON_MODULE(libsynthesizer)
   np::initialize();
   class_<Synthesizer>("Synthesizer", init<std::string, std::string>())
     .def("setup", &Synthesizer::setup)
+    .def("init_rand", &Synthesizer::init_rand)
     .def("render_one_python", &Synthesizer::render_one_python)
     .def("render_python", &Synthesizer::render_python)
   ;

@@ -88,6 +88,7 @@ if __name__ == '__main__':
 
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
+    synthesizer_.init_rand(1200)
 
     i = 0
     while i < num_images:

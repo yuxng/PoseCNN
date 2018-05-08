@@ -44,6 +44,13 @@ void Synthesizer::setup(int width, int height)
   setup_ = 1;
 }
 
+
+void Synthesizer::init_rand(unsigned seed)
+{
+  ThreadRand::forceInit(seed);
+}
+
+
 Synthesizer::~Synthesizer()
 {
   destroy_window();
@@ -570,12 +577,21 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   std::vector<Sophus::SE3d> poses(num);
 
   // sample the target object
+  /*
   Eigen::Quaterniond quaternion_first = poses_uniform_[pose_index_++];
   if (pose_index_ >= poses_uniform_.size())
   {
     pose_index_ = 0;
     std::random_shuffle(poses_uniform_.begin(), poses_uniform_.end());
   }
+  */
+
+  double roll = drand(0, 360);
+  double pitch = drand(0, 360);
+  double yaw = drand(0, 360);
+  Eigen::Quaterniond quaternion_first = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
+                                      * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
+                                      * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
 
   Sophus::SE3d::Point translation_first(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
   const Sophus::SE3d T_co_first(quaternion_first, translation_first);
