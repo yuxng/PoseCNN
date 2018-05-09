@@ -105,6 +105,32 @@ struct CanonicalVertAndNormalRenderType {
 };
 
 
+struct CanonicalVertAndTextureRenderType {
+    static std::string vertShaderName() {
+        static const char name[] = "canonicalVertsAndTexture.vert";
+        return std::string(name);
+    }
+    static std::string fragShaderName() {
+        static const char name[] = "canonicalVertsAndTexture.frag";
+        return std::string(name);
+    }
+    static constexpr int numTextures = 3;
+    static const GLenum * textureFormats() {
+        static const GLenum formats[numTextures] = { GL_RGBA32F, GL_RGBA32F, GL_RGBA32F};
+        return formats;
+    }
+    static constexpr int numVertexAttributes = 4;
+    static const int * vertexAttributeSizes() {
+        static const int sizes[numVertexAttributes] = { 3, 3, 2, 3 };
+        return sizes;
+    }
+    static const GLenum * vertexAttributeTypes() {
+        static const GLenum types[numVertexAttributes] = { GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
+        return types;
+    }
+};
+
+
 struct CanonicalVertAndColorRenderType {
     static std::string vertShaderName() {
         static const char name[] = "canonicalVertsAndColor.vert";
@@ -121,7 +147,7 @@ struct CanonicalVertAndColorRenderType {
     }
     static constexpr int numVertexAttributes = 4;
     static const int * vertexAttributeSizes() {
-        static const int sizes[numVertexAttributes] = { 3, 3, 2, 3 };
+        static const int sizes[numVertexAttributes] = { 3, 3, 3, 3 };
         return sizes;
     }
     static const GLenum * vertexAttributeTypes() {

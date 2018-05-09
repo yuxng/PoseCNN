@@ -77,7 +77,7 @@ if __name__ == '__main__':
     px = 312.9869
     py = 241.3109
     zfar = 6.0
-    znear = 0.25;
+    znear = 0.25
     num_classes = 22
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
@@ -101,8 +101,9 @@ if __name__ == '__main__':
         poses = np.zeros((num_classes, 7), dtype=np.float32)
         centers = np.zeros((num_classes, 2), dtype=np.float32)
         is_sampling = True
-        synthesizer_.render_python(int(width), int(height), fx, fy, px, py, znear, zfar, \
-                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling)
+        is_sampling_pose = False
+        synthesizer_.render_python(int(width), int(height), fx, fy, px, py, \
+                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
         # convert images
         im_syn = np.clip(255 * im_syn, 0, 255)

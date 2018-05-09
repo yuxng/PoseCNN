@@ -1,6 +1,7 @@
 #version 330
 
 uniform mat4 modelViewMatrix;
+uniform sampler2D materialTex;
 uniform float materialShininess;
 uniform vec3 materialSpecularColor;
 
@@ -15,7 +16,7 @@ uniform struct Light {
 
 in vec3 fragPosition;
 in vec3 fragCanonicalPosition;
-in vec3 fragColor;
+in vec2 fragTexCoord;
 in vec3 fragNormal;
 
 layout (location = 0) out vec3 fragOutput0;
@@ -69,7 +70,7 @@ void main()
     // color with lighting
     vec3 normal = normalize(transpose(inverse(mat3(modelViewMatrix))) * fragNormal);
     vec3 surfacePos = vec3(modelViewMatrix * vec4(fragPosition, 1));
-    vec4 surfaceColor = vec4(fragColor, 1);
+    vec4 surfaceColor = texture(materialTex, fragTexCoord);
     vec3 surfaceToCamera = normalize(-surfacePos);
 
     //combine color from all the lights

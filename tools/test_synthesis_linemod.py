@@ -10,7 +10,6 @@
 """Test a FCN on an image database."""
 
 import _init_paths
-from synthesize import synthesizer
 import argparse
 import os, sys
 from transforms3d.quaternions import quat2mat
@@ -18,6 +17,7 @@ from fcn.config import cfg, cfg_from_file, get_output_dir
 import scipy.io
 import cv2
 import numpy as np
+import libsynthesizer
 
 def parse_args():
     """
@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    num_images = 80000
+    num_images = 100
     height = 480
     width = 640
     fx = 572.41140
@@ -81,26 +81,34 @@ if __name__ == '__main__':
     num_classes = 15 + 1
     factor_depth = 1000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
-    root = '/home/yuxiang/Datasets/LINEMOD_SIXD/data_syn/'
+    root = '/capri/LINEMOD_SIXD/data_syn/'
 
-    synthesizer_ = synthesizer.PySynthesizer(args.cad_name, args.pose_name)
+    if not os.path.exists(root):
+        os.makedirs(root)
+
+    synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
+    synthesizer_.init_rand(1200)
 
     i = 0
     while i < num_images:
 
         # render a synthetic image
-        im_syn = np.zeros((height, width, 4), dtype=np.uint8)
-        depth_syn = np.zeros((height, width), dtype=np.float32)
+        im_syn = np.zeros((height, width, 4), dtype=np.float32)
+        depth_syn = np.zeros((height, width, 3), dtype=np.float32)
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
         class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
         poses = np.zeros((num_classes, 7), dtype=np.float32)
         centers = np.zeros((num_classes, 2), dtype=np.float32)
-        vertex_targets = np.zeros((height, width, 2*num_classes), dtype=np.float32)
-        vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
-        synthesizer_.render(im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, vertex_targets, vertex_weights, fx, fy, px, py, znear, zfar, 10.0)
-        im_syn = im_syn[::-1, :, :]
-        depth_syn = depth_syn[::-1, :]
+        is_sampling = True
+        is_sampling_pose = True
+        synthesizer_.render_python(int(width), int(height), fx, fy, px, py, \
+                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
+
+        # convert images
+        im_syn = np.clip(255 * im_syn, 0, 255)
+        im_syn = im_syn.astype(np.uint8)
+        depth_syn = depth_syn[:, :, 0]
 
         # convert depth
         im_depth_raw = factor_depth * 2 * zfar * znear / (zfar + znear - (zfar - znear) * (2 * depth_syn - 1))
@@ -111,6 +119,7 @@ if __name__ == '__main__':
         label = np.round(vertmap_syn[:, :, 0]) + 1
         label[np.isnan(label)] = 0
 
+        '''
         flag = 1
         for j in xrange(1, num_classes):
             I = np.where(label == j)
@@ -119,6 +128,7 @@ if __name__ == '__main__':
                 break
         if flag == 0:
             continue
+        '''
 
         # convert pose
         index = np.where(class_indexes >= 0)[0]

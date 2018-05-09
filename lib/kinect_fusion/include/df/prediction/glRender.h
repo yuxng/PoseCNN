@@ -47,6 +47,13 @@ public:
                 const std::vector<float> & materialShininesses,
                 const GLenum mode = GL_TRIANGLES);
 
+    void render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                const std::vector<pangolin::GlBuffer*> & indexBuffers,
+                const std::vector<Eigen::Matrix4f> & transforms,
+                const std::vector<Light> & lights,
+                const std::vector<float> & materialShininesses,
+                const GLenum mode = GL_TRIANGLES);
+
     inline const pangolin::GlTextureCudaArray & texture(const int i) const {
         assert(i < RenderType::numTextures);
         return textures_[i];
@@ -415,6 +422,41 @@ void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBu
 
     renderTeardown(vertexAttributeBuffers.back());
 
+}
+
+
+template <typename RenderType>
+void GLRenderer<RenderType>::render(const std::vector<std::vector<pangolin::GlBuffer *> > & vertexAttributeBuffers,
+                                    const std::vector<pangolin::GlBuffer*> & indexBuffers,
+                                    const std::vector<Eigen::Matrix4f> & transforms,
+                                    const std::vector<Light> & lights,
+                                    const std::vector<float> & materialShininesses,
+                                    const GLenum mode) {
+
+    assert(indexBuffers.size() == vertexAttributeBuffers.size());
+
+    renderSetup();
+    lightSetup(lights);
+
+    for (int m = 0; m < vertexAttributeBuffers.size(); ++m) 
+    {
+
+        setModelViewMatrix(transforms[m]);
+
+        matrixSetup();
+
+        materialSetup(materialShininesses[m]);
+
+        vertexAttributeSetup(vertexAttributeBuffers[m]);
+
+        indexBuffers[m]->Bind();
+
+        glDrawElements(mode, indexBuffers[m]->num_elements, GL_UNSIGNED_INT, 0);
+
+        indexBuffers[m]->Unbind();
+    }
+
+    renderTeardown(vertexAttributeBuffers.back());
 }
 
 

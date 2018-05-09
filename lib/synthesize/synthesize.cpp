@@ -64,7 +64,9 @@ void Synthesizer::create_window(int width, int height)
   gtView_ = &pangolin::Display("gt").SetAspect(float(width)/float(height));
 
   // create render
-  renderer_ = new df::GLRenderer<df::CanonicalVertAndColorRenderType>(width, height);
+  renderer_ = new df::GLRenderer<df::CanonicalVertRenderType>(width, height);
+  renderer_texture_ = new df::GLRenderer<df::CanonicalVertAndTextureRenderType>(width, height);
+  renderer_color_ = new df::GLRenderer<df::CanonicalVertAndColorRenderType>(width, height);
   renderer_vn_ = new df::GLRenderer<df::VertAndNormalRenderType>(width, height);
 }
 
@@ -73,6 +75,8 @@ void Synthesizer::destroy_window()
 {
   pangolin::DestroyWindow("Synthesizer");
   delete renderer_;
+  delete renderer_texture_;
+  delete renderer_color_;
   delete renderer_vn_;
 }
 
@@ -316,20 +320,22 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 }
 
 
-void Synthesizer::render_python(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-  np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& class_indexes, 
-  np::ndarray& poses_return, np::ndarray& centers_return, bool is_sampling)
+void Synthesizer::render_python(int width, int height, float fx, float fy, float px, float py,
+  np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
+  np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose)
 {
+  float zfar = 6.0;
+  float znear = 0.25;
   render(width, height, fx, fy, px, py, znear, zfar,
     reinterpret_cast<float*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
     reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(class_indexes.get_data()),
-    reinterpret_cast<float*>(poses_return.get_data()), reinterpret_cast<float*>(centers_return.get_data()), is_sampling);
+    reinterpret_cast<float*>(poses_return.get_data()), reinterpret_cast<float*>(centers_return.get_data()), is_sampling, is_sampling_pose);
 }
 
 
 void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
-              bool is_sampling)
+              bool is_sampling, bool is_sampling_pose)
 {
   double threshold = 0.2; // 0.2 for YCB
   int is_save = 0;
@@ -392,18 +398,37 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     while(1)
     {
       // sample a pose
-      // int seed = irand(0, pose_nums_[class_id]);
-      // float* pose = poses_[class_id] + seed * 7;
-      // Eigen::Quaterniond quaternion(pose[0] + drand(-0.2, 0.2), pose[1] + drand(-0.2, 0.2), pose[2] + drand(-0.2, 0.2), pose[3] + drand(-0.2, 0.2));
-      // Sophus::SE3d::Point translation(pose[4] + drand(-0.2, 0.2), pose[5] + drand(-0.2, 0.2), pose[6] + drand(-0.3, 0.3));
+      Eigen::Quaterniond quaternion;
+      Sophus::SE3d::Point translation;
+      if (is_sampling_pose)
+      {
+        int seed = irand(0, pose_nums_[class_id]);
+        float* pose = poses_[class_id] + seed * 7;
+        quaternion.w() = pose[0] + drand(-0.2, 0.2);
+        quaternion.x() = pose[1] + drand(-0.2, 0.2);
+        quaternion.y() = pose[2] + drand(-0.2, 0.2);
+        quaternion.z() = pose[3] + drand(-0.2, 0.2);
+        translation(0) = pose[4] + drand(-0.2, 0.2);
+        translation(1) = pose[5] + drand(-0.2, 0.2);
+        translation(2) = pose[6] + drand(-0.3, 0.3);
+      }
+      else
+      {
+        double roll = drand(0, 360);
+        double pitch = drand(0, 360);
+        double yaw = drand(0, 360);
+        Eigen::Quaterniond q = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
+                             * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
+                             * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
 
-      double roll = drand(0, 360);
-      double pitch = drand(0, 360);
-      double yaw = drand(0, 360);
-      Eigen::Quaterniond quaternion = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
-                                    * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
-                                    * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
-      Sophus::SE3d::Point translation(drand(-0.1, 0.1), drand(-0.1, 0.1), drand(0.5, 2.0));
+        quaternion.w() = q.w();
+        quaternion.x() = q.x();
+        quaternion.y() = q.y();
+        quaternion.z() = q.z();
+        translation(0) = drand(-0.1, 0.1);
+        translation(1) = drand(-0.1, 0.1);
+        translation(2) = drand(0.5, 2.0);
+      }
       const Sophus::SE3d T_co(quaternion, translation);
 
       int flag = 1;
@@ -447,37 +472,73 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   spotlight.ambientCoefficient = 0.5f; //no ambient light
   lights.push_back(spotlight);
 
-  // render vertmap
-  std::vector<Eigen::Matrix4f> transforms(num);
-  std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
-  std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
-  std::vector<pangolin::GlTexture*> textureBuffers(num);
-  std::vector<float> materialShininesses(num);
-
-  for (int i = 0; i < num; i++)
+  int is_texture;
+  if (is_textured_[class_ids[0]])
   {
-    int class_id = class_ids[i];
-    transforms[i] = poses[i].matrix().cast<float>();
-    materialShininesses[i] = drand(40, 120);
-    attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-    attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
-    attributeBuffers[i].push_back(&texturedCoords_[class_id]);
-    attributeBuffers[i].push_back(&vertexNormals_[class_id]);
-    modelIndexBuffers[i] = &texturedIndices_[class_id];
-    textureBuffers[i] = &texturedTextures_[class_id];
-  }
+    // render vertmap
+    std::vector<Eigen::Matrix4f> transforms(num);
+    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
+    std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+    std::vector<pangolin::GlTexture*> textureBuffers(num);
+    std::vector<float> materialShininesses(num);
 
-  glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
-  renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
+    for (int i = 0; i < num; i++)
+    {
+      int class_id = class_ids[i];
+      transforms[i] = poses[i].matrix().cast<float>();
+      materialShininesses[i] = drand(40, 120);
+      attributeBuffers[i].push_back(&texturedVertices_[class_id]);
+      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+      attributeBuffers[i].push_back(&texturedCoords_[class_id]);
+      attributeBuffers[i].push_back(&vertexNormals_[class_id]);
+      modelIndexBuffers[i] = &texturedIndices_[class_id];
+      textureBuffers[i] = &texturedTextures_[class_id];
+    }
+
+    glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+    renderer_texture_->setProjectionMatrix(projectionMatrix_reverse);
+    renderer_texture_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
+    is_texture = 1;
+  }
+  else
+  {
+    // render vertmap
+    std::vector<Eigen::Matrix4f> transforms(num);
+    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
+    std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
+    std::vector<float> materialShininesses(num);
+
+    for (int i = 0; i < num; i++)
+    {
+      int class_id = class_ids[i];
+      transforms[i] = poses[i].matrix().cast<float>();
+      materialShininesses[i] = drand(40, 120);
+      attributeBuffers[i].push_back(&texturedVertices_[class_id]);
+      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+      attributeBuffers[i].push_back(&vertexColors_[class_id]);
+      attributeBuffers[i].push_back(&vertexNormals_[class_id]);
+      modelIndexBuffers[i] = &texturedIndices_[class_id];
+    }
+
+    glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
+    renderer_color_->setProjectionMatrix(projectionMatrix_reverse);
+    renderer_color_->render(attributeBuffers, modelIndexBuffers, transforms, lights, materialShininesses);
+    is_texture = 0;
+  }
 
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
-  renderer_->texture(0).RenderToViewportFlipY();
+  if (is_texture)
+    renderer_texture_->texture(0).RenderToViewportFlipY();
+  else
+    renderer_color_->texture(0).RenderToViewportFlipY();
 
   if (vertmap)
   {
-    renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
+    if (is_texture)
+      renderer_texture_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
+    else
+      renderer_color_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
 
     // compute object 2D centers
     std::vector<float> center_x(num_classes, 0);
@@ -505,15 +566,28 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   // render color image
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
-  renderer_->texture(1).RenderToViewportFlipY();
+  if (is_texture)
+    renderer_texture_->texture(1).RenderToViewportFlipY();
+  else
+    renderer_color_->texture(1).RenderToViewportFlipY();
 
   // read color image
   if (color)
-    renderer_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
+  {
+    if (is_texture)
+      renderer_texture_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
+    else
+      renderer_color_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
+  }
   
   // read depth image
   if (depth)
-    renderer_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
+  {
+    if (is_texture)
+      renderer_texture_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
+    else
+      renderer_color_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
+  }
 
   if (is_save)
   {
@@ -666,16 +740,16 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
   }
 
   glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
-  renderer_->setProjectionMatrix(projectionMatrix_reverse);
-  renderer_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
+  renderer_texture_->setProjectionMatrix(projectionMatrix_reverse);
+  renderer_texture_->render(attributeBuffers, modelIndexBuffers, textureBuffers, transforms, lights, materialShininesses);
 
   glColor3f(1, 1, 1);
   gtView_->ActivateScissorAndClear();
-  renderer_->texture(0).RenderToViewportFlipY();
+  renderer_texture_->texture(0).RenderToViewportFlipY();
 
   if (vertmap)
   {
-    renderer_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
+    renderer_texture_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
 
     // compute object 2D center
     if (centers_return)
@@ -690,15 +764,15 @@ void Synthesizer::render_one(int which_class, int width, int height, float fx, f
 
   glColor3ub(255,255,255);
   gtView_->ActivateScissorAndClear();
-  renderer_->texture(1).RenderToViewportFlipY();
+  renderer_texture_->texture(1).RenderToViewportFlipY();
 
   // read color image
   if (color)
-    renderer_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
+    renderer_texture_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
   
   // read depth image
   if (depth)
-    renderer_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
+    renderer_texture_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
 
   if (is_save)
   {
@@ -2295,7 +2369,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, true);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, true, true);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;

@@ -115,10 +115,10 @@ class Synthesizer
   void destroy_window();
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
-              bool is_sampling);
-  void render_python(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
-    np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& class_indexes, 
-    np::ndarray& poses_return, np::ndarray& centers_return, bool is_sampling);
+              bool is_sampling, bool is_sampling_pose);
+  void render_python(int width, int height, float fx, float fy, float px, float py,
+    np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
+    np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose);
 
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               float* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
@@ -222,7 +222,9 @@ class Synthesizer
   std::vector<pangolin::GlBuffer> texturedCoords_;
   std::vector<pangolin::GlTexture> texturedTextures_;
 
-  df::GLRenderer<df::CanonicalVertAndColorRenderType>* renderer_;
+  df::GLRenderer<df::CanonicalVertRenderType>* renderer_;
+  df::GLRenderer<df::CanonicalVertAndTextureRenderType>* renderer_texture_;
+  df::GLRenderer<df::CanonicalVertAndColorRenderType>* renderer_color_;
   df::GLRenderer<df::VertAndNormalRenderType>* renderer_vn_;
 };
 

@@ -178,8 +178,9 @@ def render(data_queue, intrinsic_matrix, points):
         poses = np.zeros((num_classes, 7), dtype=np.float32)
         centers = np.zeros((num_classes, 2), dtype=np.float32)
         is_sampling = True
-        synthesizer.render_python(int(width), int(height), fx, fy, px, py, znear, zfar, \
-                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling)
+        is_sampling_pose = False
+        synthesizer.render_python(int(width), int(height), fx, fy, px, py, \
+                                   im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
         # convert images
         im_syn = np.clip(255 * im_syn, 0, 255)
