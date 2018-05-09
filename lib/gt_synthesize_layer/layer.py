@@ -99,7 +99,7 @@ class GtSynthesizeLayer(object):
         else:
             is_adapt = 0
 
-        if iter >= cfg.TRAIN.STEPSIZE:
+        if iter >= cfg.TRAIN.SYMSIZE:
           is_symmetric = 1
         else:
           is_symmetric = 0

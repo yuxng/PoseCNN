@@ -15,6 +15,7 @@ from .lov_single import lov_single
 from .ycb import ycb
 from .yumi import yumi
 from .linemod import linemod
+from .sym import sym
 from . import factory
 
 import os.path as osp

@@ -348,7 +348,7 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
             im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
 
             # process annotation if training for two classes
-            if num_classes == 2:
+            if num_classes == 2 and roidb[i]['cls_index'] > 0:
                 I = np.where(im == roidb[i]['cls_index'])
                 im[:, :] = 0
                 im[I[0], I[1]] = 1

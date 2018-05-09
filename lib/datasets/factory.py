@@ -18,6 +18,7 @@ import datasets.lov_single
 import datasets.ycb
 import datasets.yumi
 import datasets.linemod
+import datasets.sym
 import numpy as np
 
 # shapenet dataset
@@ -87,6 +88,14 @@ for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \
         print name
         __sets[name] = (lambda cls=cls, split=split:
                 datasets.linemod(cls, split))
+
+
+# sym dataset
+for split in ['test']:
+    name = 'sym_{}'.format(split)
+    print name
+    __sets[name] = (lambda split=split:
+            datasets.sym(split))
 
 
 def get_imdb(name):

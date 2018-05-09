@@ -78,6 +78,8 @@ if __name__ == '__main__':
     py = 241.3109
     zfar = 6.0
     znear = 0.25
+    tnear = 0.5
+    tfar = 2.0
     num_classes = 22
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
@@ -89,6 +91,16 @@ if __name__ == '__main__':
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
     synthesizer_.setup(width, height)
     synthesizer_.init_rand(1200)
+
+    parameters = np.zeros((8, ), dtype=np.float32)
+    parameters[0] = fx
+    parameters[1] = fy
+    parameters[2] = px
+    parameters[3] = py
+    parameters[4] = znear
+    parameters[5] = zfar
+    parameters[6] = tnear
+    parameters[7] = tfar
 
     i = 0
     while i < num_images:
@@ -102,7 +114,7 @@ if __name__ == '__main__':
         centers = np.zeros((num_classes, 2), dtype=np.float32)
         is_sampling = True
         is_sampling_pose = False
-        synthesizer_.render_python(int(width), int(height), fx, fy, px, py, \
+        synthesizer_.render_python(int(width), int(height), parameters, \
                                    im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
         # convert images

@@ -165,8 +165,20 @@ def render(data_queue, intrinsic_matrix, points):
     py = intrinsic_matrix[1, 2]
     zfar = 6.0
     znear = 0.25;
+    tnear = cfg.TRAIN.SYN_TNEAR
+    tfar = cfg.TRAIN.SYN_TFAR
     factor_depth = 1000.0
     num_classes = points.shape[0]
+
+    parameters = np.zeros((8, ), dtype=np.float32)
+    parameters[0] = fx
+    parameters[1] = fy
+    parameters[2] = px
+    parameters[3] = py
+    parameters[4] = znear
+    parameters[5] = zfar
+    parameters[6] = tnear
+    parameters[7] = tfar
 
     while True:
 
@@ -177,9 +189,9 @@ def render(data_queue, intrinsic_matrix, points):
         class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
         poses = np.zeros((num_classes, 7), dtype=np.float32)
         centers = np.zeros((num_classes, 2), dtype=np.float32)
-        is_sampling = True
-        is_sampling_pose = False
-        synthesizer.render_python(int(width), int(height), fx, fy, px, py, \
+        is_sampling = cfg.TRAIN.SYN_SAMPLE_OBJECT
+        is_sampling_pose = cfg.TRAIN.SYN_SAMPLE_POSE
+        synthesizer.render_python(int(width), int(height), parameters, \
                                    im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
         # convert images

@@ -320,20 +320,29 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 }
 
 
-void Synthesizer::render_python(int width, int height, float fx, float fy, float px, float py,
+void Synthesizer::render_python(int width, int height, np::ndarray const & parameters, 
   np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
   np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose)
 {
-  float zfar = 6.0;
-  float znear = 0.25;
-  render(width, height, fx, fy, px, py, znear, zfar,
+
+  float* meta = reinterpret_cast<float*>(parameters.get_data());
+  float fx = meta[0];
+  float fy = meta[1];
+  float px = meta[2];
+  float py = meta[3];
+  float znear = meta[4];
+  float zfar = meta[5];
+  float tnear = meta[6];
+  float tfar = meta[7];
+
+  render(width, height, fx, fy, px, py, znear, zfar, tnear, tfar,
     reinterpret_cast<float*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
     reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(class_indexes.get_data()),
     reinterpret_cast<float*>(poses_return.get_data()), reinterpret_cast<float*>(centers_return.get_data()), is_sampling, is_sampling_pose);
 }
 
 
-void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, 
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               bool is_sampling, bool is_sampling_pose)
 {
@@ -427,7 +436,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
         quaternion.z() = q.z();
         translation(0) = drand(-0.1, 0.1);
         translation(1) = drand(-0.1, 0.1);
-        translation(2) = drand(0.5, 2.0);
+        translation(2) = drand(tnear, tfar);
       }
       const Sophus::SE3d T_co(quaternion, translation);
 
@@ -2360,7 +2369,7 @@ int main(int argc, char** argv)
   // camera parameters
   int width = 640;
   int height = 480;
-  float fx = 1066.778, fy = 1067.487, px = 312.9869, py = 241.3109, zfar = 6.0, znear = 0.25;
+  float fx = 1066.778, fy = 1067.487, px = 312.9869, py = 241.3109, zfar = 6.0, znear = 0.25, tnear = 0.5, tfar = 2.0;
 
   Synthesizer Synthesizer(argv[1], argv[2]);
   Synthesizer.setup(width, height);
@@ -2369,7 +2378,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, NULL, NULL, NULL, NULL, NULL, NULL, true, true);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, tnear, tfar, NULL, NULL, NULL, NULL, NULL, NULL, true, true);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
