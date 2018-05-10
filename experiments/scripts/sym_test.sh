@@ -13,8 +13,8 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output/sym/sym_train/vgg16_fcn_color_single_frame_2d_pose_add_sym_iter_20000.ckpt \
-  --imdb sym_test \
+  --model output/sym/sym_train/vgg16_fcn_color_single_frame_2d_pose_sym_sym_iter_10000.ckpt \
+  --imdb sym_train \
   --cfg experiments/cfgs/sym.yml \
   --cad data/SYM/models.txt \
   --pose data/SYM/poses.txt \

@@ -91,7 +91,7 @@ for cls in ['ape', 'benchvise', 'bowl', 'camera', 'can', \
 
 
 # sym dataset
-for split in ['test']:
+for split in ['train']:
     name = 'sym_{}'.format(split)
     print name
     __sets[name] = (lambda split=split:

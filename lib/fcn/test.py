@@ -1272,7 +1272,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
 
         # process annotation if training for two classes
-        if imdb.num_classes == 2:
+        if imdb.num_classes == 2 and imdb._cls_index > 0:
             I = np.where(labels_gt == imdb._cls_index)
             labels_gt[:, :] = 0
             labels_gt[I[0], I[1]] = 1

@@ -29,6 +29,7 @@ class sym(datasets.imdb):
         self._class_colors = [(255, 255, 255), (255, 0, 0)]
         self._class_weights = [1, 100]
         self._symmetry = [0, 1]
+        self._cls_index = -1
 
         self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
@@ -111,7 +112,7 @@ class sym(datasets.imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        image_set_file = os.path.join(self._sym_path, 'test.txt')
+        image_set_file = os.path.join(self._sym_path, 'train.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
@@ -230,6 +231,26 @@ class sym(datasets.imdb):
                 'flipped': False}
 
 
+    def labels_to_image(self, im, labels):
+        class_colors = self._class_colors
+        height = labels.shape[0]
+        width = labels.shape[1]
+        image_r = np.zeros((height, width), dtype=np.float32)
+        image_g = np.zeros((height, width), dtype=np.float32)
+        image_b = np.zeros((height, width), dtype=np.float32)
+
+        for i in xrange(len(class_colors)):
+            color = class_colors[i]
+            I = np.where(labels == i)
+            image_r[I] = color[0]
+            image_g[I] = color[1]
+            image_b[I] = color[2]
+
+        image = np.stack((image_r, image_g, image_b), axis=-1)
+
+        return image.astype(np.uint8)
+
+
     def evaluate_result(self, im_ind, segmentation, gt_labels, meta_data, output_dir):
 
         # make matlab result dir
@@ -255,10 +276,7 @@ class sym(datasets.imdb):
             ind = index[i]
             print '{} {}'.format(self._classes[ind], intersection[ind] / union[ind])
 
-        if 'few' in self._image_set:
-            threshold = 0.1 * self._diameters[self._cls_index - 1]
-        else:
-            threshold = 0.1 * np.linalg.norm(self._extents[1, :])
+        threshold = 0.1 * np.linalg.norm(self._extents[1, :])
 
         # evaluate pose
         if cfg.TEST.POSE_REG:

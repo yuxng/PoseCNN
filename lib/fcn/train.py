@@ -470,7 +470,7 @@ def loss_quaternion(pose_pred, pose_targets, pose_weights):
     with tf.name_scope('loss'):
         distances = 1 - tf.square( tf.reduce_sum(tf.multiply(pose_pred, pose_targets), reduction_indices=[1]) )
         weights = tf.reduce_mean(pose_weights, reduction_indices=[1])
-        loss = tf.div( tf.reduce_sum(tf.multiply(weights, distances)), tf.reduce_sum(weights) )
+        loss = tf.div( tf.reduce_sum(tf.multiply(weights, distances)), tf.reduce_sum(weights)+1e-10 )
 
     return loss
 
@@ -505,8 +505,8 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     # pose_pred = network.get_output('poses_pred')
                     # pose_targets = network.get_output('poses_target')
                     # pose_weights = network.get_output('poses_weight')
-                    # loss_pose = tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
-                    # loss_pose = loss_quaternion(pose_pred, pose_targets, pose_weights)
+                    # loss_pose = cfg.TRAIN.POSE_W * tf.div( tf.reduce_sum(tf.multiply(pose_weights, tf.abs(tf.subtract(pose_pred, pose_targets)))), tf.reduce_sum(pose_weights) )
+                    # loss_pose = cfg.TRAIN.POSE_W * loss_quaternion(pose_pred, pose_targets, pose_weights)
                     loss_pose = cfg.TRAIN.POSE_W * network.get_output('loss_pose')[0]
 
                     if cfg.TRAIN.ADAPT:
