@@ -188,6 +188,7 @@ class vgg16_convs(Network):
                     (self.feed('conv4_3', 'rois')
                          .crop_pool_new(8.0, pool_size=7, name='pool4'))
 
+                    '''
                     (self.feed('conv3_3', 'rois')
                          .crop_pool_new(4.0, pool_size=7, name='pool3')
                          .conv(3, 3, 512, 1, 1, name='conv_pool3', c_i=256))
@@ -199,8 +200,9 @@ class vgg16_convs(Network):
                     (self.feed('conv1_2', 'rois')
                          .crop_pool_new(1.0, pool_size=7, name='pool1')
                          .conv(3, 3, 512, 1, 1, name='conv_pool1', c_i=64))
+                    '''
 
-                    (self.feed('pool5', 'pool4', 'conv_pool3', 'conv_pool2', 'conv_pool1')
+                    (self.feed('pool5', 'pool4')
                          .add(name='pool_score')
                          .fc(4096, height=7, width=7, channel=512, name='fc6')
                          .dropout(self.keep_prob_queue, name='drop6')
