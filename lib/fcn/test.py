@@ -1192,7 +1192,8 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         perm = xrange(num_images)
 
     if cfg.TEST.SYNTHETIC:
-        perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
+        # perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
+        perm = xrange(cfg.TRAIN.SYNNUM)
 
         cache_file = cfg.BACKGROUND
         if os.path.exists(cache_file):
@@ -1210,35 +1211,38 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             filename = cfg.TRAIN.SYNROOT + '{:06d}-color.png'.format(i)
             rgba = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
 
+            if rgba.shape[2] == 4:
+                # sample a background image
+                ind = np.random.randint(len(backgrounds), size=1)[0]
+                filename = backgrounds[ind]
+                background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+                try:
+                    background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+                except:
+                    if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+                        background = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
+                    else:
+                        background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                    print 'bad background image'
+
+                if cfg.INPUT != 'DEPTH' and cfg.INPUT != 'NORMAL' and len(background.shape) != 3:
+                    background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                    print 'bad background image'
+
+                # add background
+                im = np.copy(rgba[:,:,:3])
+                alpha = rgba[:,:,3]
+                I = np.where(alpha == 0)
+                if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+                    im_depth[I[0], I[1]] = background[I[0], I[1]] / 10
+                else:
+                    im[I[0], I[1], :] = background[I[0], I[1], :3]
+            else:
+                im = rgba
+
             # depth
             filename = cfg.TRAIN.SYNROOT + '{:06d}-depth.png'.format(i)
             im_depth = pad_im(cv2.imread(filename, cv2.IMREAD_UNCHANGED), 16)
-
-            # sample a background image
-            ind = np.random.randint(len(backgrounds), size=1)[0]
-            filename = backgrounds[ind]
-            background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-            try:
-                background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
-            except:
-                if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
-                    background = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
-                else:
-                    background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
-                print 'bad background image'
-
-            if cfg.INPUT != 'DEPTH' and cfg.INPUT != 'NORMAL' and len(background.shape) != 3:
-                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
-                print 'bad background image'
-
-            # add background
-            im = np.copy(rgba[:,:,:3])
-            alpha = rgba[:,:,3]
-            I = np.where(alpha == 0)
-            if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
-                im_depth[I[0], I[1]] = background[I[0], I[1]] / 10
-            else:
-                im[I[0], I[1], :] = background[I[0], I[1], :3]
 
             # label
             filename = cfg.TRAIN.SYNROOT + '{:06d}-label.png'.format(i)

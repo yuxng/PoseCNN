@@ -29,12 +29,14 @@ TRAIN:
   SYN_RATIO: 10
   SYN_ONLINE: True
   SYN_CLASS_INDEX: 15
+  SYNROOT: 'data/LOV/data_syn_036_wood_block/'
+  SYNNUM: 10000
 TEST:
   SINGLE_FRAME: True
   SCALES_BASE: !!python/tuple [1.0]
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
-  VISUALIZE: True
+  VISUALIZE: False
   POSE_REG: True
   POSE_REFINE: False
-  SYNTHETIC: False
+  SYNTHETIC: True

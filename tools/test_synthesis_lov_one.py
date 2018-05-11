@@ -18,6 +18,7 @@ import libsynthesizer
 import scipy.io
 import cv2
 import numpy as np
+import cPickle
 
 def parse_args():
     """
@@ -57,6 +58,9 @@ def parse_args():
     parser.add_argument('--pose', dest='pose_name',
                         help='name of the pose files',
                         default=None, type=str)
+    parser.add_argument('--background', dest='background_name',
+                        help='name of the background file',
+                        default=None, type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -68,6 +72,7 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+    cfg.BACKGROUND = args.background_name
 
     which_class = 15
     classes_all = ('002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
@@ -100,6 +105,13 @@ if __name__ == '__main__':
     extents = np.zeros((num_classes + 1, 3), dtype=np.float32)
     extents[1:, :] = np.loadtxt(extent_file).astype(np.float32)
     print extents
+
+    # load background
+    cache_file = cfg.BACKGROUND
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as fid:
+            backgrounds = cPickle.load(fid)
+        print 'backgrounds loaded from {}'.format(cache_file)
 
     i = 0
     while i < num_images:
@@ -146,9 +158,36 @@ if __name__ == '__main__':
         metadata = {'poses': qt, 'center': centers, \
                     'cls_indexes': which_class + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
 
+        # sample a background image
+        rgba = im_syn
+        ind = np.random.randint(len(backgrounds), size=1)[0]
+        filename = backgrounds[ind]
+        background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+        try:
+            background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+        except:
+            if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+                background = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.uint16)
+            else:
+                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+            print 'bad background image'
+
+        if cfg.INPUT != 'DEPTH' and cfg.INPUT != 'NORMAL' and len(background.shape) != 3:
+            background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+            print 'bad background image'
+
+        # add background
+        im = np.copy(rgba[:,:,:3])
+        alpha = rgba[:,:,3]
+        I = np.where(alpha == 0)
+        if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+            im_depth[I[0], I[1]] = background[I[0], I[1]] / 10
+        else:
+            im[I[0], I[1], :] = background[I[0], I[1], :3]
+
         # save image
         filename = root + '{:06d}-color.png'.format(i)
-        cv2.imwrite(filename, im_syn)
+        cv2.imwrite(filename, im)
 
         # save depth
         filename = root + '{:06d}-depth.png'.format(i)
