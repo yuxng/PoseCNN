@@ -130,22 +130,7 @@ class vgg16_convs(Network):
              .dropout(self.keep_prob_queue, name='dropout')
              .deconv(int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False))
 
-        # stage 1
         (self.feed('upscore')
-             .conv(1, 1, self.num_classes, 1, 1, name='score_1', c_i=self.num_units)
-             .log_softmax_high_dimension(self.num_classes, name='prob_1'))
-
-        (self.feed('score_1')
-             .softmax_high_dimension(self.num_classes, name='prob_normalized_1')
-             .argmax_2d(name='label_2d_1'))
-
-        (self.feed('prob_normalized_1', 'gt_label_2d')
-             .hard_label(threshold=0.7, name='gt_label_weight_1'))
-
-        # stage 2
-        (self.feed('upscore', 'score_1')
-             .concat(3, name='upscore_2')
-             .conv(3, 3, self.num_units, 1, 1, name='conv_s2', c_i=self.num_units+self.num_classes)
              .conv(1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
              .log_softmax_high_dimension(self.num_classes, name='prob'))
 
@@ -154,7 +139,7 @@ class vgg16_convs(Network):
              .argmax_2d(name='label_2d'))
 
         (self.feed('prob_normalized', 'gt_label_2d')
-             .hard_label(threshold=0.7, name='gt_label_weight'))
+             .hard_label(threshold=0.9, name='gt_label_weight'))
 
         if self.vertex_reg:
             (self.feed('conv5_3')
@@ -187,20 +172,6 @@ class vgg16_convs(Network):
                          
                     (self.feed('conv4_3', 'rois')
                          .crop_pool_new(8.0, pool_size=7, name='pool4'))
-
-                    '''
-                    (self.feed('conv3_3', 'rois')
-                         .crop_pool_new(4.0, pool_size=7, name='pool3')
-                         .conv(3, 3, 512, 1, 1, name='conv_pool3', c_i=256))
-
-                    (self.feed('conv2_2', 'rois')
-                         .crop_pool_new(2.0, pool_size=7, name='pool2')
-                         .conv(3, 3, 512, 1, 1, name='conv_pool2', c_i=128))
-
-                    (self.feed('conv1_2', 'rois')
-                         .crop_pool_new(1.0, pool_size=7, name='pool1')
-                         .conv(3, 3, 512, 1, 1, name='conv_pool1', c_i=64))
-                    '''
 
                     (self.feed('pool5', 'pool4')
                          .add(name='pool_score')
