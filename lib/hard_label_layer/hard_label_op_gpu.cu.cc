@@ -23,7 +23,7 @@ __global__ void HardlabelForward(const int nthreads, const float* bottom_prob, c
       top_data[index * num_classes + c] = 0.0;
 
     int gt_label = bottom_gt[index];
-    if (gt_label != -1 && bottom_prob[index * num_classes + gt_label] < threshold)
+    if (gt_label != -1 && (gt_label > 0 || bottom_prob[index * num_classes + gt_label] < threshold))
       top_data[index * num_classes + gt_label] = 1.0;
   }
 }
