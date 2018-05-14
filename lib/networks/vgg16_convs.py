@@ -2,12 +2,13 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
+    def __init__(self, input_format, num_classes, num_units, scales, threshold_label, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
         self.num_units = num_units
         self.scale = 1.0
+        self.threshold_label = threshold_label
         self.vertex_reg_2d = vertex_reg_2d
         self.vertex_reg_3d = vertex_reg_3d
         self.vertex_reg = vertex_reg_2d or vertex_reg_3d
@@ -139,7 +140,7 @@ class vgg16_convs(Network):
              .argmax_2d(name='label_2d'))
 
         (self.feed('prob_normalized', 'gt_label_2d')
-             .hard_label(threshold=0.9, name='gt_label_weight'))
+             .hard_label(threshold=self.threshold_label, name='gt_label_weight'))
 
         if self.vertex_reg:
             (self.feed('conv5_3')
