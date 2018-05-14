@@ -8,6 +8,7 @@
 """Compute minibatch blobs for training a Fast R-CNN network."""
 
 import sys
+import os
 import numpy as np
 import numpy.random as npr
 import cv2
@@ -324,7 +325,10 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
             else:
                 meta_data = scipy.io.loadmat(roidb[i]['meta_data'])
                 meta_data['cls_indexes'] = meta_data['cls_indexes'].flatten()
-                im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+                if os.path.exists(roidb[i]['depth']):
+                    im_depth = pad_im(cv2.imread(roidb[i]['depth'], cv2.IMREAD_UNCHANGED), 16)
+                else:
+                    im_depth = np.zeros((blob_height, blob_width), dtype=np.float32)
 
                 # read label image
                 im = pad_im(cv2.imread(roidb[i]['label'], cv2.IMREAD_UNCHANGED), 16)
