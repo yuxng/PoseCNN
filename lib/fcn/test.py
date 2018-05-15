@@ -1189,7 +1189,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         perm = np.random.permutation(np.arange(num_images))
         # perm = xrange(num_images)
     else:
-        perm = xrange(num_images)
+        perm = xrange(0, num_images, 10)
 
     if cfg.TEST.SYNTHETIC:
         # perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
@@ -1266,7 +1266,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                 im = rgba
 
             # read depth image
-            im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+            if os.path.exists(imdb.depth_path_at(i)):
+                im_depth = pad_im(cv2.imread(imdb.depth_path_at(i), cv2.IMREAD_UNCHANGED), 16)
+            else:
+                im_depth = np.zeros((rgba.shape[0], rgba.shape[1]), dtype=np.float32)
 
             # read label image
             labels_gt = pad_im(cv2.imread(imdb.label_path_at(i), cv2.IMREAD_UNCHANGED), 16)
@@ -1435,12 +1438,14 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             else:
                 vis_segmentations(im, im_depth, im_label, im_label_gt, imdb._class_colors)
 
+    '''
     seg_file = os.path.join(output_dir, 'segmentations.pkl')
     with open(seg_file, 'wb') as f:
         cPickle.dump(segmentations, f, cPickle.HIGHEST_PROTOCOL)
 
     # evaluation
     imdb.evaluate_segmentations(segmentations, output_dir)
+    '''
 
 ########################
 # test detection network
