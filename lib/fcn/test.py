@@ -1189,7 +1189,7 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
         perm = np.random.permutation(np.arange(num_images))
         # perm = xrange(num_images)
     else:
-        perm = xrange(0, num_images, 10)
+        perm = xrange(num_images)
 
     if cfg.TEST.SYNTHETIC:
         # perm = np.random.permutation(np.arange(cfg.TRAIN.SYNNUM))
