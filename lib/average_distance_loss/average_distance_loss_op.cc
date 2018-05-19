@@ -62,8 +62,8 @@ class AveragedistanceOp : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->GetAttr("margin", &margin_));
     // Check that margin is positive
-    OP_REQUIRES(context, margin_ > 0,
-                errors::InvalidArgument("Need margin > 0, got ", margin_));
+    OP_REQUIRES(context, margin_ >= 0,
+                errors::InvalidArgument("Need margin >= 0, got ", margin_));
   }
 
   // bottom_prediction: (batch_size, 4 * num_classes)
@@ -261,8 +261,8 @@ class AveragedistanceOp<Eigen::GpuDevice, T> : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->GetAttr("margin", &margin_));
     // Check that margin is positive
-    OP_REQUIRES(context, margin_ > 0,
-                errors::InvalidArgument("Need margin > 0, got ", margin_));
+    OP_REQUIRES(context, margin_ >= 0,
+                errors::InvalidArgument("Need margin >= 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -323,8 +323,8 @@ class AveragedistanceGradOp : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->GetAttr("margin", &margin_));
     // Check that margin is positive
-    OP_REQUIRES(context, margin_ > 0,
-                errors::InvalidArgument("Need margin > 0, got ", margin_));
+    OP_REQUIRES(context, margin_ >= 0,
+                errors::InvalidArgument("Need margin >= 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
@@ -391,8 +391,8 @@ class AveragedistanceGradOp<Eigen::GpuDevice, T> : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->GetAttr("margin", &margin_));
     // Check that margin is positive
-    OP_REQUIRES(context, margin_ > 0,
-                errors::InvalidArgument("Need margin > 0, got ", margin_));
+    OP_REQUIRES(context, margin_ >= 0,
+                errors::InvalidArgument("Need margin >= 0, got ", margin_));
   }
 
   void Compute(OpKernelContext* context) override 
