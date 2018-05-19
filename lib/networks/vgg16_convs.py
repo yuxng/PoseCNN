@@ -180,7 +180,7 @@ class vgg16_convs(Network):
                          .dropout(self.keep_prob_queue, name='drop6')
                          .fc(4096, num_in=4096, name='fc7')
                          .dropout(self.keep_prob_queue, name='drop7')
-                         .fc(4 * self.num_classes, relu=False, name='poses_pred_unnormalized')
+                         .fc(4 * self.num_classes, relu=False, name='fc8')
                          .tanh(name='poses_tanh'))
 
                     (self.feed('poses_tanh', 'poses_weight')
@@ -196,8 +196,8 @@ class vgg16_convs(Network):
 
                         (self.feed('pool_score')
                              .gradient_reversal(0.01, name='greversal')
-                             .fc(256, height=7, width=7, channel=512, name='fc8')
-                             .dropout(self.keep_prob_queue, name='drop8') 
+                             .fc(256, height=7, width=7, channel=512, name='fc9')
+                             .dropout(self.keep_prob_queue, name='drop9') 
                              .fc(2, name='domain_score')
                              .softmax(-1, name='domain_prob')
                              .argmax(-1, name='domain_label'))

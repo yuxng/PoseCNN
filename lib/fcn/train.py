@@ -525,13 +525,43 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         labels = network.get_output('labels_gt_2d')
         loss = loss_cross_entropy(scores, labels) + loss_regu
 
-    # optimizer
+    # split variables
+    variables = tf.trainable_variables()
+    var_list1 = []
+    var_list2 = []
+    for i in xrange(len(variables)):
+        name = variables[i].name
+        if 'fc' in name:
+            var_list2.append(variables[i])
+        else:
+            var_list1.append(variables[i])
+
     global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = cfg.TRAIN.LEARNING_RATE
-    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
     momentum = cfg.TRAIN.MOMENTUM
-    train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
+    starter_learning_rate1 = cfg.TRAIN.LEARNING_RATE
+    learning_rate = tf.train.exponential_decay(starter_learning_rate1, global_step,
+                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+    opt1 = tf.train.MomentumOptimizer(learning_rate, momentum)
+
+    starter_learning_rate2 = cfg.TRAIN.LEARNING_RATE * 10
+    learning_rate2 = tf.train.exponential_decay(starter_learning_rate2, global_step,
+                                              cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+    opt2 = tf.train.MomentumOptimizer(learning_rate2, momentum)
+
+    grads = tf.gradients(loss, var_list1 + var_list2)
+    grads1 = grads[:len(var_list1)]
+    grads2 = grads[len(var_list1):]
+    train_op1 = opt1.apply_gradients(zip(grads1, var_list1))
+    train_op2 = opt2.apply_gradients(zip(grads2, var_list2))
+    train_op = tf.group(train_op1, train_op2)
+
+    # optimizer
+    # global_step = tf.Variable(0, trainable=False)
+    # starter_learning_rate = cfg.TRAIN.LEARNING_RATE
+    # learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+    #                                          cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+    # momentum = cfg.TRAIN.MOMENTUM
+    # train_op = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(loss, global_step=global_step)
     
     #config = tf.ConfigProto()
     #config.gpu_options.per_process_gpu_memory_fraction = 0.85
