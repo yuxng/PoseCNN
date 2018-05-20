@@ -536,23 +536,24 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
         else:
             var_list1.append(variables[i])
 
-    global_step = tf.Variable(0, trainable=False)
+    global_step1 = tf.Variable(0, trainable=False)
     momentum = cfg.TRAIN.MOMENTUM
     starter_learning_rate1 = cfg.TRAIN.LEARNING_RATE
-    learning_rate = tf.train.exponential_decay(starter_learning_rate1, global_step,
+    learning_rate = tf.train.exponential_decay(starter_learning_rate1, global_step1,
                                               cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
     opt1 = tf.train.MomentumOptimizer(learning_rate, momentum)
 
     starter_learning_rate2 = cfg.TRAIN.LEARNING_RATE * 10
-    learning_rate2 = tf.train.exponential_decay(starter_learning_rate2, global_step,
+    global_step2 = tf.Variable(0, trainable=False)
+    learning_rate2 = tf.train.exponential_decay(starter_learning_rate2, global_step2,
                                               cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
     opt2 = tf.train.MomentumOptimizer(learning_rate2, momentum)
 
     grads = tf.gradients(loss, var_list1 + var_list2)
     grads1 = grads[:len(var_list1)]
     grads2 = grads[len(var_list1):]
-    train_op1 = opt1.apply_gradients(zip(grads1, var_list1))
-    train_op2 = opt2.apply_gradients(zip(grads2, var_list2))
+    train_op1 = opt1.apply_gradients(zip(grads1, var_list1), global_step=global_step1)
+    train_op2 = opt2.apply_gradients(zip(grads2, var_list2), global_step=global_step2)
     train_op = tf.group(train_op1, train_op2)
 
     # optimizer
