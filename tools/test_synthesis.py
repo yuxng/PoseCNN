@@ -57,6 +57,9 @@ def parse_args():
     parser.add_argument('--pose', dest='pose_name',
                         help='name of the pose files',
                         default=None, type=str)
+    parser.add_argument('--background', dest='background_name',
+                        help='name of the background file',
+                        default=None, type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -68,8 +71,9 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+    cfg.BACKGROUND = args.background_name
 
-    num_images = 100
+    num_images = 80000
     height = 480
     width = 640
     fx = 1066.778
@@ -113,7 +117,7 @@ if __name__ == '__main__':
         poses = np.zeros((num_classes, 7), dtype=np.float32)
         centers = np.zeros((num_classes, 2), dtype=np.float32)
         is_sampling = True
-        is_sampling_pose = False
+        is_sampling_pose = True
         synthesizer_.render_python(int(width), int(height), parameters, \
                                    im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
