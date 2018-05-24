@@ -552,9 +552,9 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
             if cfg.TRAIN.VERTEX_REG_3D:
                 vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
 
-            vertex_weights[y, x, 3*i+0] = 1.0
-            vertex_weights[y, x, 3*i+1] = 1.0
-            vertex_weights[y, x, 3*i+2] = 1.0
+            vertex_weights[y, x, 3*i+0] = 10.0
+            vertex_weights[y, x, 3*i+1] = 10.0
+            vertex_weights[y, x, 3*i+2] = 10.0
 
     return vertex_targets, vertex_weights
 
