@@ -1841,6 +1841,25 @@ void Synthesizer::refinePose(int width, int height, int objID, float znear, floa
   }
 }
 
+void Synthesizer::icp_python(np::ndarray& labelmap, np::ndarray& depth, np::ndarray& parameters, 
+  int height, int width, int num_roi, int channel_roi, 
+  np::ndarray& rois, np::ndarray& poses, np::ndarray& outputs, np::ndarray& outputs_icp, float maxError)
+{
+  float* meta = reinterpret_cast<float*>(parameters.get_data());
+  float fx = meta[0];
+  float fy = meta[1];
+  float px = meta[2];
+  float py = meta[3];
+  float znear = meta[4];
+  float zfar = meta[5];
+  float factor = meta[6];
+
+  solveICP(reinterpret_cast<int*>(labelmap.get_data()), reinterpret_cast<unsigned char*>(depth.get_data()),
+    height, width, fx, fy, px, py, znear, zfar, factor, num_roi, channel_roi,
+    reinterpret_cast<float*>(rois.get_data()), reinterpret_cast<float*>(poses.get_data()),
+    reinterpret_cast<float*>(outputs.get_data()), reinterpret_cast<float*>(outputs_icp.get_data()), maxError);
+}
+
 
 // ICP
 void Synthesizer::solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, 

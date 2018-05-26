@@ -1202,7 +1202,9 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             print 'backgrounds loaded from {}'.format(cache_file)
 
     if (cfg.TEST.VERTEX_REG_2D and cfg.TEST.POSE_REFINE) or (cfg.TEST.VERTEX_REG_3D and cfg.TEST.POSE_REG):
-        SYN = synthesizer.PySynthesizer(cfg.CAD, cfg.POSE)
+        import libsynthesizer
+        synthesizer = libsynthesizer.Synthesizer(cfg.CAD, cfg.POSE)
+        synthesizer.setup(cfg.TRAIN.SYN_WIDTH, cfg.TRAIN.SYN_HEIGHT)
 
     for i in perm:
 
@@ -1329,7 +1331,22 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
                         rois_icp = rois.copy()
                         rois_icp[:, 1] = imdb._cls_index
                     im_depth = cv2.resize(im_depth, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_LINEAR)
-                    SYN.refine_poses(labels_icp, im_depth, rois_icp, poses, poses_new, poses_icp, fx, fy, px, py, znear, zfar, factor, error_threshold)
+
+                    parameters = np.zeros((7, ), dtype=np.float32)
+                    parameters[0] = fx
+                    parameters[1] = fy
+                    parameters[2] = px
+                    parameters[3] = py
+                    parameters[4] = znear
+                    parameters[5] = zfar
+                    parameters[6] = factor
+
+                    height = labels_icp.shape[0]
+                    width = labels_icp.shape[1]
+                    num_roi = rois_icp.shape[0]
+                    channel_roi = rois_icp.shape[1]
+                    synthesizer.icp_python(labels_icp, im_depth, parameters, height, width, num_roi, channel_roi, \
+                                           rois_icp, poses, poses_new, poses_icp, error_threshold)
                 
         elif cfg.TEST.VERTEX_REG_3D:
             fx = meta_data['intrinsic_matrix'][0, 0] * im_scale

@@ -20,4 +20,4 @@ time ./tools/train_net.py --gpu 0 \
   --cfg experiments/cfgs/lov_color_banana.yml \
   --cad data/LOV/models.txt \
   --pose data/LOV/poses.txt \
-  --iters 80000
+  --iters 160000

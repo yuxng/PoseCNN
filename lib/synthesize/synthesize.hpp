@@ -137,6 +137,11 @@ class Synthesizer
   // pose refinement with ICP
   void solveICP(const int* labelmap, unsigned char* depth, int height, int width, float fx, float fy, float px, float py, float znear, float zfar, 
                 float factor, int num_roi, int channel_roi, const float* rois, const float* poses, float* outputs, float* outputs_icp, float maxError);
+
+  void icp_python(np::ndarray& labelmap, np::ndarray& depth, np::ndarray& parameters, 
+    int height, int width, int num_roi, int channel_roi, 
+    np::ndarray& rois, np::ndarray& poses, np::ndarray& outputs, np::ndarray& outputs_icp, float   maxError);
+
   void visualizePose(int height, int width, float fx, float fy, float px, float py, float znear, float zfar, const float* rois, float* outputs, int num_roi, int channel_roi);
   double poseWithOpt(std::vector<double> & vec, DataForOpt data, int iterations);
   void refinePose(int width, int height, int objID, float znear, float zfar,
@@ -237,5 +242,6 @@ BOOST_PYTHON_MODULE(libsynthesizer)
     .def("init_rand", &Synthesizer::init_rand)
     .def("render_one_python", &Synthesizer::render_one_python)
     .def("render_python", &Synthesizer::render_python)
+    .def("icp_python", &Synthesizer::icp_python)
   ;
 }
