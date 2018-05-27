@@ -10,7 +10,6 @@
 """Test a FCN on an image database."""
 
 import _init_paths
-from fcn.test import test_net_images
 from fcn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
 import argparse
@@ -19,6 +18,10 @@ import time, os, sys
 import tensorflow as tf
 import os.path as osp
 import numpy as np
+import rospy
+import rosbag
+from cv_bridge import CvBridge, CvBridgeError
+from test import test_ros
 
 def parse_args():
     """
@@ -59,6 +62,9 @@ def parse_args():
     parser.add_argument('--background', dest='background_name',
                         help='name of the background file',
                         default=None, type=str)
+    parser.add_argument('--bag', dest='bag_name',
+                        help='name of the bag file',
+                        default=None, type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -66,6 +72,7 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
 
 if __name__ == '__main__':
     args = parse_args()
@@ -79,25 +86,10 @@ if __name__ == '__main__':
     print('Using config:')
     pprint.pprint(cfg)
 
-    weights_filename = os.path.splitext(os.path.basename(args.model))[0]
-
     imdb = get_imdb(args.imdb_name)
 
-    # construct the filenames
-    root = 'images/'
-    num = 35
-    rgb_filenames = []
-    depth_filenames = []
-    for i in xrange(num):
-        filename = root + '{:06d}-color.png'.format(i)
-        rgb_filenames.append(filename)
-        filename = root + '{:06d}-depth.png'.format(i)
-        depth_filenames.append(filename)
-
     # construct meta data
-    # K = np.array([[575.8157348632812, 0.0, 314.5], [0.0, 575.8157348632812, 235.5], [0.0, 0.0, 1.0]])
-    # K = np.array([[533.4884, 0.0, 341.9589], [0.0, 498.7812, 287.9247], [0.0, 0.0, 1.0]])
-    # K = np.array([[565.2146606445312, 0, 316.7839657704098], [0.0, 527.93408203125, 259.8812293402443], [0.0, 0.0, 1.0]])
+    # K = np.array([[565.2146606445312, 0.0, 316.7839657704098], [0.0, 527.93408203125, 259.8812293402443], [0.0, 0.0, 1.0]])
     K = np.array([[1066.778, 0, 312.9869], [0, 1067.487, 241.3109], [0, 0, 1]])
     meta_data = dict({'intrinsic_matrix': K, 'factor_depth': 1000.0})
     print meta_data
@@ -130,4 +122,21 @@ if __name__ == '__main__':
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 
-    test_net_images(sess, network, imdb, weights_filename, rgb_filenames, depth_filenames, meta_data)
+    # ros bag
+    bag = rosbag.Bag(args.bag_name)
+    cv_bridge = CvBridge()
+
+    count = 1
+    for topic, msg, t in bag.read_messages(topics=['/camera/rgb/image_rect_color', '/camera/depth_registered/sw_registered/image_rect']):
+        print count, topic
+        if topic == '/camera/rgb/image_rect_color':
+            rgb = msg
+        if topic == '/camera/depth_registered/sw_registered/image_rect':
+            depth = msg
+
+        if count % 2 == 0:
+            test_ros(sess, network, imdb, meta_data, cfg, rgb, depth, cv_bridge, count/2 - 1)
+
+        count += 1
+
+    bag.close()

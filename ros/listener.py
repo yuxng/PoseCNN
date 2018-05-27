@@ -188,7 +188,7 @@ class ImageListener:
         # use a fake label blob of ones
         height = int(im_depth.shape[0] * im_scale)
         width = int(im_depth.shape[1] * im_scale)
-        label_blob = np.ones((1, height, width, num_classes), dtype=np.float32)
+        label_blob = np.ones((1, height, width), dtype=np.int32)
 
         pose_blob = np.zeros((1, 13), dtype=np.float32)
         vertex_target_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)

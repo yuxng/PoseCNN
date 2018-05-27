@@ -395,6 +395,7 @@ void Synthesizer::refineDistance(const int* labelmap, unsigned char* depth, int 
     Sophus::SE3f::Point translation(pose[4], pose[5], pose[6]);
     Sophus::SE3f T_co(quaternion, translation);
 
+    /*
     // set labels
     label_indexes_.clear();
     for (int j = 0; j < width * height; j++)
@@ -466,6 +467,7 @@ void Synthesizer::refineDistance(const int* labelmap, unsigned char* depth, int 
     }
     else
       Tz = T_co.translation()(2);
+    */
 
     // copy results
     outputs[i * 7 + 0] = T_co.unit_quaternion().w();
