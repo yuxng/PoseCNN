@@ -108,6 +108,11 @@ if __name__ == '__main__':
     cfg.TRAIN.NUM_STEPS = 1
     cfg.TRAIN.GRID_SIZE = cfg.TEST.GRID_SIZE
     cfg.TRAIN.TRAINABLE = False
+
+    cfg.RIG = args.rig_name
+    cfg.CAD = args.cad_name
+    cfg.POSE = args.pose_name
+    cfg.BACKGROUND = args.background_name
     cfg.IS_TRAIN = False
 
     from networks.factory import get_network
