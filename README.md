@@ -62,7 +62,7 @@ If you find PoseCNN useful in your research, please consider citing:
 - CUDA >= 8.0
 
 ### Running the demo
-1. Download our trained model on the YCB-Video dataset from [here](https://drive.google.com/open?id=1Zv1cRhFViUkrRi_srqMg5u5Tac8FU3EU), and save it to $ROOT/data/demo_models.
+1. Download our trained model on the YCB-Video dataset from [here](https://drive.google.com/file/d/1UNJ56Za6--bHGgD3lbteZtXLC2E-liWz/view?usp=sharing), and save it to $ROOT/data/demo_models.
 
 2. run the following script
     ```Shell
