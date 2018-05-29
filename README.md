@@ -76,6 +76,7 @@ If you find PoseCNN useful in your research, please consider citing:
     ```Shell
     cd $ROOT/data/LOV
     ln -s $ycb_data data
+    ln -s $ycb_models models
     ```
 
 3. Training and testing on the YCB-Video dataset
