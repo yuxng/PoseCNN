@@ -133,6 +133,7 @@ void Synthesizer::loadModels(const std::string filename)
   const int num_models = model_names.size();
   assimpMeshes_.resize(num_models);
   texture_names.resize(num_models);
+  std::cout << num_models << " models" << std::endl;
 
   for (int m = 0; m < num_models; ++m)
   {
