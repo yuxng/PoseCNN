@@ -1,6 +1,6 @@
 # PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes
 
-Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington.
+Created by Yu Xiang at [RSE-Lab](http://rse-lab.cs.washington.edu/) at University of Washington and NVIDIA Research.
 
 ### Introduction
 
@@ -16,11 +16,11 @@ PoseCNN is released under the MIT License (refer to the LICENSE file for details
 
 If you find PoseCNN useful in your research, please consider citing:
 
-    @inproceedings{xiang2017posecnn,
+    @inproceedings{xiang2018posecnn,
         Author = {Xiang, Yu and Schmidt, Tanner and Narayanan, Venkatraman and Fox, Dieter},
         Title = {PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes},
-        Journal   = {arXiv preprint arXiv:1711.00199},
-        Year = {2017}
+        Journal   = {Robotics: Science and Systems (RSS)},
+        Year = {2018}
     }
 
 ### Installation
@@ -34,7 +34,7 @@ If you find PoseCNN useful in your research, please consider citing:
     ```
 3. Download the VGG16 weights from [here](https://drive.google.com/open?id=1UdmOKrr9t4IetMubX-y-Pcn7AVaWJ2bL) (528M). Put the weight file vgg16.npy to $ROOT/data/imagenet_models.
 
-4. Compile lib/synthesize with cmake (optional). This package contains a few useful tools such as generating synthetic image and ICP.
+4. Compile lib/synthesize with cmake (optional). This package contains a few useful tools such as generating synthetic images for training and ICP.
 
    Install dependencies:
    - [Pangolin](https://github.com/stevenlovegrove/Pangolin)
@@ -51,18 +51,12 @@ If you find PoseCNN useful in your research, please consider citing:
     make
     ```
 
-    Compile the Cython interface for lib/synthesize
+    Add the libary to python path
     ```Shell
-    cd $ROOT/lib
-    python setup.py build_ext --inplace
+    export PYTHONPATH=$PYTHONPATH:$ROOT/lib/synthesize/build
     ```
 
-    Add the libary path
-    ```Shell
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ROOT/lib/synthesize/build
-    ```
-
-### Tested environment
+### Required environment
 - Ubuntu 16.04
 - Tensorflow >= 1.2.0
 - CUDA >= 8.0
