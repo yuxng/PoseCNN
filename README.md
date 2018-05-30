@@ -39,6 +39,7 @@ If you find PoseCNN useful in your research, please consider citing:
    Install dependencies:
    - [Pangolin](https://github.com/stevenlovegrove/Pangolin)
    - [Eigen](https://eigen.tuxfamily.org)
+   - [boost](https://www.boost.org/)
    - [Sophus](https://github.com/strasdat/Sophus)
    - [nanoflann](https://github.com/jlblancoc/nanoflann)
    - libsuitesparse-dev
