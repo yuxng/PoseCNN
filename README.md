@@ -44,6 +44,10 @@ If you find PoseCNN useful in your research, please consider citing:
    - [nanoflann](https://github.com/jlblancoc/nanoflann)
    - libsuitesparse-dev
 
+   We use Boost.Python library to link tensorflow with the c++ code. Make sure you have it in your Boost. The tested Boost version is 1.66.0.
+
+   Change hard coded pathes in CMakeLists.txt.
+
     ```Shell
     cd $ROOT/lib/synthesize
     mkdir build

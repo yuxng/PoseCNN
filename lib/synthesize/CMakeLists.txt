@@ -29,7 +29,7 @@ if (OPENMP_FOUND)
 endif()
 
 set(BOOST_INCLUDEDIR "/usr/local/include")
-set(BOOST_LIBRARYDIR "/usr/local/lib")
+set(BOOST_LIBRARYDIR "/usr/local/lib/boost")
 
 set(xFusion_ROOT "/home/yuxiang/Projects/Deep_Pose/lib/kinect_fusion")
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
@@ -59,7 +59,8 @@ include_directories(${Pangolin_INCLUDE_DIRS}
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
                  ${OpenEXR_LIBRARY_DIRS}
-                 ${PCL_LIBRARY_DIRS})
+                 ${PCL_LIBRARY_DIRS}
+                 ${BOOST_LIBRARYDIR})
 
 link_libraries(${Pangolin_LIBRARIES}
                ${xFusion_LIBRARIES}
