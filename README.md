@@ -56,7 +56,7 @@ If you find PoseCNN useful in your research, please consider citing:
     make
     ```
 
-    Add the libary to python path
+    Add the path of the built libary libsynthesizer.so to python path
     ```Shell
     export PYTHONPATH=$PYTHONPATH:$ROOT/lib/synthesize/build
     ```
