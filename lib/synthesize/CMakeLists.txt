@@ -28,10 +28,10 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(BOOST_INCLUDEDIR "/usr/local/include")
-set(BOOST_LIBRARYDIR "/usr/local/lib/boost")
+set(BOOST_INCLUDE_DIRS "/usr/local/include")
+set(BOOST_LIBRARY_DIRS "/usr/local/lib/boost")
 
-set(xFusion_ROOT "/home/yuxiang/Projects/Deep_Pose/lib/kinect_fusion")
+set(xFusion_ROOT ${PROJECT_SOURCE_DIR}/../kinect_fusion)
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
 set(xFusion_LIBRARY_DIRS ${xFusion_ROOT}/build)
 set(xFusion_LIBRARIES kfusion)
@@ -54,13 +54,13 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${PCL_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
                     ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc
-                    ${BOOST_INCLUDEDIR})
+                    ${BOOST_INCLUDE_DIRS})
 
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
                  ${OpenEXR_LIBRARY_DIRS}
                  ${PCL_LIBRARY_DIRS}
-                 ${BOOST_LIBRARYDIR})
+                 ${BOOST_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
                ${xFusion_LIBRARIES}
