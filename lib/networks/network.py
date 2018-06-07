@@ -254,8 +254,9 @@ class Network(object):
         return hough_voting_op.hough_voting(input[0], input[1], input[2], input[3], input[4], is_train, name=name)
 
     @layer
-    def hough_voting_gpu(self, input, is_train, threshold, skip_pixels, name):
-        return hough_voting_gpu_op.hough_voting_gpu(input[0], input[1], input[2], input[3], input[4], is_train, threshold, skip_pixels, name=name)
+    def hough_voting_gpu(self, input, is_train, threshold, per_threshold, skip_pixels, name):
+        return hough_voting_gpu_op.hough_voting_gpu(input[0], input[1], input[2], input[3], input[4], is_train, \
+                   threshold, per_threshold, skip_pixels, name=name)
 
     @layer
     def rnn_gru2d(self, input, num_units, channels, name, reuse=None):

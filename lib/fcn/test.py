@@ -15,7 +15,7 @@ from utils.voxelizer import Voxelizer, set_axes_equal
 from utils.se3 import *
 from utils.pose_error import *
 from utils.bbox_transform import clip_boxes, bbox_transform_inv
-from utils.nms_wrapper import nms
+from utils.nms import nms
 import numpy as np
 import cv2
 import cPickle
@@ -195,10 +195,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                               net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
 
                 # non-maximum suppression
-                # keep = nms(rois, 0.5)
-                # rois = rois[keep, :]
-                # poses_init = poses_init[keep, :]
-                # poses_pred = poses_pred[keep, :]
+                keep = nms(rois, 0.5)
+                rois = rois[keep, :]
+                poses_init = poses_init[keep, :]
+                poses_pred = poses_pred[keep, :]
+                print keep
                 print rois
 
                 # combine poses
@@ -1286,9 +1287,10 @@ def test_net_single_frame(sess, net, imdb, weights_filename, model_filename):
             labels_gt[:, :] = 0
             labels_gt[I[0], I[1]] = 1
             ind = np.where(meta_data['cls_indexes'] == imdb._cls_index)[0]
-            meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
-            if len(meta_data['poses'].shape) == 3:
-                meta_data['poses'] = meta_data['poses'][:,:,ind]
+            meta_data['cls_indexes'] = np.ones((len(ind),), dtype=np.float32)
+            if len(meta_data['poses'].shape) == 2:
+                meta_data['poses'] = np.reshape(meta_data['poses'], (3, 4, 1))
+            meta_data['poses'] = meta_data['poses'][:,:,ind]
             meta_data['center'] = meta_data['center'][ind,:]
 
         if len(labels_gt.shape) == 2:
@@ -1852,8 +1854,8 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        perm = np.random.permutation(np.arange(num_images))
-        # perm = xrange(370, num_images)
+        # perm = np.random.permutation(np.arange(num_images))
+        perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
@@ -1866,6 +1868,7 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
 
         # read color image
         rgba = pad_im(cv2.imread(rgb_filenames[i], cv2.IMREAD_UNCHANGED), 16)
+        print rgb_filenames[i]
         if rgba.shape[2] == 4:
             im = np.copy(rgba[:,:,:3])
             alpha = rgba[:,:,3]
@@ -1938,7 +1941,7 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        imdb.save_result(i, seg, output_dir)
+        # imdb.save_result(i, seg, output_dir)
 
         if cfg.TEST.VISUALIZE:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)

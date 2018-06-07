@@ -352,14 +352,17 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
             im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
 
             # process annotation if training for two classes
+            cls_indexes_old = []
             if num_classes == 2 and roidb[i]['cls_index'] > 0:
                 I = np.where(im == roidb[i]['cls_index'])
                 im[:, :] = 0
                 im[I[0], I[1]] = 1
                 ind = np.where(meta_data['cls_indexes'] == roidb[i]['cls_index'])[0]
-                meta_data['cls_indexes'] = np.ones((1,), dtype=np.float32)
-                if len(meta_data['poses'].shape) == 3:
-                    meta_data['poses'] = meta_data['poses'][:,:,ind]
+                cls_indexes_old = ind
+                meta_data['cls_indexes'] = np.ones((len(ind),), dtype=np.float32)
+                if len(meta_data['poses'].shape) == 2:
+                    meta_data['poses'] = np.reshape(meta_data['poses'], (3, 4, 1))
+                meta_data['poses'] = meta_data['poses'][:,:,ind]
                 meta_data['center'] = meta_data['center'][ind,:]
                 meta_data['box'] = meta_data['box'][ind,:]
 
@@ -418,8 +421,19 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
                 if roidb[i]['flipped']:
                     center[:, 0] = width - center[:, 0]
 
+                # check if mutiple same instances
+                cls_indexes = meta_data['cls_indexes']
+                if len(np.unique(cls_indexes)) < len(cls_indexes):
+                    is_multi_instances = 1
+                    # read mask image
+                    mask = pad_im(cv2.imread(roidb[i]['mask'], cv2.IMREAD_UNCHANGED), 16)
+                else:
+                    is_multi_instances = 0
+                    mask = []
+
                 vertex_target_blob[i,:,:,:], vertex_weight_blob[i,:,:,:] = \
                     _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * center, poses, num_classes, vertmap, extents, \
+                                             mask, is_multi_instances, cls_indexes_old, \
                                              vertex_target_blob[i,:,:,:], vertex_weight_blob[i,:,:,:])
 
                 num = poses.shape[2]
@@ -526,35 +540,64 @@ def _flip_poses(poses, K, width):
 
 
 # compute the voting label image in 2D
-def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, vertmap, extents, vertex_targets, vertex_weights):
+def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, vertmap, extents, \
+    mask, is_multi_instances, cls_indexes_old, vertex_targets, vertex_weights):
+
     width = im_label.shape[1]
     height = im_label.shape[0]
 
-    c = np.zeros((2, 1), dtype=np.float32)
-    for i in xrange(1, num_classes):
-        y, x = np.where(im_label == i)
-        I = np.where(im_label == i)
-        ind = np.where(cls_indexes == i)[0]
-        if len(x) > 0 and len(ind) > 0:
-            if cfg.TRAIN.VERTEX_REG_2D:
-                c[0] = center[ind, 0]
-                c[1] = center[ind, 1]
-                z = poses[2, 3, ind]
-                R = np.tile(c, (1, len(x))) - np.vstack((x, y))
-                # compute the norm
-                N = np.linalg.norm(R, axis=0) + 1e-10
-                # normalization
-                R = np.divide(R, np.tile(N, (2,1)))
-                # assignment
-                vertex_targets[y, x, 3*i+0] = R[0,:]
-                vertex_targets[y, x, 3*i+1] = R[1,:]
-                vertex_targets[y, x, 3*i+2] = math.log(z)
-            if cfg.TRAIN.VERTEX_REG_3D:
-                vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
+    if is_multi_instances:
+        c = np.zeros((2, 1), dtype=np.float32)
+        for i in xrange(len(cls_indexes)):
+            cls = int(cls_indexes[i])
+            y, x = np.where(mask == cls_indexes_old[i]+1)
+            I = np.where(mask == cls_indexes_old[i]+1)
+            if len(x) > 0:
+                if cfg.TRAIN.VERTEX_REG_2D:
+                    c[0] = center[i, 0]
+                    c[1] = center[i, 1]
+                    z = poses[2, 3, i]
+                    R = np.tile(c, (1, len(x))) - np.vstack((x, y))
+                    # compute the norm
+                    N = np.linalg.norm(R, axis=0) + 1e-10
+                    # normalization
+                    R = np.divide(R, np.tile(N, (2,1)))
+                    # assignment
+                    vertex_targets[y, x, 3*cls+0] = R[0,:]
+                    vertex_targets[y, x, 3*cls+1] = R[1,:]
+                    vertex_targets[y, x, 3*cls+2] = math.log(z)
+                if cfg.TRAIN.VERTEX_REG_3D:
+                    vertex_targets[y, x, 3*cls:3*cls+3] = _scale_vertmap(vertmap, I, extents[cls, :])
 
-            vertex_weights[y, x, 3*i+0] = 10.0
-            vertex_weights[y, x, 3*i+1] = 10.0
-            vertex_weights[y, x, 3*i+2] = 10.0
+                vertex_weights[y, x, 3*cls+0] = 10.0
+                vertex_weights[y, x, 3*cls+1] = 10.0
+                vertex_weights[y, x, 3*cls+2] = 10.0
+    else:
+        c = np.zeros((2, 1), dtype=np.float32)
+        for i in xrange(1, num_classes):
+            y, x = np.where(im_label == i)
+            I = np.where(im_label == i)
+            ind = np.where(cls_indexes == i)[0]
+            if len(x) > 0 and len(ind) > 0:
+                if cfg.TRAIN.VERTEX_REG_2D:
+                    c[0] = center[ind, 0]
+                    c[1] = center[ind, 1]
+                    z = poses[2, 3, ind]
+                    R = np.tile(c, (1, len(x))) - np.vstack((x, y))
+                    # compute the norm
+                    N = np.linalg.norm(R, axis=0) + 1e-10
+                    # normalization
+                    R = np.divide(R, np.tile(N, (2,1)))
+                    # assignment
+                    vertex_targets[y, x, 3*i+0] = R[0,:]
+                    vertex_targets[y, x, 3*i+1] = R[1,:]
+                    vertex_targets[y, x, 3*i+2] = math.log(z)
+                if cfg.TRAIN.VERTEX_REG_3D:
+                    vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
+
+                vertex_weights[y, x, 3*i+0] = 10.0
+                vertex_weights[y, x, 3*i+1] = 10.0
+                vertex_weights[y, x, 3*i+2] = 10.0
 
     return vertex_targets, vertex_weights
 

@@ -29,6 +29,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 
 #define VERTEX_CHANNELS 3
+#define MAX_ROI 1024
 
 using namespace tensorflow;
 typedef Eigen::ThreadPoolDevice CPUDevice;
@@ -36,7 +37,8 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 REGISTER_OP("Houghvotinggpu")
     .Attr("T: {float, double}")
     .Attr("is_train: int")
-    .Attr("threshold_vote: int")
+    .Attr("threshold_vote: float")
+    .Attr("threshold_percentage: float")
     .Attr("skip_pixels: int")
     .Input("bottom_label: int32")
     .Input("bottom_vertex: T")
@@ -83,12 +85,13 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int labelThreshold, const int votingThreshold, const int skip_pixels,
-    float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, const Eigen::GpuDevice& d);
+    const int is_train, const float inlierThreshold, const int labelThreshold, const float votingThreshold, const float perThreshold,
+    const int skip_pixels,float* top_box, float* top_pose, float* top_target, float* top_weight, 
+    int* top_domain, int* num_rois, const Eigen::GpuDevice& d);
 
 void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_domain_tensor, Tensor* top_rois_tensor, int num_classes)
 {
-  int num = 1024;
+  int num = MAX_ROI * 9;
   int dims[2];
 
   dims[0] = num;
@@ -139,6 +142,8 @@ class HoughvotinggpuOp : public OpKernel {
                                         is_train_));
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold_vote", &threshold_vote_));
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_percentage", &threshold_percentage_));
     OP_REQUIRES_OK(context,
                    context->GetAttr("skip_pixels", &skip_pixels_));
 
@@ -284,7 +289,8 @@ class HoughvotinggpuOp : public OpKernel {
   }
  private:
   int is_train_;
-  int threshold_vote_;
+  float threshold_vote_;
+  float threshold_percentage_;
   int skip_pixels_;
 };
 
@@ -306,6 +312,8 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
                                         is_train_));
     OP_REQUIRES_OK(context,
                    context->GetAttr("threshold_vote", &threshold_vote_));
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("threshold_percentage", &threshold_percentage_));
     OP_REQUIRES_OK(context,
                    context->GetAttr("skip_pixels", &skip_pixels_));
   }
@@ -364,7 +372,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * VERTEX_CHANNELS * num_classes;
       const float* meta_data = bottom_meta_data.flat<float>().data() + n * num_meta_data;
       HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, height, width, num_classes, num_gt,
-        is_train_, inlierThreshold, labelThreshold, threshold_vote_, skip_pixels_,
+        is_train_, inlierThreshold, labelThreshold, threshold_vote_, threshold_percentage_, skip_pixels_,
         top_box, top_pose, top_target, top_weight, top_domain, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
     }
 
@@ -421,7 +429,8 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
   }
  private:
   int is_train_;
-  int threshold_vote_;
+  float threshold_vote_;
+  float threshold_percentage_;
   int skip_pixels_;
 };
 

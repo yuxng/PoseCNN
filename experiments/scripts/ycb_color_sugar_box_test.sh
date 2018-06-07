@@ -13,7 +13,7 @@ echo Logging output to "$LOG"
 # test FCN for single frames
 time ./tools/test_net.py --gpu 0 \
   --network vgg16_convs \
-  --model output_adrian/ycb/ycb_004_sugar_box_train/vgg16_fcn_color_single_frame_2d_pose_add_ycb_sugar_box_iter_160000.ckpt \
-  --imdb lov_single_004_sugar_box_val \
+  --model output/ycb/ycb_004_sugar_box_train/vgg16_fcn_color_single_frame_2d_pose_add_ycb_sugar_box_iter_20000.ckpt \
+  --imdb ycb_single_004_sugar_box_train \
   --cfg experiments/cfgs/ycb_color_sugar_box.yml \
   --background data/cache/backgrounds.pkl

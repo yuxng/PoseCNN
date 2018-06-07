@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     # construct the filenames
     root = 'images/'
-    num = 35
+    num = 50
     rgb_filenames = []
     depth_filenames = []
     for i in xrange(num):

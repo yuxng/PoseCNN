@@ -17,10 +17,14 @@ class vgg16_convs(Network):
         self.trainable = trainable
         if is_train:
             self.is_train = 1
-            self.skip_pixels = 50
+            self.skip_pixels = 10
+            self.vote_threshold = 100
+            self.vote_percentage = 0.02
         else:
             self.is_train = 0
             self.skip_pixels = 10
+            self.vote_threshold = 100
+            self.vote_percentage = 0.02
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
@@ -159,7 +163,7 @@ class vgg16_convs(Network):
             if self.vertex_reg_2d:
 
                 (self.feed('label_2d', 'vertex_pred', 'extents', 'meta_data', 'poses')
-                     .hough_voting_gpu(self.is_train, -1, self.skip_pixels, name='hough'))
+                     .hough_voting_gpu(self.is_train, self.vote_threshold, self.vote_percentage, self.skip_pixels, name='hough'))
 
                 self.layers['rois'] = self.get_output('hough')[0]
                 self.layers['poses_init'] = self.get_output('hough')[1]
@@ -169,10 +173,13 @@ class vgg16_convs(Network):
                 if self.pose_reg:
                     # roi pooling without masking
                     (self.feed('conv5_3', 'rois')
-                         .crop_pool_new(16.0, pool_size=7, name='pool5'))
+                         .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5'))
+                         #.crop_pool_new(16.0, pool_size=7, name='pool5'))
                          
                     (self.feed('conv4_3', 'rois')
-                         .crop_pool_new(8.0, pool_size=7, name='pool4'))
+                         .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4'))
+                         #.crop_pool_new(8.0, pool_size=7, name='pool4'))
+
 
                     (self.feed('pool5', 'pool4')
                          .add(name='pool_score')

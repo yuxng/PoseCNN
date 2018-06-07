@@ -19,7 +19,7 @@ namespace tensorflow {
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
     const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
-    const int is_train, const float inlierThreshold, const int votingThreshold, 
+    const int is_train, const float inlierThreshold, const float votingThreshold, const float perThreshold,
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, const Eigen::GpuDevice& d);
 
 void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, int num_classes);
