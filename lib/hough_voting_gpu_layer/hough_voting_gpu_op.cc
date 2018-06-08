@@ -29,7 +29,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 
 #define VERTEX_CHANNELS 3
-#define MAX_ROI 1024
+#define MAX_ROI 128
 
 using namespace tensorflow;
 typedef Eigen::ThreadPoolDevice CPUDevice;
