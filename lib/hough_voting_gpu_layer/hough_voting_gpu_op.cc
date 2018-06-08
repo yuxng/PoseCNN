@@ -84,7 +84,7 @@ inline void compute_width_height(const int* labelmap, const float* vertmap, cv::
 // cuda functions
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
-    const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
+    const int batch_index, const int batch_size, const int height, const int width, const int num_classes, const int num_gt, 
     const int is_train, const float inlierThreshold, const int labelThreshold, const float votingThreshold, const float perThreshold,
     const int skip_pixels,float* top_box, float* top_pose, float* top_target, float* top_weight, 
     int* top_domain, int* num_rois, const Eigen::GpuDevice& d);
@@ -371,7 +371,7 @@ class HoughvotinggpuOp<Eigen::GpuDevice, T> : public OpKernel {
       const int* labelmap = bottom_label.flat<int>().data() + n * height * width;
       const float* vertmap = bottom_vertex.flat<float>().data() + n * height * width * VERTEX_CHANNELS * num_classes;
       const float* meta_data = bottom_meta_data.flat<float>().data() + n * num_meta_data;
-      HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, height, width, num_classes, num_gt,
+      HoughVotingLaucher(context, labelmap, vertmap, extents, meta_data, gt, n, batch_size, height, width, num_classes, num_gt,
         is_train_, inlierThreshold, labelThreshold, threshold_vote_, threshold_percentage_, skip_pixels_,
         top_box, top_pose, top_target, top_weight, top_domain, num_rois_device, context->eigen_device<Eigen::GpuDevice>());
     }

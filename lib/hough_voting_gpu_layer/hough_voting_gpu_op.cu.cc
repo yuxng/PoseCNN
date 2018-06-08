@@ -332,7 +332,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
   }
 }
 
-__global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes, int* num_max, float* hough_space, 
+__global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes, int index_size, int* num_max, float* hough_space, 
   float* hough_data, int height, int width, float threshold, float perThreshold)
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
@@ -375,7 +375,7 @@ __global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes,
       {
         // add the location to max_indexes
         int max_index = atomicAdd(num_max, 1);
-        if (max_index < MAX_ROI)
+        if (max_index < index_size)
           max_indexes[max_index] = index;
       }
     }
@@ -622,7 +622,7 @@ void set_gradients(float* top_label, float* top_vertex, int batch_size, int heig
 
 void HoughVotingLaucher(OpKernelContext* context,
     const int* labelmap, const float* vertmap, const float* extents, const float* meta_data, const float* gt,
-    const int batch_index, const int height, const int width, const int num_classes, const int num_gt, 
+    const int batch_index, const int batch_size, const int height, const int width, const int num_classes, const int num_gt, 
     const int is_train, const float inlierThreshold, const int labelThreshold, const float votingThreshold, const float perThreshold, 
     const int skip_pixels, 
     float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, const Eigen::GpuDevice& d)
@@ -738,13 +738,13 @@ void HoughVotingLaucher(OpKernelContext* context,
   if (cudaMemset(num_max, 0, sizeof(int)) != cudaSuccess)
     fprintf(stderr, "reset error\n");
 
-  dim = MAX_ROI;
+  int index_size = MAX_ROI / batch_size;
   TensorShape output_shape_max_indexes;
-  TensorShapeUtils::MakeShape(&dim, 1, &output_shape_max_indexes);
+  TensorShapeUtils::MakeShape(&index_size, 1, &output_shape_max_indexes);
   Tensor max_indexes_tensor;
   OP_REQUIRES_OK(context, context->allocate_temp(DT_INT32, output_shape_max_indexes, &max_indexes_tensor));
   int* max_indexes = max_indexes_tensor.flat<int>().data(); 
-  if (cudaMemset(max_indexes, 0, dim * sizeof(int)) != cudaSuccess)
+  if (cudaMemset(max_indexes, 0, index_size * sizeof(int)) != cudaSuccess)
     fprintf(stderr, "reset error\n");
 
   if (votingThreshold > 0)
@@ -752,7 +752,7 @@ void HoughVotingLaucher(OpKernelContext* context,
     output_size = count * height * width;
     compute_max_indexes_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, max_indexes, num_max, hough_space, hough_data, height, width, votingThreshold, perThreshold);
+      output_size, max_indexes, index_size, num_max, hough_space, hough_data, height, width, votingThreshold, perThreshold);
     cudaThreadSynchronize();
   }
   else
@@ -778,8 +778,8 @@ void HoughVotingLaucher(OpKernelContext* context,
   // step 4: compute outputs
   int num_max_host;
   cudaMemcpy(&num_max_host, num_max, sizeof(int), cudaMemcpyDeviceToHost);
-  if (num_max_host >= MAX_ROI)
-    num_max_host = MAX_ROI;
+  if (num_max_host >= index_size)
+    num_max_host = index_size;
   // printf("num_max: %d\n", num_max_host);
   if (num_max_host > 0)
   {
