@@ -139,7 +139,10 @@ class lov_single(datasets.imdb):
         Load the indexes listed in this dataset's image set file.
         """
 
-        image_set_file = os.path.join(self._lov_path, 'indexes', self._cls + '_' + self._image_set + '.txt')
+        if self._image_set == 'keyframe':
+            image_set_file = os.path.join(self._lov_path, 'indexes', self._image_set + '.txt')
+        else:
+            image_set_file = os.path.join(self._lov_path, 'indexes', self._cls + '_' + self._image_set + '.txt')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
