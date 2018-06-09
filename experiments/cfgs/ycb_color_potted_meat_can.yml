@@ -13,7 +13,7 @@ TRAIN:
   NUM_CLASSES: 2
   NUM_UNITS: 64
   SNAPSHOT_ITERS: 10000
-  SNAPSHOT_INFIX: ycb_sugar_box
+  SNAPSHOT_INFIX: ycb_potted_meat_can
   SNAPSHOT_PREFIX: vgg16_fcn_color_single_frame_2d_pose_add
   USE_FLIPPED: False
   CHROMATIC: True
@@ -23,7 +23,7 @@ TRAIN:
   VERTEX_W: 1.0
   POSE_W: 1.0
   THRESHOLD_LABEL: 0.7
-  VISUALIZE: False
+  VISUALIZE: True
   POSE_REG: True
   SYNTHESIZE: False
 TEST:

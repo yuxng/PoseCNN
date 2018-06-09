@@ -550,8 +550,8 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
         c = np.zeros((2, 1), dtype=np.float32)
         for i in xrange(len(cls_indexes)):
             cls = int(cls_indexes[i])
-            y, x = np.where(mask == cls_indexes_old[i]+1)
-            I = np.where(mask == cls_indexes_old[i]+1)
+            y, x = np.where((mask == cls_indexes_old[i]+1) & (im_label == cls))
+            I = np.where((mask == cls_indexes_old[i]+1) & (im_label == cls))
             if len(x) > 0:
                 if cfg.TRAIN.VERTEX_REG_2D:
                     c[0] = center[i, 0]
