@@ -436,42 +436,34 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
           top_domain[roi_index + i] = 0;
       }
 
-      // find the gt index
-      int gt_ind = -1;
+      // compute pose target
       for (int i = 0; i < num_gt; i++)
       {
         int gt_batch = int(gt[i * 13 + 0]);
         int gt_id = int(gt[i * 13 + 1]);
         if(cls == gt_id && batch_index == gt_batch)
         {
-          gt_ind = i;
-          break;
-        }
-      }
+          int gt_ind = i;
 
-      if (gt_ind != -1)
-      {
-        float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 7 + 2);
-        if (overlap > 0.5)
-        {
-          for (int i = 0; i < 9; i++)
+          float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 7 + 2);
+          if (overlap > 0.2)
           {
-            top_target[(roi_index + i) * 4 * num_classes + 4 * cls + 0] = gt[gt_ind * 13 + 6];
-            top_target[(roi_index + i) * 4 * num_classes + 4 * cls + 1] = gt[gt_ind * 13 + 7];
-            top_target[(roi_index + i) * 4 * num_classes + 4 * cls + 2] = gt[gt_ind * 13 + 8];
-            top_target[(roi_index + i) * 4 * num_classes + 4 * cls + 3] = gt[gt_ind * 13 + 9];
+            for (int j = 0; j < 9; j++)
+            {
+              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 0] = gt[gt_ind * 13 + 6];
+              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 1] = gt[gt_ind * 13 + 7];
+              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 2] = gt[gt_ind * 13 + 8];
+              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 3] = gt[gt_ind * 13 + 9];
 
-            top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 0] = 1;
-            top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 1] = 1;
-            top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 2] = 1;
-            top_weight[(roi_index + i) * 4 * num_classes + 4 * cls + 3] = 1;
+              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 0] = 1;
+              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 1] = 1;
+              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 2] = 1;
+              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 3] = 1;
+            }
+            break;
           }
         }
-        // else
-        //  printf("small overlap\n");
       }
-      // else
-      //  printf("no gt pose\n");
 
       // add jittering boxes
       float x1 = top_box[roi_index * 7 + 2];
