@@ -1854,8 +1854,8 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         colors[i * 3 + 2] = imdb._class_colors[i][2]
 
     if cfg.TEST.VISUALIZE:
-        # perm = np.random.permutation(np.arange(num_images))
-        perm = xrange(num_images)
+        perm = np.random.permutation(np.arange(num_images))
+        # perm = xrange(num_images)
     else:
         perm = xrange(num_images)
 
@@ -1878,7 +1878,10 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
             im = rgba
 
         # read depth image
-        im_depth = pad_im(cv2.imread(depth_filenames[i], cv2.IMREAD_UNCHANGED), 16)
+        if os.path.isfile(depth_filenames[i]):
+            im_depth = pad_im(cv2.imread(depth_filenames[i], cv2.IMREAD_UNCHANGED), 16)
+        else:
+            im_depth = np.zeros((im.shape[0], im.shape[1]), dtype=np.uint16)
 
         _t['im_segment'].tic()
 
@@ -1941,7 +1944,7 @@ def test_net_images(sess, net, imdb, weights_filename, rgb_filenames, depth_file
         print 'im_segment: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i, num_images, _t['im_segment'].diff, _t['misc'].diff)
 
-        # imdb.save_result(i, seg, output_dir)
+        imdb.save_result(i, seg, output_dir)
 
         if cfg.TEST.VISUALIZE:
             vertmap = _extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)

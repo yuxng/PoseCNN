@@ -389,7 +389,7 @@ class lov(datasets.imdb):
                 results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
             else:
                 results = {'labels': sg_labels, 'rois_rgb': rois_rgb, 'poses_rgb': poses_rgb, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
-            filename = os.path.join(mat_dir, '%04d.mat' % im_ind)
+            filename = os.path.join(mat_dir, '%06d.mat' % im_ind)
             print filename
             scipy.io.savemat(filename, results, do_compression=True)
 

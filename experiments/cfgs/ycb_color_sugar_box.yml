@@ -20,7 +20,8 @@ TRAIN:
   ADD_NOISE: True
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
-  VERTEX_W: 1.0
+  VERTEX_W: 5.0
+  VERTEX_W_INSIDE: 1.0
   POSE_W: 1.0
   THRESHOLD_LABEL: 0.7
   VISUALIZE: False
@@ -31,7 +32,7 @@ TEST:
   SCALES_BASE: !!python/tuple [1.0]
   VERTEX_REG_2D: True
   VERTEX_REG_3D: False
-  VISUALIZE: False
+  VISUALIZE: True
   POSE_REG: True
   POSE_REFINE: False
   SYNTHETIC: False

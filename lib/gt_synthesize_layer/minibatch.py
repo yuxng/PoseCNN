@@ -569,9 +569,9 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
                 if cfg.TRAIN.VERTEX_REG_3D:
                     vertex_targets[y, x, 3*cls:3*cls+3] = _scale_vertmap(vertmap, I, extents[cls, :])
 
-                vertex_weights[y, x, 3*cls+0] = 10.0
-                vertex_weights[y, x, 3*cls+1] = 10.0
-                vertex_weights[y, x, 3*cls+2] = 10.0
+                vertex_weights[y, x, 3*cls+0] = cfg.TRAIN.VERTEX_W_INSIDE
+                vertex_weights[y, x, 3*cls+1] = cfg.TRAIN.VERTEX_W_INSIDE
+                vertex_weights[y, x, 3*cls+2] = cfg.TRAIN.VERTEX_W_INSIDE
     else:
         c = np.zeros((2, 1), dtype=np.float32)
         for i in xrange(1, num_classes):
@@ -595,9 +595,9 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
                 if cfg.TRAIN.VERTEX_REG_3D:
                     vertex_targets[y, x, 3*i:3*i+3] = _scale_vertmap(vertmap, I, extents[i, :])
 
-                vertex_weights[y, x, 3*i+0] = 10.0
-                vertex_weights[y, x, 3*i+1] = 10.0
-                vertex_weights[y, x, 3*i+2] = 10.0
+                vertex_weights[y, x, 3*i+0] = cfg.TRAIN.VERTEX_W_INSIDE
+                vertex_weights[y, x, 3*i+1] = cfg.TRAIN.VERTEX_W_INSIDE
+                vertex_weights[y, x, 3*i+2] = cfg.TRAIN.VERTEX_W_INSIDE
 
     return vertex_targets, vertex_weights
 
@@ -734,7 +734,7 @@ def _vis_minibatch(im_blob, im_depth_blob, depth_blob, label_blob, meta_data_blo
             else:
                 ax.set_title('vertex y')
             ax = fig.add_subplot(2, 3, 6)
-            plt.imshow(center[:,:,2])
+            plt.imshow(np.exp(center[:,:,2]))
             if cfg.TRAIN.VERTEX_REG_2D:
                 ax.set_title('z')
             else:

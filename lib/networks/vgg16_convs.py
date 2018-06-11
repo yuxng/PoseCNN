@@ -23,7 +23,7 @@ class vgg16_convs(Network):
         else:
             self.is_train = 0
             self.skip_pixels = 10
-            self.vote_threshold = 100
+            self.vote_threshold = -1
             self.vote_percentage = 0.02
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
