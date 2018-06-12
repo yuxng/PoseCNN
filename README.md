@@ -48,6 +48,8 @@ If you find PoseCNN useful in your research, please consider citing:
 
    Change hard coded pathes in CMakeLists.txt.
 
+   The Pangolin branch I use: c2a6ef524401945b493f14f8b5b8aa76cc7d71a9
+
     ```Shell
     cd $ROOT/lib/synthesize
     mkdir build

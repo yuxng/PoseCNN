@@ -93,6 +93,7 @@ if __name__ == '__main__':
         path = osp.abspath(osp.join(cfg.ROOT_DIR, args.pretrained_model))
         cfg.TRAIN.MODEL_PATH = path
     cfg.TRAIN.TRAINABLE = False
+    cfg.TRAIN.VOTING_THRESHOLD = cfg.TEST.VOTING_THRESHOLD
 
     cfg.RIG = args.rig_name
     cfg.CAD = args.cad_name

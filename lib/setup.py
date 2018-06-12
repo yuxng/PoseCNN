@@ -150,18 +150,6 @@ ext_modules = [
                                      '--compiler-options',
                                      "'-fPIC'"]},
         include_dirs = [numpy_include, CUDA['include']]
-    ),
-    Extension(
-        "synthesize.synthesizer",                                # the extension name
-        sources=['synthesize/synthesizer.pyx'],
-        language='c++',
-        extra_objects=["synthesize/build/libsynthesizer.so"],
-        extra_compile_args={'gcc': ["-Wno-unused-function"],
-                            'nvcc': ['-arch=sm_35',
-                                     '--ptxas-options=-v',
-                                     '-c',
-                                     '--compiler-options',
-                                     "'-fPIC'"]}
     )
     #Extension(
     #    "kinect_fusion.kfusion",                                # the extension name

@@ -2,7 +2,7 @@ import tensorflow as tf
 from networks.network import Network
 
 class vgg16_convs(Network):
-    def __init__(self, input_format, num_classes, num_units, scales, threshold_label, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
+    def __init__(self, input_format, num_classes, num_units, scales, threshold_label, vote_threshold, vertex_reg_2d=False, vertex_reg_3d=False, pose_reg=False, adaptation=False, trainable=True, is_train=True):
         self.inputs = []
         self.input_format = input_format
         self.num_classes = num_classes
@@ -15,15 +15,17 @@ class vgg16_convs(Network):
         self.pose_reg = pose_reg
         self.adaptation = adaptation
         self.trainable = trainable
+        # if vote_threshold < 0, only detect single instance (default). 
+        # Otherwise, multiple instances are detected if hough voting score larger than the threshold
         if is_train:
             self.is_train = 1
             self.skip_pixels = 10
-            self.vote_threshold = 100
+            self.vote_threshold = vote_threshold
             self.vote_percentage = 0.02
         else:
             self.is_train = 0
             self.skip_pixels = 10
-            self.vote_threshold = -1
+            self.vote_threshold = vote_threshold
             self.vote_percentage = 0.02
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
