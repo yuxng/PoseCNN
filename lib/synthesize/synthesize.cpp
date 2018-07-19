@@ -695,6 +695,107 @@ void Synthesizer::render_poses(int num, int channel, int width, int height, floa
 }
 
 
+void Synthesizer::render_poses_color_python(int num, int channel, int width, int height, np::ndarray const & parameters, 
+  np::ndarray const & color, np::ndarray const & poses)
+{
+
+  float* meta = reinterpret_cast<float*>(parameters.get_data());
+  float fx = meta[0];
+  float fy = meta[1];
+  float px = meta[2];
+  float py = meta[3];
+  float znear = meta[4];
+  float zfar = meta[5];
+
+  render_poses_color(num, channel, width, height, fx, fy, px, py, znear, zfar,
+    reinterpret_cast<unsigned char*>(color.get_data()), reinterpret_cast<float*>(poses.get_data()));
+}
+
+
+void Synthesizer::render_poses_color(int num, int channel, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+  unsigned char* color, float *poses_input)
+{
+  pangolin::OpenGlMatrixSpec projectionMatrix = pangolin::ProjectionMatrixRDF_TopLeft(width, height, fx, fy, px+0.5, py+0.5, znear, zfar);
+
+  // show gt pose
+  glEnable(GL_DEPTH_TEST);
+  glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+  glShadeModel(GL_FLAT);
+
+  glColor3ub(255,255,255);
+  gtView_->ActivateScissorAndClear();
+
+  for (int i = 0; i < num; i++)
+  {
+    int class_id = int(poses_input[i * channel]) - 1;
+
+    Eigen::Quaterniond quaternion;
+    Sophus::SE3d::Point translation;
+    float* pose = poses_input + i * channel + 1;
+    quaternion.w() = pose[0];
+    quaternion.x() = pose[1];
+    quaternion.y() = pose[2];
+    quaternion.z() = pose[3];
+    translation(0) = pose[4];
+    translation(1) = pose[5];
+    translation(2) = pose[6];
+    const Sophus::SE3d T_co(quaternion, translation);
+
+    glMatrixMode(GL_PROJECTION);
+    projectionMatrix.Load();
+    glMatrixMode(GL_MODELVIEW);
+
+    Eigen::Matrix4f mv = T_co.cast<float>().matrix();
+    pangolin::OpenGlMatrix mvMatrix(mv);
+    mvMatrix.Load();
+
+    if (is_textured_[class_id])
+    {
+      glEnable(GL_TEXTURE_2D);
+      glEnableClientState(GL_VERTEX_ARRAY);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      texturedTextures_[class_id].Bind();
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      texturedCoords_[class_id].Bind();
+      glTexCoordPointer(2,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedTextures_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      texturedCoords_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+      glDisable(GL_TEXTURE_2D);
+    }
+    else
+    {
+      glEnableClientState(GL_VERTEX_ARRAY);
+      texturedVertices_[class_id].Bind();
+      glVertexPointer(3,GL_FLOAT,0,0);
+      glEnableClientState(GL_COLOR_ARRAY);
+      vertexColors_[class_id].Bind();
+      glColorPointer(3,GL_FLOAT,0,0);
+      texturedIndices_[class_id].Bind();
+      glDrawElements(GL_TRIANGLES, texturedIndices_[class_id].num_elements, GL_UNSIGNED_INT, 0);
+      texturedIndices_[class_id].Unbind();
+      texturedVertices_[class_id].Unbind();
+      vertexColors_[class_id].Unbind();
+      glDisableClientState(GL_VERTEX_ARRAY);
+      glDisableClientState(GL_COLOR_ARRAY);
+    }
+  }
+
+  // read color image
+  if (color)
+    glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, color);
+  
+  pangolin::FinishFrame();
+  counter_++;
+}
+
+
 void Synthesizer::render_one_python(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
   np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents)
 {

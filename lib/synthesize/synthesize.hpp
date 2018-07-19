@@ -125,6 +125,11 @@ class Synthesizer
   void render_poses(int num, int channel, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
     unsigned char* color, float *poses_input);
 
+  void render_poses_color_python(int num, int channel, int width, int height, np::ndarray const & parameters, 
+    np::ndarray const & color, np::ndarray const & poses);
+  void render_poses_color(int num, int channel, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
+    unsigned char* color, float *poses_input);
+
   void render_one(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
               float* color, float* depth, float* vertmap, float *poses_return, float* centers_return, float* extents);
   void render_one_python(int which_class, int width, int height, float fx, float fy, float px, float py, float znear, float zfar, 
@@ -248,6 +253,7 @@ BOOST_PYTHON_MODULE(libsynthesizer)
     .def("render_one_python", &Synthesizer::render_one_python)
     .def("render_python", &Synthesizer::render_python)
     .def("render_poses_python", &Synthesizer::render_poses_python)
+    .def("render_poses_color_python", &Synthesizer::render_poses_color_python)
     .def("icp_python", &Synthesizer::icp_python)
   ;
 }
