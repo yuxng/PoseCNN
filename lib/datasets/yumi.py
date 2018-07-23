@@ -24,12 +24,12 @@ class yumi(datasets.imdb):
                             else yumi_path
         self._data_path = os.path.join(self._yumi_path, 'data')
 
-        self._classes = ('__background__', 'xmas_cup')
+        self._classes = ('__background__', 'chair_black')
         self._class_colors = [(255, 255, 255), (0, 255, 0)]
         self._cls_index = 1
 
         self._class_weights = [1, 100]
-        self._symmetry = np.array([0, 1])
+        self._symmetry = np.array([0, 0])
         self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
 
@@ -60,7 +60,7 @@ class yumi(datasets.imdb):
         Construct an image path from the image's "index" identifier.
         """
 
-        image_path = os.path.join(self._data_path, index + '-color' + self._image_ext)
+        image_path = os.path.join(self._data_path, index + self._image_ext)
         assert os.path.exists(image_path), \
                 'Path does not exist: {}'.format(image_path)
         return image_path
@@ -76,7 +76,7 @@ class yumi(datasets.imdb):
         """
         Construct an depth path from the image's "index" identifier.
         """
-        depth_path = os.path.join(self._data_path, index + '-depth' + self._image_ext)
+        depth_path = os.path.join(self._data_path, index + '.depth' + self._image_ext)
         assert os.path.exists(depth_path), \
                 'Path does not exist: {}'.format(depth_path)
         return depth_path
@@ -357,6 +357,35 @@ class yumi(datasets.imdb):
         image = np.stack((image_r, image_g, image_b), axis=-1)
 
         return image.astype(np.uint8)
+
+
+    def save_result(self, im_ind, segmentation, output_dir):
+
+        # make matlab result dir
+        import scipy.io
+        mat_dir = os.path.join(output_dir, 'mat')
+        if not os.path.exists(mat_dir):
+            os.makedirs(mat_dir)
+
+        sg_labels = segmentation['labels']
+        # evaluate pose
+        if cfg.TEST.POSE_REG:
+            rois = segmentation['rois']
+            poses = segmentation['poses']
+            poses_new = segmentation['poses_refined']
+            poses_icp = segmentation['poses_icp']
+            if cfg.TEST.VERTEX_REG_3D:
+                rois_rgb = segmentation['rois_rgb']
+                poses_rgb = segmentation['poses_rgb']
+
+            # save matlab result
+            if cfg.TEST.VERTEX_REG_2D:
+                results = {'labels': sg_labels, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            else:
+                results = {'labels': sg_labels, 'rois_rgb': rois_rgb, 'poses_rgb': poses_rgb, 'rois': rois, 'poses': poses, 'poses_refined': poses_new, 'poses_icp': poses_icp}
+            filename = os.path.join(mat_dir, '%06d.mat' % im_ind)
+            print filename
+            scipy.io.savemat(filename, results, do_compression=True)
 
 
     def evaluate_result(self, im_ind, segmentation, gt_labels, meta_data, output_dir):

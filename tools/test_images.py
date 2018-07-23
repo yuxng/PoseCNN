@@ -85,11 +85,11 @@ if __name__ == '__main__':
 
     # construct the filenames
     root = 'images/'
-    num = 9894
+    num = 116
     rgb_filenames = []
     depth_filenames = []
     for i in xrange(num):
-        filename = root + '{:06d}-color.png'.format(i)
+        filename = root + '{:05d}.png'.format(i)
         rgb_filenames.append(filename)
         filename = root + '{:06d}-depth.png'.format(i)
         depth_filenames.append(filename)
