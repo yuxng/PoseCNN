@@ -18,8 +18,8 @@ def bbox_overlaps(
     """
     Parameters
     ----------
-    boxes: (N, 4) ndarray of float
-    query_boxes: (K, 4) ndarray of float
+    boxes: (N, 5) ndarray of float (batch_id, x1, y1, x2, y2)
+    query_boxes: (K, 5) ndarray of float (batch_id, x1, y1, x2, y2)
     Returns
     -------
     overlaps: (N, K) ndarray of overlap between boxes and query_boxes
@@ -32,25 +32,26 @@ def bbox_overlaps(
     cdef unsigned int k, n
     for k in range(K):
         box_area = (
-            (query_boxes[k, 2] - query_boxes[k, 0] + 1) *
-            (query_boxes[k, 3] - query_boxes[k, 1] + 1)
+            (query_boxes[k, 2+1] - query_boxes[k, 0+1] + 1) *
+            (query_boxes[k, 3+1] - query_boxes[k, 1+1] + 1)
         )
         for n in range(N):
-            iw = (
-                min(boxes[n, 2], query_boxes[k, 2]) -
-                max(boxes[n, 0], query_boxes[k, 0]) + 1
-            )
-            if iw > 0:
-                ih = (
-                    min(boxes[n, 3], query_boxes[k, 3]) -
-                    max(boxes[n, 1], query_boxes[k, 1]) + 1
+            if query_boxes[k, 0] == boxes[n, 0]:
+                iw = (
+                    min(boxes[n, 2+1], query_boxes[k, 2+1]) -
+                    max(boxes[n, 0+1], query_boxes[k, 0+1]) + 1
                 )
-                if ih > 0:
-                    ua = float(
-                        (boxes[n, 2] - boxes[n, 0] + 1) *
-                        (boxes[n, 3] - boxes[n, 1] + 1) +
-                        box_area - iw * ih
+                if iw > 0:
+                    ih = (
+                        min(boxes[n, 3+1], query_boxes[k, 3+1]) -
+                        max(boxes[n, 1+1], query_boxes[k, 1+1]) + 1
                     )
-                    overlaps[n, k] = iw * ih / ua
+                    if ih > 0:
+                        ua = float(
+                            (boxes[n, 2+1] - boxes[n, 0+1] + 1) *
+                            (boxes[n, 3+1] - boxes[n, 1+1] + 1) +
+                            box_area - iw * ih
+                        )
+                        overlaps[n, k] = iw * ih / ua
     return overlaps
 

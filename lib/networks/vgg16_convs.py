@@ -36,6 +36,7 @@ class vgg16_convs(Network):
         if self.vertex_reg:
             self.vertex_targets = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
             self.vertex_weights = tf.placeholder(tf.float32, shape=[None, None, None, 3 * num_classes])
+            self.gt_boxes = tf.placeholder(tf.float32, shape=[None, 6])
             self.poses = tf.placeholder(tf.float32, shape=[None, 13])
             self.extents = tf.placeholder(tf.float32, shape=[num_classes, 3])
             self.meta_data = tf.placeholder(tf.float32, shape=[None, 1, 1, 48])
@@ -46,13 +47,13 @@ class vgg16_convs(Network):
         queue_size = 25
         if input_format == 'RGBD':
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.data_p, self.gt_label_2d, self.keep_prob, \
-                                             self.vertex_targets, self.vertex_weights, self.poses, \
+                                             self.vertex_targets, self.vertex_weights, self.gt_boxes, self.poses, \
                                              self.extents, self.meta_data, self.points, self.symmetry])
-                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
+                data, data_p, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gt_boxes, poses, extents, meta_data, points, symmetry = q.dequeue()
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
-                                    'vertex_weights': vertex_weights, 'poses': poses, 'extents': extents, \
+                                    'vertex_weights': vertex_weights, 'gt_boxes': gt_boxes, 'poses': poses, 'extents': extents, \
                                     'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.float32, tf.int32, tf.float32])
@@ -61,11 +62,12 @@ class vgg16_convs(Network):
                 self.layers = dict({'data': data, 'data_p': data_p, 'gt_label_2d': gt_label_2d})
         else:
             if self.vertex_reg:
-                q = tf.FIFOQueue(queue_size, [tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
-                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
-                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, poses, extents, meta_data, points, symmetry = q.dequeue()
-                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, 'vertex_weights': vertex_weights, 
-                                    'poses': poses, 'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
+                q = tf.FIFOQueue(queue_size, [tf.float32, tf.int32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32])
+                self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob, self.vertex_targets, self.vertex_weights, self.gt_boxes, self.poses, self.extents, self.meta_data, self.points, self.symmetry])
+                data, gt_label_2d, self.keep_prob_queue, vertex_targets, vertex_weights, gt_boxes, poses, extents, meta_data, points, symmetry = q.dequeue()
+                self.layers = dict({'data': data, 'gt_label_2d': gt_label_2d, 'vertex_targets': vertex_targets, \
+                                    'vertex_weights': vertex_weights, 'gt_boxes': gt_boxes, 'poses': poses, \
+                                    'extents': extents, 'meta_data': meta_data, 'points': points, 'symmetry': symmetry})
             else:
                 q = tf.FIFOQueue(queue_size, [tf.float32, tf.int32, tf.float32])
                 self.enqueue_op = q.enqueue([self.data, self.gt_label_2d, self.keep_prob])
@@ -182,7 +184,6 @@ class vgg16_convs(Network):
                          .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4'))
                          #.crop_pool_new(8.0, pool_size=7, name='pool4'))
 
-
                     (self.feed('pool5', 'pool4')
                          .add(name='pool_score')
                          .fc(4096, height=7, width=7, channel=512, name='fc6')
@@ -198,6 +199,30 @@ class vgg16_convs(Network):
 
                     (self.feed('poses_pred', 'poses_target', 'poses_weight', 'points', 'symmetry')
                          .average_distance_loss(margin=0.01, name='loss_pose'))
+
+                    # compute proposal targets
+                    (self.feed('rois', 'gt_boxes', 'poses')
+                         .compute_proposal_targets_v2(self.num_classes, name='proposal_targets'))
+
+                    if self.is_train:
+                        self.layers['rois_target'] = self.get_output('proposal_targets')[0]
+                    else:
+                        self.layers['rois_target'] = self.layers['rois']
+                    self.layers['roi_scores'] = self.get_output('proposal_targets')[1]
+                    self.layers['bbox_labels'] = self.get_output('proposal_targets')[2]
+                    self.layers['bbox_targets'] = self.get_output('proposal_targets')[3]
+                    self.layers['bbox_inside_weights'] = self.get_output('proposal_targets')[4]
+                    self.layers['bbox_outside_weights'] = self.get_output('proposal_targets')[5]
+
+                    # classify rois
+                    (self.feed('drop7')
+                         .fc(self.num_classes, relu=False, name='cls_score')
+                         .tanh(name='cls_score_tanh')
+                         .log_softmax_high_dimension(self.num_classes, name='cls_prob'))
+
+                    # bounding box regression
+                    (self.feed('drop7')
+                         .fc(4 * self.num_classes, relu=False, name='bbox_pred'))
 
                     # domain adaptation
                     if self.adaptation:
