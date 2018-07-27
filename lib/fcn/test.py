@@ -152,7 +152,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
     height = int(im_depth.shape[0] * im_scale)
     width = int(im_depth.shape[1] * im_scale)
     label_blob = np.ones((1, height, width), dtype=np.int32)
-
+    box_blob = np.zeros((1, 6), dtype=np.float32)
     pose_blob = np.zeros((1, 13), dtype=np.float32)
     vertex_target_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
     vertex_weight_blob = np.zeros((1, height, width, 3*num_classes), dtype=np.float32)
@@ -172,14 +172,16 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
         if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
-                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.poses: pose_blob}
+                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, \
+                         net.gt_boxes: box_blob, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
     else:
         if cfg.TEST.VERTEX_REG_2D or cfg.TEST.VERTEX_REG_3D:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0, \
                          net.vertex_targets: vertex_target_blob, net.vertex_weights: vertex_weight_blob, \
-                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, net.symmetry: symmetry, net.poses: pose_blob}
+                         net.meta_data: meta_data_blob, net.extents: extents, net.points: points, \
+                         net.symmetry: symmetry, net.gt_boxes: box_blob, net.poses: pose_blob}
         else:
             feed_dict = {net.data: data_blob, net.gt_label_2d: label_blob, net.keep_prob: 1.0}
 
@@ -190,16 +192,39 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
     else:
         if cfg.TEST.VERTEX_REG_2D:
             if cfg.TEST.POSE_REG:
-                labels_2d, probs, vertex_pred, rois, poses_init, poses_pred = \
+                labels_2d, probs, vertex_pred, rois, poses_init, poses_pred, scores, bbox_pred = \
                     sess.run([net.get_output('label_2d'), net.get_output('prob_normalized'), net.get_output('vertex_pred'), \
-                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh')])
+                              net.get_output('rois'), net.get_output('poses_init'), net.get_output('poses_tanh'), \
+                              net.get_output('cls_prob_normalized'), net.get_output('bbox_pred')])
+
+                # process boxes
+                stds = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS), (num_classes))
+                means = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS), (num_classes))
+                bbox_pred *= stds
+                bbox_pred += means
+
+                boxes = rois[:, 2:6] / im_scale
+                scores = np.reshape(scores, [scores.shape[0], -1])
+                bbox_pred = np.reshape(bbox_pred, [bbox_pred.shape[0], -1])
+                if cfg.TEST.BBOX_REG:
+                    box_deltas = bbox_pred
+                    pred_boxes = bbox_transform_inv(boxes, box_deltas)
+                    pred_boxes = clip_boxes(pred_boxes, im.shape)
+                else:
+                    pred_boxes = np.tile(boxes, (1, scores.shape[1]))
+
+                # assign boxes
+                for i in xrange(scores.shape[0]):
+                    cls = int(rois[i, 1])
+                    rois[i, 2:6] = pred_boxes[i, cls*4:cls*4+4]
+                    rois[i, 6] = scores[i, cls]
 
                 # non-maximum suppression
                 keep = nms(rois, 0.5)
                 rois = rois[keep, :]
+                scores = scores[keep, :]
                 poses_init = poses_init[keep, :]
                 poses_pred = poses_pred[keep, :]
-                print keep
                 print rois
 
                 # combine poses
