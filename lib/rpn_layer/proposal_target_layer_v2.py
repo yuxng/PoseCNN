@@ -40,7 +40,7 @@ def proposal_target_layer_v2(rpn_rois, rpn_scores, gt_boxes, poses, _num_classes
   # convert labels
   num = labels.shape[0]
   label_blob = np.zeros((num, _num_classes), dtype=np.float32)
-  if num > 1:
+  if np.sum(labels) > 0:
       for i in xrange(num):
           label_blob[i, int(labels[i])] = 1.0
 

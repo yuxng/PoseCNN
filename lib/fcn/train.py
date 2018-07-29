@@ -569,14 +569,14 @@ def train_net(network, imdb, roidb, output_dir, pretrained_model=None, pretraine
                     # RCNN, class loss
                     cls_prob = network.get_output("cls_prob")
                     bbox_labels = network.get_output("bbox_labels")
-                    loss_box_cls = 0.1 * loss_cross_entropy_single_frame(cls_prob, bbox_labels)
+                    loss_box_cls = cfg.TRAIN.BOX_W * loss_cross_entropy_single_frame(cls_prob, bbox_labels)
 
                     # RCNN, bbox loss
                     bbox_pred = network.get_output('bbox_pred')
                     bbox_targets = network.get_output('bbox_targets')
                     bbox_inside_weights = network.get_output('bbox_inside_weights')
                     bbox_outside_weights = network.get_output('bbox_outside_weights')
-                    loss_box_pos = 0.1 * smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
+                    loss_box_pos = cfg.TRAIN.BOX_W * smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
 
                     if cfg.TRAIN.ADAPT:
                         domain_score = network.get_output("domain_score")

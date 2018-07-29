@@ -363,6 +363,14 @@ __global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes,
               flag = 1;
               break;
             }
+            if (hough_space[ind * height * width + y * width + x] == hough_space[index])
+            {
+              if (ind * height * width + y * width + x > index)
+              {
+                flag = 1;
+                break;
+              }
+            }
           }
         }
 

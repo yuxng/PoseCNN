@@ -220,6 +220,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                     rois[i, 6] = scores[i, cls]
 
                 # non-maximum suppression
+                print rois[:, 1]
                 keep = nms(rois, 0.5)
                 rois = rois[keep, :]
                 scores = scores[keep, :]

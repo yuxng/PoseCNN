@@ -21,12 +21,12 @@ class vgg16_convs(Network):
             self.is_train = 1
             self.skip_pixels = 10
             self.vote_threshold = vote_threshold
-            self.vote_percentage = 0.02
+            self.vote_percentage = 0.01
         else:
             self.is_train = 0
             self.skip_pixels = 10
             self.vote_threshold = vote_threshold
-            self.vote_percentage = 0.02
+            self.vote_percentage = 0.01
 
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         if input_format == 'RGBD':
@@ -217,6 +217,7 @@ class vgg16_convs(Network):
                     # classify rois
                     (self.feed('drop7')
                          .fc(self.num_classes, relu=False, name='cls_score')
+                         .tanh(name='cls_score_tanh')
                          .log_softmax_high_dimension(self.num_classes, name='cls_prob'))
 
                     (self.feed('cls_score')
@@ -224,7 +225,8 @@ class vgg16_convs(Network):
 
                     # bounding box regression
                     (self.feed('drop7')
-                         .fc(4 * self.num_classes, relu=False, name='bbox_pred'))
+                         .fc(4 * self.num_classes, relu=False, name='bbox_pred_raw')
+                         .tanh(name='bbox_pred'))
 
                     # domain adaptation
                     if self.adaptation:
