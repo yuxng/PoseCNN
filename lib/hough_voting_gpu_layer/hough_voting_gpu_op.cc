@@ -29,7 +29,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 
 #define VERTEX_CHANNELS 3
-#define MAX_ROI 128
+#define MAX_ROI 256
 
 using namespace tensorflow;
 typedef Eigen::ThreadPoolDevice CPUDevice;
@@ -91,7 +91,7 @@ void HoughVotingLaucher(OpKernelContext* context,
 
 void allocate_outputs(OpKernelContext* context, Tensor* top_box_tensor, Tensor* top_pose_tensor, Tensor* top_target_tensor, Tensor* top_weight_tensor, Tensor* top_domain_tensor, Tensor* top_rois_tensor, int num_classes)
 {
-  int num = MAX_ROI * 9;
+  int num = MAX_ROI;
   int dims[2];
 
   dims[0] = num;

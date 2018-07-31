@@ -40,12 +40,11 @@ def proposal_target_layer_v2(rpn_rois, rpn_scores, gt_boxes, poses, _num_classes
   # convert labels
   num = labels.shape[0]
   label_blob = np.zeros((num, 2), dtype=np.float32)
-  if np.sum(labels) > 0:
-      for i in xrange(num):
-          if labels[i] == 0:
-              label_blob[i, 0] = 1.0
-          else:
-              label_blob[i, 1] = 1.0
+  for i in xrange(num):
+      if labels[i] == 0:
+          label_blob[i, 0] = 1.0
+      else:
+          label_blob[i, 1] = 1.0
 
   return rois, roi_scores, label_blob, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
 
@@ -129,7 +128,7 @@ def _sample_rois(all_rois, all_scores, gt_boxes, poses, num_classes):
   fg_inds = np.where(max_overlaps >= cfg.TRAIN.FG_THRESH)[0]
   bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH)[0]
 
-  # print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
+  print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
   # print all_rois
 
   # The indices that we're selecting (both fg and bg)

@@ -11,7 +11,7 @@
 #include "hough_voting_gpu_op.h"
 
 #define VERTEX_CHANNELS 3
-#define MAX_ROI 128
+#define MAX_ROI 256
 
 #define CUDA_1D_KERNEL_LOOP(i, n)                            \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; \
@@ -333,7 +333,7 @@ __global__ void compute_hough_kernel(const int nthreads, float* hough_space, flo
 }
 
 __global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes, int index_size, int* num_max, float* hough_space, 
-  float* hough_data, int height, int width, float threshold, float perThreshold)
+  float* hough_data, int height, int width, float threshold, float perThreshold, const int is_train)
 {
   CUDA_1D_KERNEL_LOOP(index, nthreads) 
   {
@@ -363,7 +363,7 @@ __global__ void compute_max_indexes_kernel(const int nthreads, int* max_indexes,
               flag = 1;
               break;
             }
-            if (hough_space[ind * height * width + y * width + x] == hough_space[index])
+            if (is_train == 0 && hough_space[ind * height * width + y * width + x] == hough_space[index])
             {
               if (ind * height * width + y * width + x > index)
               {
@@ -419,7 +419,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 
     if (is_train)
     {
-      int roi_index = atomicAdd(num_rois, 9);
+      int roi_index = atomicAdd(num_rois, 1);
       top_box[roi_index * 7 + 0] = batch_index;
       top_box[roi_index * 7 + 1] = cls;
       top_box[roi_index * 7 + 2] = x - bb_width * (0.5 + scale);
@@ -428,21 +428,18 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
       top_box[roi_index * 7 + 5] = y + bb_height * (0.5 + scale);
       top_box[roi_index * 7 + 6] = hough_space[max_index];
 
-      for (int i = 0; i < 9; i++)
-      {
-        top_pose[(roi_index + i) * 7 + 0] = 1;
-        top_pose[(roi_index + i) * 7 + 1] = 0;
-        top_pose[(roi_index + i) * 7 + 2] = 0;
-        top_pose[(roi_index + i) * 7 + 3] = 0;
-        top_pose[(roi_index + i) * 7 + 4] = rx * bb_distance;
-        top_pose[(roi_index + i) * 7 + 5] = ry * bb_distance;
-        top_pose[(roi_index + i) * 7 + 6] = bb_distance;
+      top_pose[roi_index * 7 + 0] = 1;
+      top_pose[roi_index * 7 + 1] = 0;
+      top_pose[roi_index * 7 + 2] = 0;
+      top_pose[roi_index * 7 + 3] = 0;
+      top_pose[roi_index * 7 + 4] = rx * bb_distance;
+      top_pose[roi_index * 7 + 5] = ry * bb_distance;
+      top_pose[roi_index * 7 + 6] = bb_distance;
 
-        if (num_gt == 0)
-          top_domain[roi_index + i] = 1;
-        else
-          top_domain[roi_index + i] = 0;
-      }
+      if (num_gt == 0)
+        top_domain[roi_index] = 1;
+      else
+        top_domain[roi_index] = 0;
 
       // compute pose target
       for (int i = 0; i < num_gt; i++)
@@ -454,112 +451,21 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
           int gt_ind = i;
 
           float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 7 + 2);
-          if (overlap > 0.2)
+          if (overlap > 0.5)
           {
-            for (int j = 0; j < 9; j++)
-            {
-              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 0] = gt[gt_ind * 13 + 6];
-              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 1] = gt[gt_ind * 13 + 7];
-              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 2] = gt[gt_ind * 13 + 8];
-              top_target[(roi_index + j) * 4 * num_classes + 4 * cls + 3] = gt[gt_ind * 13 + 9];
+            top_target[roi_index * 4 * num_classes + 4 * cls + 0] = gt[gt_ind * 13 + 6];
+            top_target[roi_index * 4 * num_classes + 4 * cls + 1] = gt[gt_ind * 13 + 7];
+            top_target[roi_index * 4 * num_classes + 4 * cls + 2] = gt[gt_ind * 13 + 8];
+            top_target[roi_index * 4 * num_classes + 4 * cls + 3] = gt[gt_ind * 13 + 9];
 
-              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 0] = 1;
-              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 1] = 1;
-              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 2] = 1;
-              top_weight[(roi_index + j) * 4 * num_classes + 4 * cls + 3] = 1;
-            }
+            top_weight[roi_index * 4 * num_classes + 4 * cls + 0] = 1;
+            top_weight[roi_index * 4 * num_classes + 4 * cls + 1] = 1;
+            top_weight[roi_index * 4 * num_classes + 4 * cls + 2] = 1;
+            top_weight[roi_index * 4 * num_classes + 4 * cls + 3] = 1;
             break;
           }
         }
       }
-
-      // add jittering boxes
-      float x1 = top_box[roi_index * 7 + 2];
-      float y1 = top_box[roi_index * 7 + 3];
-      float x2 = top_box[roi_index * 7 + 4];
-      float y2 = top_box[roi_index * 7 + 5];
-      float ww = x2 - x1;
-      float hh = y2 - y1;
-
-      // (-1, -1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (+1, -1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (-1, +1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (+1, +1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (0, -1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1;
-      top_box[roi_index * 7 + 3] = y1 - 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (-1, 0)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 - 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (0, +1)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1;
-      top_box[roi_index * 7 + 3] = y1 + 0.05 * hh;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
-
-      // (+1, 0)
-      roi_index++;
-      top_box[roi_index * 7 + 0] = batch_index;
-      top_box[roi_index * 7 + 1] = cls;
-      top_box[roi_index * 7 + 2] = x1 + 0.05 * ww;
-      top_box[roi_index * 7 + 3] = y1;
-      top_box[roi_index * 7 + 4] = top_box[roi_index * 7 + 2] + ww;
-      top_box[roi_index * 7 + 5] = top_box[roi_index * 7 + 3] + hh;
-      top_box[roi_index * 7 + 6] = hough_space[max_index];
     }
     else
     {
@@ -586,7 +492,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
 
 void reset_outputs(float* top_box, float* top_pose, float* top_target, float* top_weight, int* top_domain, int* num_rois, int num_classes)
 {
-  int num = MAX_ROI * 9;
+  int num = MAX_ROI;
   cudaMemset(top_box, 0, num * 7 * sizeof(float));
   cudaMemset(top_pose, 0, num * 7 * sizeof(float));
   cudaMemset(top_target, 0, num * 4 *num_classes * sizeof(float));
@@ -752,7 +658,7 @@ void HoughVotingLaucher(OpKernelContext* context,
     output_size = count * height * width;
     compute_max_indexes_kernel<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, max_indexes, index_size, num_max, hough_space, hough_data, height, width, votingThreshold, perThreshold);
+      output_size, max_indexes, index_size, num_max, hough_space, hough_data, height, width, votingThreshold, perThreshold, is_train);
     cudaThreadSynchronize();
   }
   else

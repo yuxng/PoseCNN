@@ -217,7 +217,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 for i in xrange(scores.shape[0]):
                     cls = int(rois[i, 1])
                     rois[i, 2:6] = pred_boxes[i, cls*4:cls*4+4]
-                    rois[i, 6] = scores[i, cls]
+                    rois[i, 6] = scores[i, 1]
 
                 # non-maximum suppression
                 print rois[:, 1]
