@@ -39,10 +39,13 @@ def proposal_target_layer_v2(rpn_rois, rpn_scores, gt_boxes, poses, _num_classes
 
   # convert labels
   num = labels.shape[0]
-  label_blob = np.zeros((num, _num_classes), dtype=np.float32)
+  label_blob = np.zeros((num, 2), dtype=np.float32)
   if np.sum(labels) > 0:
       for i in xrange(num):
-          label_blob[i, int(labels[i])] = 1.0
+          if labels[i] == 0:
+              label_blob[i, 0] = 1.0
+          else:
+              label_blob[i, 1] = 1.0
 
   return rois, roi_scores, label_blob, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
 

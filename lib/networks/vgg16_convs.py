@@ -216,12 +216,12 @@ class vgg16_convs(Network):
 
                     # classify rois
                     (self.feed('drop7')
-                         .fc(self.num_classes, relu=False, name='cls_score')
+                         .fc(2, relu=False, name='cls_score')
                          .tanh(name='cls_score_tanh')
-                         .log_softmax_high_dimension(self.num_classes, name='cls_prob'))
+                         .log_softmax_high_dimension(2, name='cls_prob'))
 
                     (self.feed('cls_score')
-                         .softmax_high_dimension(self.num_classes, name='cls_prob_normalized'))
+                         .softmax_high_dimension(2, name='cls_prob_normalized'))
 
                     # bounding box regression
                     (self.feed('drop7')
