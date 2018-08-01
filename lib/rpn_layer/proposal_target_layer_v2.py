@@ -128,7 +128,7 @@ def _sample_rois(all_rois, all_scores, gt_boxes, poses, num_classes):
   fg_inds = np.where(max_overlaps >= cfg.TRAIN.FG_THRESH)[0]
   bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH)[0]
 
-  print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
+  # print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
   # print all_rois
 
   # The indices that we're selecting (both fg and bg)
