@@ -451,7 +451,7 @@ __global__ void compute_rois_kernel(const int nthreads, float* top_box, float* t
           int gt_ind = i;
 
           float overlap = compute_box_overlap(cls, extents, meta_data, gt + gt_ind * 13, top_box + roi_index * 7 + 2);
-          if (overlap > 0.5)
+          if (overlap > 0.2)
           {
             top_target[roi_index * 4 * num_classes + 4 * cls + 0] = gt[gt_ind * 13 + 6];
             top_target[roi_index * 4 * num_classes + 4 * cls + 1] = gt[gt_ind * 13 + 7];
