@@ -29,7 +29,7 @@ TRAIN:
   FG_THRESH: 0.5
   VISUALIZE: False
   POSE_REG: True
-  SYNTHESIZE: False
+  SYNTHESIZE: True
   SYNROOT: 'data/LOV/data_syn/'
   SYNNUM: 80000
   SYN_RATIO: 5
