@@ -34,7 +34,8 @@ from rpn_layer.proposal_layer import proposal_layer
 from rpn_layer.proposal_top_layer import proposal_top_layer
 from rpn_layer.anchor_target_layer import anchor_target_layer
 from rpn_layer.proposal_target_layer import proposal_target_layer
-from rpn_layer.proposal_target_layer_v2 import proposal_target_layer_v2
+from rpn_layer.roi_target_layer import roi_target_layer
+from rpn_layer.pose_target_layer import pose_target_layer
 
 DEFAULT_PADDING = 'SAME'
 
@@ -788,27 +789,58 @@ class Network(object):
         return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
 
     @layer
-    def compute_proposal_targets_v2(self, input, num_classes, name):
+    def compute_roi_targets(self, input, num_classes, name):
         rois_all = input[0]
         gt_boxes = input[1]
-        poses = input[2]
 
         batch_ids = tf.slice(rois_all, [0, 0], [-1, 1], name="batch_ids")
+        cls = tf.slice(rois_all, [0, 1], [-1, 1], name="cls")
         x1 = tf.slice(rois_all, [0, 2], [-1, 1], name="x1")
         y1 = tf.slice(rois_all, [0, 3], [-1, 1], name="y1")
         x2 = tf.slice(rois_all, [0, 4], [-1, 1], name="x2")
         y2 = tf.slice(rois_all, [0, 5], [-1, 1], name="y2")
         roi_scores = tf.slice(rois_all, [0, 6], [-1, 1], name="roi_scores")
-        rois = tf.concat([batch_ids, x1, y1, x2, y2], axis=1)
+        rois = tf.concat([batch_ids, x1, y1, x2, y2, cls], axis=1)
 
         with tf.variable_scope(name) as scope:
-            rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight = tf.py_func(
-                proposal_target_layer_v2,
-                [rois, roi_scores, gt_boxes, poses, num_classes],
-                [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
-                name="proposal_target")
+            rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights = tf.py_func(
+                roi_target_layer,
+                [rois, roi_scores, gt_boxes, num_classes],
+                [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+                name="roi_target")
 
-        return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses_target, poses_weight
+        return rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+
+
+    @layer
+    def compute_pose_targets(self, input, num_classes, name):
+        rois_all = input[0]
+        bbox_pred = input[1]
+        im_info = input[2]
+        gt_boxes = input[3]
+        poses = input[4]
+
+        batch_ids = tf.slice(rois_all, [0, 0], [-1, 1], name="batch_ids")
+        cls = tf.slice(rois_all, [0, 1], [-1, 1], name="cls")
+        x1 = tf.slice(rois_all, [0, 2], [-1, 1], name="x1")
+        y1 = tf.slice(rois_all, [0, 3], [-1, 1], name="y1")
+        x2 = tf.slice(rois_all, [0, 4], [-1, 1], name="x2")
+        y2 = tf.slice(rois_all, [0, 5], [-1, 1], name="y2")
+        rois = tf.concat([batch_ids, x1, y1, x2, y2, cls], axis=1)
+
+        with tf.variable_scope(name) as scope:
+            rois_target, poses_target, poses_weight = tf.py_func(
+                pose_target_layer,
+                [rois, bbox_pred, im_info, gt_boxes, poses, num_classes],
+                [tf.float32, tf.float32, tf.float32],
+                name="pose_target")
+
+            num = rois.shape[0]
+            rois_target.set_shape([num, 6])
+            poses_target.set_shape([num, 4 * num_classes])
+            poses_weight.set_shape([num, 4 * num_classes])
+
+        return rois_target, poses_target, poses_weight
 
 
     @layer

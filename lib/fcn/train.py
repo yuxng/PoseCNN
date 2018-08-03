@@ -460,7 +460,7 @@ def load_and_enqueue(sess, net, data_layer, coord):
                     if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                         feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                    net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                                   net.gt_boxes: blobs['data_gt_boxes'], \
+                                   net.im_info: blobs['data_im_info'], net.gt_boxes: blobs['data_gt_boxes'], \
                                    net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data']}
                     else:
                         feed_dict={net.data: data_blob, net.data_p: data_p_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5}
@@ -468,7 +468,7 @@ def load_and_enqueue(sess, net, data_layer, coord):
                     if cfg.TRAIN.VERTEX_REG_2D or cfg.TRAIN.VERTEX_REG_3D:
                         feed_dict={net.data: data_blob, net.gt_label_2d: blobs['data_label'], net.keep_prob: 0.5, \
                                    net.vertex_targets: blobs['data_vertex_targets'], net.vertex_weights: blobs['data_vertex_weights'], \
-                                   net.gt_boxes: blobs['data_gt_boxes'], \
+                                   net.im_info: blobs['data_im_info'], net.gt_boxes: blobs['data_gt_boxes'], \
                                    net.poses: blobs['data_pose'], net.extents: blobs['data_extents'], net.meta_data: blobs['data_meta_data'], \
                                    net.points: blobs['data_points'], net.symmetry: blobs['data_symmetry']}
                     else:

@@ -33,10 +33,7 @@ def get_minibatch(roidb, extents, points, symmetry, num_classes, backgrounds, in
     depth_blob, label_blob, meta_data_blob, vertex_target_blob, vertex_weight_blob, pose_blob, gt_boxes \
         = _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn, im_scales, extents, is_syn, db_inds_adapt, is_adapt, height, width)
 
-    if not cfg.TRAIN.SEGMENTATION:
-        im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
-    else:
-        im_info = []
+    im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
 
     # For debug visualizations
     if cfg.TRAIN.VISUALIZE:

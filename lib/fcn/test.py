@@ -912,6 +912,7 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
                 RT[:, 3] = poses[i, 4:7]
                 print classes[cls]
                 print RT
+                print rois[i, -1]
                 print '\n'
                 x2d = np.matmul(intrinsic_matrix, np.matmul(RT, x3d))
                 x2d[0, :] = np.divide(x2d[0, :], x2d[2, :])
