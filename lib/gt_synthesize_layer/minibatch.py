@@ -426,15 +426,17 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
                 if len(np.unique(cls_indexes)) < len(cls_indexes):
                     is_multi_instances = 1
                     # read mask image
-                    mask = pad_im(cv2.imread(roidb[i]['mask'], cv2.IMREAD_UNCHANGED), 16)
+                    if 'mask' in meta_data:
+                        mask = meta_data['mask']
+                    else:
+                        mask = pad_im(cv2.imread(roidb[i]['mask'], cv2.IMREAD_UNCHANGED), 16)
                 else:
                     is_multi_instances = 0
                     mask = []
 
                 vertex_target_blob[i,:,:,:], vertex_weight_blob[i,:,:,:] = \
                     _generate_vertex_targets(im, meta_data['cls_indexes'], im_scale * center, poses, num_classes, vertmap, extents, \
-                                             mask, is_multi_instances, cls_indexes_old, \
-                                             vertex_target_blob[i,:,:,:], vertex_weight_blob[i,:,:,:])
+                                             mask, is_multi_instances, vertex_target_blob[i,:,:,:], vertex_weight_blob[i,:,:,:])
 
                 num = poses.shape[2]
                 qt = np.zeros((num, 13), dtype=np.float32)
@@ -516,8 +518,8 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
             label_blob[i,:,:] = processed_label[i]
 
         # filter bad boxes
-        gt_widths = gt_boxes[:, 2] - gt_boxes[:, 0] + 1.0
-        gt_heights = gt_boxes[:, 3] - gt_boxes[:, 1] + 1.0
+        gt_widths = gt_boxes[:, 3] - gt_boxes[:, 1] + 1.0
+        gt_heights = gt_boxes[:, 4] - gt_boxes[:, 2] + 1.0
         ind = np.where((gt_widths > 0) & (gt_heights > 0))[0]
         gt_boxes = gt_boxes[ind, :]
     
@@ -540,7 +542,7 @@ def _flip_poses(poses, K, width):
 
 # compute the voting label image in 2D
 def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, vertmap, extents, \
-    mask, is_multi_instances, cls_indexes_old, vertex_targets, vertex_weights):
+    mask, is_multi_instances, vertex_targets, vertex_weights):
 
     width = im_label.shape[1]
     height = im_label.shape[0]
@@ -549,8 +551,8 @@ def _generate_vertex_targets(im_label, cls_indexes, center, poses, num_classes, 
         c = np.zeros((2, 1), dtype=np.float32)
         for i in xrange(len(cls_indexes)):
             cls = int(cls_indexes[i])
-            y, x = np.where((mask == cls_indexes_old[i]+1) & (im_label == cls))
-            I = np.where((mask == cls_indexes_old[i]+1) & (im_label == cls))
+            y, x = np.where((mask == i+1) & (im_label == cls))
+            I = np.where((mask == i+1) & (im_label == cls))
             if len(x) > 0:
                 if cfg.TRAIN.VERTEX_REG_2D:
                     c[0] = center[i, 0]

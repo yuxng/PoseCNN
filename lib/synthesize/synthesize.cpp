@@ -163,11 +163,13 @@ void Synthesizer::loadModels(const std::string filename)
   const int num_models = model_names.size();
   assimpMeshes_.resize(num_models);
   texture_names.resize(num_models);
-
+  int max_vertices = 0;
   for (int m = 0; m < num_models; ++m)
   {
     assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names[m]);
     std::cout << texture_names[m] << std::endl;
+    if (assimpMeshes_[m]->mNumVertices > max_vertices)
+      max_vertices = assimpMeshes_[m]->mNumVertices;
   }
 
   // buffers
@@ -190,7 +192,7 @@ void Synthesizer::loadModels(const std::string filename)
     is_textured_[m] = is_textured;
 
     initializeBuffers(m, assimpMeshes_[m], texture_names[m], texturedVertices_[m], canonicalVertices_[m], vertexColors_[m], vertexNormals_[m],
-                      texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], is_textured);
+                      texturedIndices_[m], texturedCoords_[m], texturedTextures_[m], is_textured, max_vertices);
   }
 }
 
@@ -245,7 +247,7 @@ aiMesh* Synthesizer::loadTexturedMesh(const std::string filename, std::string & 
 
 void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
   pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors, pangolin::GlBuffer & normals,
-  pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured)
+  pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured, int max_vertices)
 {
     std::cout << "number of vertices: " << assimpMesh->mNumVertices << std::endl;
     std::cout << "number of faces: " << assimpMesh->mNumFaces << std::endl;
@@ -264,14 +266,15 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
     }
 
     // canonical vertices
-    std::vector<float3> canonicalVerts(assimpMesh->mNumVertices);
-    std::memcpy(canonicalVerts.data(), assimpMesh->mVertices, assimpMesh->mNumVertices*sizeof(float3));
-
-    for (std::size_t i = 0; i < assimpMesh->mNumVertices; i++)
-      canonicalVerts[i].x += model_index;
-
-    canonicalVertices.Reinitialise(pangolin::GlArrayBuffer, assimpMesh->mNumVertices, GL_FLOAT, 3, GL_STATIC_DRAW);
-    canonicalVertices.Upload(canonicalVerts.data(), assimpMesh->mNumVertices*sizeof(float3));
+    std::vector<float3> canonicalVerts(max_vertices);
+    for (std::size_t i = 0; i < max_vertices; i++)
+    {
+      canonicalVerts[i].x = model_index;
+      canonicalVerts[i].y = model_index;
+      canonicalVerts[i].z = model_index;
+    }
+    canonicalVertices.Reinitialise(pangolin::GlArrayBuffer, max_vertices, GL_FLOAT, 3, GL_STATIC_DRAW);
+    canonicalVertices.Upload(canonicalVerts.data(), max_vertices*sizeof(float3));
 
     std::vector<uint3> faces3(assimpMesh->mNumFaces);
     for (std::size_t i = 0; i < assimpMesh->mNumFaces; i++) {
@@ -369,6 +372,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     {
       int class_id = irand(0, num_classes);
       int flag = 1;
+      /*
       for (int j = 0; j < i; j++)
       {
         if(class_id == class_ids[j])
@@ -377,6 +381,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
           break;
         }
       }
+      */
       if (flag)
       {
         class_ids.push_back(class_id);
@@ -497,7 +502,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       transforms[i] = poses[i].matrix().cast<float>();
       materialShininesses[i] = drand(40, 120);
       attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+      attributeBuffers[i].push_back(&canonicalVertices_[i]);
       attributeBuffers[i].push_back(&texturedCoords_[class_id]);
       attributeBuffers[i].push_back(&vertexNormals_[class_id]);
       modelIndexBuffers[i] = &texturedIndices_[class_id];
@@ -523,7 +528,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       transforms[i] = poses[i].matrix().cast<float>();
       materialShininesses[i] = drand(40, 120);
       attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
+      attributeBuffers[i].push_back(&canonicalVertices_[i]);
       attributeBuffers[i].push_back(&vertexColors_[class_id]);
       attributeBuffers[i].push_back(&vertexNormals_[class_id]);
       modelIndexBuffers[i] = &texturedIndices_[class_id];
@@ -558,8 +563,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       float tx = poses_return[i * 7 + 4];
       float ty = poses_return[i * 7 + 5];
       float tz = poses_return[i * 7 + 6];
-      center_x[class_id] = fx * (tx / tz) + px;
-      center_y[class_id] = fy * (ty / tz) + py;
+      center_x[i] = fx * (tx / tz) + px;
+      center_y[i] = fy * (ty / tz) + py;
     }
 
     if (centers_return)

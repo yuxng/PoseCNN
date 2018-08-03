@@ -140,7 +140,7 @@ class Synthesizer
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
     pangolin::GlBuffer & vertices, pangolin::GlBuffer & canonicalVertices, pangolin::GlBuffer & colors, pangolin::GlBuffer & normals,
-    pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured);
+    pangolin::GlBuffer & indices, pangolin::GlBuffer & texCoords, pangolin::GlTexture & texture, bool is_textured, int max_vertices);
 
   jp::jp_trans_t quat2our(const Sophus::SE3d T_co);
 

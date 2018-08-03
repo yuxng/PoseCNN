@@ -204,9 +204,18 @@ def render(data_queue, intrinsic_matrix, points):
         I = np.where(depth_syn == 1)
         im_depth_raw[I[0], I[1]] = 0
 
-        # compute labels from vertmap
-        label = np.round(vertmap_syn[:, :, 0]) + 1
-        label[np.isnan(label)] = 0
+        # compute mask and label from vertmap
+        mask = np.round(vertmap_syn[:, :, 0]) + 1
+        mask[np.isnan(mask)] = 0
+
+        label = np.zeros_like(mask)
+        for i in xrange(len(class_indexes)):
+            cls = class_indexes[i]
+            if cls >= 0:
+                y, x = np.where(mask == i + 1)
+                label[y, x] = cls + 1
+            else:
+                break
 
         # convert pose
         index = np.where(class_indexes >= 0)[0]
@@ -250,8 +259,8 @@ def render(data_queue, intrinsic_matrix, points):
             box[j, 3] = np.max(x2d[1, :])
 
         # metadata
-        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], 'box': box, \
-                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
+        metadata = {'poses': qt, 'center': centers[index, :], 'box': box, \
+                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth, 'mask': mask}
 
         # construct data
         data = {'image': im_syn, 'depth': im_depth_raw.astype(np.uint16), 'label': label.astype(np.uint8), 'meta_data': metadata}
