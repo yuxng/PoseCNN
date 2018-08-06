@@ -33,8 +33,9 @@ def roi_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):
   # convert labels
   num = labels.shape[0]
   label_blob = np.zeros((num, 1, 1, _num_classes), dtype=np.float32)
-  for i in xrange(num):
-      label_blob[i, 0, 0, int(labels[i])] = 1.0
+  if num > 1:
+      for i in xrange(num):
+          label_blob[i, 0, 0, int(labels[i])] = 1.0
 
   return rois, roi_scores, label_blob, bbox_targets, bbox_inside_weights, bbox_outside_weights
 
