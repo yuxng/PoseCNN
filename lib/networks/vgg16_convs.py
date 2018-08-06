@@ -184,17 +184,27 @@ class vgg16_convs(Network):
                     self.layers['bbox_inside_weights'] = self.get_output('roi_targets')[4]
                     self.layers['bbox_outside_weights'] = self.get_output('roi_targets')[5]
 
-                    # classify rois
-                    (self.feed('upscore', 'rois')
-                         .roi_pool(1, 1, 1.0, 0, name='pool_upscore')
-                         .conv(1, 1, self.num_classes, 1, 1, name='cls_score', c_i=self.num_units)
+                    # roi pooling for bounding box classification and regression
+                    (self.feed('conv5_3', 'rois')
+                         .roi_pool(7, 7, 1.0 / 16.0, 0, name='pool5_box'))
+                         
+                    (self.feed('conv4_3', 'rois')
+                         .roi_pool(7, 7, 1.0 / 8.0, 0, name='pool4_box'))
+
+                    (self.feed('pool5_box', 'pool4_box')
+                         .add(name='pool_score_box')
+                         .fc(4096, height=7, width=7, channel=512, name='fc6')
+                         .dropout(self.keep_prob_queue, name='drop6_box')
+                         .fc(4096, num_in=4096, name='fc7')
+                         .dropout(self.keep_prob_queue, name='drop7_box')
+                         .fc(self.num_classes, name='cls_score')
                          .log_softmax_high_dimension(self.num_classes, name='cls_prob'))
 
                     (self.feed('cls_score')
                          .softmax_high_dimension(self.num_classes, name='cls_prob_normalized'))
 
                     # bounding box regression
-                    (self.feed('pool_upscore')
+                    (self.feed('drop7_box')
                          .fc(4 * self.num_classes, relu=False, name='bbox_pred'))
 
                     # compute pose targets
@@ -216,9 +226,9 @@ class vgg16_convs(Network):
 
                     (self.feed('pool5', 'pool4')
                          .add(name='pool_score')
-                         .fc(4096, height=7, width=7, channel=512, name='fc6')
+                         .fc(4096, height=7, width=7, channel=512, name='fc6', reuse=True)
                          .dropout(self.keep_prob_queue, name='drop6')
-                         .fc(4096, num_in=4096, name='fc7')
+                         .fc(4096, num_in=4096, name='fc7', reuse=True)
                          .dropout(self.keep_prob_queue, name='drop7')
                          .fc(4 * self.num_classes, relu=False, name='fc8')
                          .tanh(name='poses_tanh'))
