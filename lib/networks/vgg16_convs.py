@@ -187,10 +187,10 @@ class vgg16_convs(Network):
                     # classify rois
                     (self.feed('upscore', 'rois')
                          .roi_pool(1, 1, 1.0, 0, name='pool_upscore')
-                         .conv(1, 1, self.num_classes, 1, 1, name='score', reuse=True, c_i=self.num_units)
+                         .conv(1, 1, self.num_classes, 1, 1, name='cls_score', c_i=self.num_units)
                          .log_softmax_high_dimension(self.num_classes, name='cls_prob'))
 
-                    (self.feed('score')
+                    (self.feed('cls_score')
                          .softmax_high_dimension(self.num_classes, name='cls_prob_normalized'))
 
                     # bounding box regression

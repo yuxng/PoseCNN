@@ -460,6 +460,7 @@ class lov(datasets.imdb):
                         RT[:3, :3] = quat2mat(poses[k, :4])
                         RT[:, 3] = poses[k, 4:7]
                         print RT
+                        print rois[k, -1]
 
                         if cfg.TEST.POSE_REFINE:
                             print 'translation refined pose'
