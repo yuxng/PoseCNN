@@ -204,7 +204,7 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 for i in xrange(num):
                     rois[i, :6] = rois_target[i, :]
                     cls = int(rois_target[i, 1])
-                    rois[i, 6] = scores[i, 0, 0, cls]
+                    rois[i, 6] = scores[i, cls]
 
                 # non-maximum suppression
                 print rois[:, 1]
