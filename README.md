@@ -42,7 +42,11 @@ If you find PoseCNN useful in your research, please consider citing:
    - [boost](https://www.boost.org/)
    - [Sophus](https://github.com/strasdat/Sophus)
    - [nanoflann](https://github.com/jlblancoc/nanoflann)
-   - libsuitesparse-dev
+   - [nlopt](https://nlopt.readthedocs.io/en/latest/)
+   - libsuitesparse-dev(apt install)
+   - openexr(apt install)
+   - libopenexr-dev(apt install)
+   
 
    We use Boost.Python library to link tensorflow with the c++ code. Make sure you have it in your Boost. The tested Boost version is 1.66.0.
 
