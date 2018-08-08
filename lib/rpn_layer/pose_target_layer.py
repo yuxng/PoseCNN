@@ -45,6 +45,9 @@ def pose_target_layer(rois, bbox_pred, im_info, gt_boxes, poses, num_classes):
     # Select foreground RoIs as those with >= FG_THRESH overlap
     bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH_POSE)[0]
     labels[bg_inds] = 0
+
+    bg_inds = np.where(rois[:, -1] != labels)[0]
+    labels[bg_inds] = 0
     
     # pose regression targets and weights
     poses_target, poses_weight = _compute_pose_targets(quaternions, labels, num_classes)
