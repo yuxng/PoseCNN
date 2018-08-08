@@ -88,26 +88,34 @@ def _sample_rois(all_rois, all_scores, gt_boxes, num_classes):
   # all_rois (batch_ids, x1, y1, x2, y2, cls)
   # gt_boxes (batch_ids, x1, y1, x2, y2, cls)
   # overlaps: (rois x gt_boxes)
-  overlaps = bbox_overlaps(
-    np.ascontiguousarray(all_rois[:, :5], dtype=np.float),
-    np.ascontiguousarray(gt_boxes[:, :5], dtype=np.float))
 
-  gt_assignment = overlaps.argmax(axis=1)
-  max_overlaps = overlaps.max(axis=1)
-  labels = gt_boxes[gt_assignment, 5]
+  if gt_boxes.shape[0] == 0:
+      num = all_rois.shape[0]
+      labels = np.zeros((num, 1), dtype=np.float32)
+      bbox_targets = np.zeros((num, 4 * num_classes), dtype=np.float32)
+      bbox_inside_weights = np.zeros(bbox_targets.shape, dtype=np.float32)
+  else:
+      overlaps = bbox_overlaps(
+        np.ascontiguousarray(all_rois[:, :5], dtype=np.float),
+        np.ascontiguousarray(gt_boxes[:, :5], dtype=np.float))
 
-  # Select foreground RoIs as those with >= FG_THRESH overlap
-  # fg_inds = np.where(max_overlaps >= cfg.TRAIN.FG_THRESH)[0]
-  bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH)[0]
-  labels[bg_inds] = 0
 
-  # print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
-  # print all_rois
+      gt_assignment = overlaps.argmax(axis=1)
+      max_overlaps = overlaps.max(axis=1)
+      labels = gt_boxes[gt_assignment, 5]
 
-  bbox_target_data = _compute_targets(
-    all_rois[:, 1:5], gt_boxes[gt_assignment, 1:5], labels)
+      # Select foreground RoIs as those with >= FG_THRESH overlap
+      # fg_inds = np.where(max_overlaps >= cfg.TRAIN.FG_THRESH)[0]
+      bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH)[0]
+      labels[bg_inds] = 0
 
-  bbox_targets, bbox_inside_weights = \
-    _get_bbox_regression_labels(bbox_target_data, num_classes)
+      # print '{:d} rois, {:d} fg, {:d} bg'.format(all_rois.shape[0], len(fg_inds), len(bg_inds))
+      # print all_rois
+
+      bbox_target_data = _compute_targets(
+        all_rois[:, 1:5], gt_boxes[gt_assignment, 1:5], labels)
+
+      bbox_targets, bbox_inside_weights = \
+        _get_bbox_regression_labels(bbox_target_data, num_classes)
 
   return labels, all_rois, all_scores, bbox_targets, bbox_inside_weights

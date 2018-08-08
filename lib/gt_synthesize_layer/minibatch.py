@@ -347,13 +347,11 @@ def _get_label_blob(roidb, intrinsic_matrix, data_out, num_classes, db_inds_syn,
             im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale, interpolation=cv2.INTER_NEAREST)
 
             # process annotation if training for two classes
-            cls_indexes_old = []
             if num_classes == 2 and roidb[i]['cls_index'] > 0:
                 I = np.where(im == roidb[i]['cls_index'])
                 im[:, :] = 0
                 im[I[0], I[1]] = 1
                 ind = np.where(meta_data['cls_indexes'] == roidb[i]['cls_index'])[0]
-                cls_indexes_old = ind
                 meta_data['cls_indexes'] = np.ones((len(ind),), dtype=np.float32)
                 if len(meta_data['poses'].shape) == 2:
                     meta_data['poses'] = np.reshape(meta_data['poses'], (3, 4, 1))

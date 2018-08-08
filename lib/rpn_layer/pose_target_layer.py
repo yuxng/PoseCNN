@@ -32,25 +32,30 @@ def pose_target_layer(rois, bbox_pred, im_info, gt_boxes, poses, num_classes):
         cls = int(rois[i, 5])
         rois[i, 1:5] = pred_boxes[i, cls*4:cls*4+4]
 
-    # overlaps: (rois x gt_boxes)
-    overlaps = bbox_overlaps(
-        np.ascontiguousarray(rois[:, :5], dtype=np.float),
-        np.ascontiguousarray(gt_boxes[:, :5], dtype=np.float))
+    if gt_boxes.shape[0] == 0:
+        num = rois.shape[0]
+        poses_target = np.zeros((num, 4 * num_classes), dtype=np.float32)
+        poses_weight = np.zeros((num, 4 * num_classes), dtype=np.float32)
+    else:
+        # overlaps: (rois x gt_boxes)
+        overlaps = bbox_overlaps(
+            np.ascontiguousarray(rois[:, :5], dtype=np.float),
+            np.ascontiguousarray(gt_boxes[:, :5], dtype=np.float))
 
-    gt_assignment = overlaps.argmax(axis=1)
-    max_overlaps = overlaps.max(axis=1)
-    labels = gt_boxes[gt_assignment, 5]
-    quaternions = poses[gt_assignment, 6:10]
+        gt_assignment = overlaps.argmax(axis=1)
+        max_overlaps = overlaps.max(axis=1)
+        labels = gt_boxes[gt_assignment, 5]
+        quaternions = poses[gt_assignment, 6:10]
 
-    # Select foreground RoIs as those with >= FG_THRESH overlap
-    bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH_POSE)[0]
-    labels[bg_inds] = 0
+        # Select foreground RoIs as those with >= FG_THRESH overlap
+        bg_inds = np.where(max_overlaps < cfg.TRAIN.FG_THRESH_POSE)[0]
+        labels[bg_inds] = 0
 
-    bg_inds = np.where(rois[:, -1] != labels)[0]
-    labels[bg_inds] = 0
+        bg_inds = np.where(rois[:, -1] != labels)[0]
+        labels[bg_inds] = 0
     
-    # pose regression targets and weights
-    poses_target, poses_weight = _compute_pose_targets(quaternions, labels, num_classes)
+        # pose regression targets and weights
+        poses_target, poses_weight = _compute_pose_targets(quaternions, labels, num_classes)
 
     ind = [0, 5, 1, 2, 3, 4]
     rois_target = rois[:, ind]
