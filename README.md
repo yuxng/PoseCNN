@@ -54,9 +54,16 @@ If you find PoseCNN useful in your research, please consider citing:
 
    We use Boost.Python library to link tensorflow with the c++ code. Make sure you have it in your Boost. The tested Boost version is 1.66.0.
 
-   1. Change hard coded pathes in CMakeLists.txt of boost and add sophus paths manually or via find_script.
+   1. Change hard coded pathes in lib/synthesize/CMakeLists.txt of boost and add sophus paths manually or via find_script. Uncomment line #add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0) to fix potential compatibility issues with tf.
    2. Uncomment ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc from include dirs because of this issue: https://github.com/stevenlovegrove/Pangolin/issues/268
    3. Surpress these warnings so you see errors better.
+   ```add_definitions(-Wno-sign-compare)
+      add_definitions(-Wno-unused-result)
+      add_definitions(-Wno-unused-but-set-variable)
+      add_definitions(-Wno-unused-variable)
+      add_definitions(-Wno-reorder)
+      add_definitions(-Wno-deprecated-declarations)
+   ```
    4. Adapt boost_python and boost_numpy in Cmake line 98/99 to your library name when using boost and python 3.5 it is boost_python27 and boost_numpy27 or symlink these to boots_python and boost_numpy.
    5. Create folder data and models under data/LOV and add or symlink the data and models into there
    
