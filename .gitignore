@@ -14,3 +14,13 @@ ros/build/*
 ros/data/*
 ros/devel/*
 images/*
+
+data/YCB/models/
+data/demo_models/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_160000.ckpt.index
+data/imagenet_models/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_160000.ckpt.data-00000-of-00001
+data/imagenet_models/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_160000.ckpt.index
+lib/kinect_fusion/build/
+lib/nms/gpu_nms.cpp
+lib/normals/gpu_normals.cpp
+lib/synthesize/build/
+
