@@ -14,6 +14,7 @@ ros/build/*
 ros/data/*
 ros/devel/*
 images/*
+.idea/
 
 data/YCB/models/
 data/demo_models/vgg16_fcn_color_single_frame_2d_pose_add_lov_iter_160000.ckpt.index

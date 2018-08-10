@@ -3,10 +3,12 @@ import message_filters
 import cv2
 import numpy as np
 from fcn.config import cfg
+from fcn.test import vis_segmentations_vertmaps_detection
 from utils.blob import im_list_to_blob, pad_im, unpad_im, add_noise
 from normals import gpu_normals
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
+from transforms3d.quaternions import quat2mat
 
 
 def test_ros(sess, network, imdb, meta_data, cfg, rgb, depth, cv_bridge, count):
@@ -39,9 +41,12 @@ def test_ros(sess, network, imdb, meta_data, cfg, rgb, depth, cv_bridge, count):
 
     if cfg.TEST.VISUALIZE:
         vertmap = extract_vertmap(labels, vertex_pred, imdb._extents, imdb.num_classes)
-        vis_segmentations_vertmaps(im, depth_cv, im_label, imdb._class_colors, \
-                    vertmap, labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
-                    imdb.num_classes, imdb._points_all, cfg)
+        # vis_segmentations_vertmaps(im, depth_cv, im_label, imdb._class_colors, \
+        #             vertmap, labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
+        #             imdb.num_classes, imdb._points_all, cfg)
+        vis_segmentations_vertmaps_detection(im, depth_cv, im_label, imdb._class_colors, \
+                                   vertmap, labels, rois, poses, poses_icp, meta_data['intrinsic_matrix'], \
+                                   imdb.num_classes, imdb._classes, imdb._points_all)
 
 
 def extract_vertmap(im_label, vertex_pred, extents, num_classes):

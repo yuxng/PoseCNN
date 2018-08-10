@@ -22,6 +22,7 @@ import rospy
 import rosbag
 from cv_bridge import CvBridge, CvBridgeError
 from test import test_ros
+import faulthandler
 
 def parse_args():
     """
@@ -65,6 +66,12 @@ def parse_args():
     parser.add_argument('--bag', dest='bag_name',
                         help='name of the bag file',
                         default=None, type=str)
+    parser.add_argument('--color_topic', dest='color_topic',
+                        help='name of the color topic',
+                        default="/camera/color/image_raw", type=str)
+    parser.add_argument('--depth_topic', dest='depth_topic',
+                        help='name of the depth topic',
+                        default="/camera/aligned_depth_to_color/image_raw", type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -75,6 +82,7 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    faulthandler.enable()
     args = parse_args()
 
     print('Called with args:')
@@ -127,13 +135,15 @@ if __name__ == '__main__':
     cv_bridge = CvBridge()
 
     count = 1
-    for topic, msg, t in bag.read_messages(topics=['/camera/rgb/image_rect_color', '/camera/depth_registered/sw_registered/image_rect']):
-        print count, topic
-        if topic == '/camera/rgb/image_rect_color':
+    for topic, msg, t in bag.read_messages(topics=[args.color_topic, args.depth_topic]):
+        print count, topic, type(msg)
+        if topic == args.color_topic:
             rgb = msg
-        if topic == '/camera/depth_registered/sw_registered/image_rect':
+        if topic == args.depth_topic:
             depth = msg
 
+        # if count > 2:
+        #     break
         if count % 2 == 0:
             test_ros(sess, network, imdb, meta_data, cfg, rgb, depth, cv_bridge, count/2 - 1)
 
