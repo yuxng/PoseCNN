@@ -32,7 +32,10 @@ endif()
 find_package(CUDA REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(Eigen3 REQUIRED)
+message("-- Found Eigen3: " ${EIGEN3_INCLUDE_DIR} " (found version " ${EIGEN3_VERSION_MAJOR} . ${EIGEN3_VERSION_MINOR} ")")
 find_package(PkgConfig REQUIRED)
+set(Sophus_INCLUDE_DIRS "/home/satco/thesis/external_libraries_and_code/Sophus")
+set(Sophus_LIBRARY_DIRS "/home/satco/thesis/external_libraries_and_code/Sophus")
 
 pkg_check_modules(nanoflann nanoflann REQUIRED)
 
@@ -47,12 +50,15 @@ set(SUITESPARSE_LIBRARIES "cholmod;metis")
 include_directories(${PROJECT_SOURCE_DIR}/include
                     ${Pangolin_INCLUDE_DIRS}
                     ${EIGEN3_INCLUDE_DIR}
-                    ${SUITESPARSE_INCLUDE_DIRS}
-                    ${nanoflann_INCLUDE_DIRS})
+                    ${SUITESPARSE_INCLUDE_DIRS} 
+                    ${nanoflann_INCLUDE_DIRS}
+                    ${Sophus_INCLUDE_DIRS})
 
-link_directories(${Pangolin_LIBRARY_DIRS})
+link_directories(${Pangolin_LIBRARY_DIRS}
+                 ${Sophus_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
+               ${Sophus_LIBRARIES}
                ${SUITESPARSE_LIBRARIES} "-lutil")
 
 file( GLOB DF_HEADERS

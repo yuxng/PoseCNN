@@ -20,6 +20,7 @@ import numpy as np
 import cv2
 import cPickle
 import os
+import sys
 import math
 import tensorflow as tf
 import time
@@ -928,8 +929,13 @@ def vis_segmentations_vertmaps_detection(im, im_depth, im_labels, colors, center
             ax.set_xlim([0, im.shape[1]])
             ax.set_ylim([im.shape[0], 0])
 
-    plt.show()
-
+    # plt.show()
+    plt.draw()
+    plt.pause(1)
+    cmd = raw_input("Press Enter to continue, Type exit to exit\n")
+    plt.close(fig)
+    if cmd == "exit":
+        sys.exit()
 
 
 def vis_segmentations_vertmaps_3d(im, im_depth, im_labels, im_labels_gt, colors, vertmap, vertmap_target,

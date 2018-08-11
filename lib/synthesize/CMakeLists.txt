@@ -7,10 +7,18 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+# Ignore warnings
+add_definitions(-Wno-sign-compare)
+add_definitions(-Wno-unused-result)
+add_definitions(-Wno-unused-but-set-variable)
+add_definitions(-Wno-unused-variable)
+add_definitions(-Wno-reorder)
+add_definitions(-Wno-deprecated-declarations)
+
 add_definitions(-std=c++11)
 add_definitions(-Wall)
 add_definitions(-fPIC)
-#add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 include(${CMAKE_SOURCE_DIR}/cmake/FindNLopt.cmake)
 
@@ -20,6 +28,7 @@ find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
+find_package(Boost 1.67.0 EXACT REQUIRED)
 pkg_check_modules(OpenEXR REQUIRED OpenEXR)
 
 find_package(OpenMP REQUIRED)
@@ -28,13 +37,17 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(BOOST_INCLUDE_DIRS "/usr/local/include")
-set(BOOST_LIBRARY_DIRS "/usr/local/lib/boost")
+# HARD CODED
+set(Sophus_INCLUDE_DIRS "/home/satco/thesis/external_libraries_and_code/Sophus")
+set(Sophus_LIBRARY_DIRS "/home/satco/thesis/external_libraries_and_code/Sophus")
 
+message("Project source dir: " ${PROJECT_SOURCE_DIR})
 set(xFusion_ROOT ${PROJECT_SOURCE_DIR}/../kinect_fusion)
 set(xFusion_INCLUDE_DIRS ${xFusion_ROOT}/include)
 set(xFusion_LIBRARY_DIRS ${xFusion_ROOT}/build)
 set(xFusion_LIBRARIES kfusion)
+
+
 
 # TODO:
 set(SUITESPARSE_INCLUDE_DIRS "/usr/include/suitesparse" CACHE PATH "suitesparse include directory")
@@ -53,14 +66,16 @@ include_directories(${Pangolin_INCLUDE_DIRS}
                     ${OpenCV_INCLUDE_DIRS}
                     ${PCL_INCLUDE_DIRS}
                     ${PROJECT_SOURCE_DIR}/include
-                    ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc
-                    ${BOOST_INCLUDE_DIRS})
+                    #${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc
+                    ${BOOST_INCLUDE_DIRS}
+                    ${Sophus_INCLUDE_DIRS})
 
 link_directories(${Pangolin_LIBRARY_DIRS}
                  ${xFusion_LIBRARY_DIRS}
                  ${OpenEXR_LIBRARY_DIRS}
                  ${PCL_LIBRARY_DIRS}
-                 ${BOOST_LIBRARY_DIRS})
+                 ${BOOST_LIBRARY_DIRS}
+                 ${Sophus_LIBRARY_DIRS})
 
 link_libraries(${Pangolin_LIBRARIES}
                ${xFusion_LIBRARIES}
@@ -70,8 +85,9 @@ link_libraries(${Pangolin_LIBRARIES}
                ${OpenCV_LIBS}
                ${NLOPT_LIBRARIES}
                ${PCL_LIBRARIES}
-               boost_python
-               boost_numpy
+               ${Sophus_LIBRARIES}
+               boost_python27
+               boost_numpy27
                assimp
                util)
 
